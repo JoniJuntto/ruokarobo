@@ -4,44 +4,229 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>Ruokarobo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Overpass:wght@600;700;800;900&display=swap" rel="stylesheet">
 <style>
-  html,body{margin:0;height:100%;overflow:hidden;background:#0d1b2a}
+  /* Finnish street signage: blue guide plates with a white inset rim, white supplementary panels
+     with a black rim, yellow warning triangles with a red border. */
+  :root{--blue:#0b4f9c;--yellow:#ffcc00;--red:#d7261e;--snow:#f5f8fb;--ink:#1d232b;--orange:#ff6a13;--green:#2f9e57;
+        --font:'Overpass',system-ui,sans-serif}
+  [hidden]{display:none!important}
+  html,body{margin:0;height:100%;overflow:hidden;background:#0d1b2a;font-family:var(--font);color:var(--ink)}
   canvas{position:fixed;inset:0;display:block}
   #ui{pointer-events:none}
-  #menu{position:fixed;left:50%;bottom:6vh;transform:translateX(-50%);display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:center;font:600 18px system-ui;color:#e8f1fb;max-width:calc(100vw - 32px)}
-  #menu[hidden]{display:none}
-  #menu button,#menu input{font:inherit;border-radius:10px;border:2px solid #ff7b00;padding:10px 16px}
-  #menu button{background:#ff7b00;color:#fff;cursor:pointer}
-  #menu button.alt{background:#0d1b2a}
-  #menu input{width:6.5em;text-transform:uppercase;text-align:center;background:#0d1b2a;color:#fff;letter-spacing:.15em}
-  #status{width:100%;text-align:center;text-shadow:0 1px 3px #000}
-  #shop{position:fixed;left:50%;top:58%;transform:translate(-50%,-50%);display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;font:500 14px system-ui;width:min(880px,calc(100vw - 32px))}
-  #shop[hidden]{display:none}
-  #shop button{display:flex;flex-direction:column;gap:4px;align-items:flex-start;text-align:left;padding:12px 14px;border-radius:12px;border:2px solid #ff7b00;background:rgba(10,22,44,.92);color:#e8f1fb;font:inherit;cursor:pointer}
-  #shop button:disabled{opacity:.45;cursor:default}
-  #shop button b{font-size:17px}
-  #shop button span{color:#ffd84a}
-  #shop #bNext{grid-column:1/-1;align-items:center;background:#ff7b00;color:#fff;font-weight:700;font-size:18px}
-  #menu #bStart{font-weight:800;padding:10px 28px;background:#2fbf6a;border-color:#2fbf6a}
-  #menu.over > :not(#bStart){display:none}
-  #bStart[hidden],#touch[hidden]{display:none}
-  #stick{position:fixed;left:20px;bottom:84px;width:150px;height:150px;border-radius:50%;background:rgba(255,255,255,.15);border:2px solid rgba(255,255,255,.45);touch-action:none}
-  #knob{position:absolute;left:50%;top:50%;width:60px;height:60px;margin:-30px 0 0 -30px;border-radius:50%;background:rgba(255,255,255,.7);pointer-events:none}
-  .tbtn{position:fixed;width:88px;height:88px;border-radius:50%;border:2px solid rgba(255,255,255,.6);color:#fff;font:800 14px system-ui;touch-action:none}
-  #tBoost{right:20px;bottom:180px;background:rgba(79,216,255,.55)}
-  #tBrake{right:20px;bottom:84px;background:rgba(255,123,0,.55)}
+  button{font:inherit;cursor:pointer}
+  button:focus-visible,input:focus-visible{outline:3px solid var(--yellow);outline-offset:3px}
+
+  .plate{--edge:var(--blue);--rim:#fff;background:var(--edge);color:#fff;border-radius:8px;
+         box-shadow:inset 0 0 0 3px var(--edge),inset 0 0 0 5px var(--rim),0 4px 0 rgba(0,0,0,.22),0 10px 24px rgba(0,0,0,.18)}
+  .plate.white{--edge:#fff;--rim:var(--ink);color:var(--ink)}
+  .plate.yellow{--edge:var(--yellow);--rim:var(--ink);color:var(--ink)}
+  .plate.danger{--edge:#fff;--rim:var(--red);color:var(--ink)}
+  .plate.red{--edge:var(--red);--rim:#fff}
+
+  .go{background:var(--orange);color:#fff;border:0;border-radius:8px;font-weight:800;font-size:20px;padding:14px 26px 11px;box-shadow:0 4px 0 #b84508}
+  .go:active{transform:translateY(2px);box-shadow:0 2px 0 #b84508}
+  .go:disabled{background:#8a96a3;box-shadow:0 4px 0 #5f6a75;cursor:default;font-size:16px}
+  .ghost{background:#fff;color:var(--blue);border:0;border-radius:8px;font-weight:800;font-size:16px;padding:13px 16px 10px;box-shadow:0 4px 0 rgba(0,0,0,.25)}
+
+  /* in-game HUD */
+  #hud{position:fixed;left:14px;top:12px;display:flex;gap:8px;flex-wrap:wrap;pointer-events:none;max-width:calc(100vw - 290px)}
+  #hud .plate{display:flex;align-items:center;gap:8px;padding:9px 15px 6px;font-weight:900;font-size:22px;line-height:1;font-variant-numeric:tabular-nums}
+  #hud .lbl{font-weight:600;font-size:14px;opacity:.85}
+  #hud svg{width:22px;height:22px;flex:none}
+  .meter{width:84px;height:13px;border-radius:3px;box-shadow:inset 0 0 0 2px currentColor;padding:3px;box-sizing:border-box}
+  .meter i{display:block;height:100%;background:currentColor;border-radius:1px}
+  .bat.low{--edge:var(--red);background:var(--red)}
+  .pips{display:flex;gap:3px}
+  .pips i{width:8px;height:14px;border-radius:2px;box-shadow:inset 0 0 0 2px var(--blue)}
+  .pips i.on{background:var(--blue)}
+  #hWx svg{width:24px;height:21px}
+  #joinHint{position:fixed;right:14px;top:12px;padding:9px 13px 6px;font-size:14px;font-weight:600;pointer-events:none}
+  #joinHint kbd{font-size:11px}
+
+  /* shift start: a guide sign drops in */
+  #sign{position:fixed;left:50%;top:78px;transform:translateX(-50%);padding:18px 22px 14px 26px;width:max-content;max-width:calc(100vw - 40px);
+        pointer-events:none;display:grid;grid-template-columns:1fr auto;column-gap:22px;align-items:center}
+  #sign h2{margin:0;font-size:46px;font-weight:900;line-height:1}
+  #sign p{margin:4px 0 0;font-size:17px;font-weight:600}
+  #sign .num{grid-row:1/3;grid-column:2;padding:10px 14px 6px;text-align:center;font-size:34px;font-weight:900;line-height:1}
+  #sign .num small{display:block;font-size:12px;font-weight:700}
+  #sign.show{animation:drop 3s both}
+  @keyframes drop{0%{transform:translate(-50%,-170%)}12%,86%{transform:translate(-50%,0)}100%{transform:translate(-50%,-170%)}}
+
+  /* weather warning: triangle + supplementary panel */
+  #alert{position:fixed;left:50%;top:78px;transform:translateX(-50%);display:flex;align-items:center;gap:12px;pointer-events:none}
+  #alert svg{width:92px;height:80px;filter:drop-shadow(0 4px 0 rgba(0,0,0,.25))}
+  #alert .plate{padding:12px 18px 9px}
+  #alert b{display:block;font-size:30px;font-weight:900;line-height:1}
+  #alert span{font-size:16px;font-weight:600}
+  #alert.show{animation:shake .45s 2}
+  @keyframes shake{25%{transform:translateX(calc(-50% - 7px))}75%{transform:translateX(calc(-50% + 7px))}}
+
+  /* title */
+  #title{position:fixed;left:max(20px,5vw);top:50%;transform:translateY(-50%);width:min(580px,calc(100vw - 40px));
+         display:flex;flex-direction:column;gap:12px;max-height:calc(100vh - 32px);overflow:auto;padding:4px 4px 8px;box-sizing:border-box}
+  #title .hero{padding:22px 28px 20px}
+  #title .hero svg{width:92px;height:62px;display:block;margin-bottom:8px}
+  #title h1{margin:0;font-size:clamp(48px,9vw,80px);font-weight:900;line-height:.88;letter-spacing:-.015em}
+  #title .hero p{margin:12px 0 0;font-size:18px;font-weight:600;line-height:1.35;max-width:38ch}
+  #keys{padding:12px 14px 10px;font-size:14px;overflow-x:auto}
+  #keys table{border-collapse:collapse;width:100%}
+  #keys th{font-weight:600;text-align:left;padding:2px 6px;color:#5a6470;font-size:13px}
+  #keys td{padding:3px 6px;white-space:nowrap;font-weight:600}
+  kbd{font:800 12px var(--font);border:1.5px solid var(--ink);border-bottom-width:3px;border-radius:4px;padding:2px 5px 0;margin-right:2px;display:inline-block;min-width:9px;text-align:center;background:#fff;color:var(--ink)}
+  #touchNote{padding:12px 16px 9px;font-weight:600}
+  .note{background:rgba(29,35,43,.78);color:#fff;font-weight:600;border-radius:6px;padding:7px 11px 5px;width:fit-content;max-width:100%;box-sizing:border-box}
+  #players{display:flex;gap:6px;flex-wrap:wrap;align-items:center;min-height:32px}
+  #players:has(.chip){background:none;padding:0}
+  .chip{display:inline-flex;align-items:center;gap:7px;background:#fff;color:var(--ink);border-radius:6px;padding:6px 11px 3px;font-weight:900;text-shadow:none;box-shadow:0 3px 0 rgba(0,0,0,.2)}
+  .chip i{width:12px;height:12px;border-radius:3px}
+  .actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  #joinBox{display:inline-flex;gap:6px}
+  #code{width:5.4em;font:900 18px var(--font);text-transform:uppercase;text-align:center;letter-spacing:.12em;border:0;border-radius:8px;
+        padding:12px 8px 9px;box-shadow:inset 0 0 0 2px var(--ink),0 4px 0 rgba(0,0,0,.25)}
+  #status{margin:0}
+  #status:empty{display:none}
+  .foot{font-size:14px;display:flex;gap:18px;flex-wrap:wrap;align-items:center}
+
+  /* workshop between shifts */
+  #shop{position:fixed;inset:0;display:grid;place-items:center;background:rgba(13,27,42,.5);overflow:auto;padding:20px;box-sizing:border-box}
+  #shop .wrap{width:min(900px,100%);display:flex;flex-direction:column;gap:12px}
+  #shop .head{padding:20px 26px 16px;display:flex;justify-content:space-between;align-items:flex-end;gap:18px;flex-wrap:wrap}
+  #shop h2{margin:0;font-size:42px;font-weight:900;line-height:1}
+  #shop .head p{margin:6px 0 0;font-weight:600;font-size:16px}
+  #shop .stats{display:flex;gap:22px}
+  #shop .stats b{display:block;font-size:30px;font-weight:900;line-height:1;font-variant-numeric:tabular-nums}
+  #shop .stats span{font-size:13px;font-weight:600;opacity:.85}
+  #shop h3{margin:4px 2px -2px;color:#fff;font-size:17px;font-weight:800;text-shadow:0 1px 3px rgba(0,0,0,.6)}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(196px,1fr));gap:10px}
+  .card{display:grid;grid-template-columns:44px 1fr;column-gap:12px;row-gap:3px;align-items:start;text-align:left;padding:14px 14px 12px;border:0;
+        color:var(--ink);background:#fff;border-radius:8px;box-shadow:inset 0 0 0 3px #fff,inset 0 0 0 5px var(--ink),0 4px 0 rgba(0,0,0,.22)}
+  .card .pic{grid-row:1/4;width:44px;height:44px;background:var(--blue);border-radius:6px;display:grid;place-items:center;box-shadow:inset 0 0 0 2px var(--blue),inset 0 0 0 3.5px #fff}
+  .card .pic svg{width:26px;height:26px}
+  .card b{font-size:16px;font-weight:800;line-height:1.15}
+  .card small{font-size:13px;color:#4a5562;line-height:1.3}
+  .card .row{display:flex;justify-content:space-between;align-items:center;margin-top:5px;gap:8px}
+  .lv{display:flex;gap:3px}
+  .lv i{width:9px;height:9px;border-radius:2px;box-shadow:inset 0 0 0 2px var(--blue)}
+  .lv i.on{background:var(--blue)}
+  .price{background:var(--yellow);font-weight:900;padding:4px 8px 1px;border-radius:4px;font-size:14px;font-variant-numeric:tabular-nums}
+  .card.owned .price{background:#e3ebf3}
+  .card:disabled{cursor:default}
+  .card:disabled:not(.owned){opacity:.5}
+  .card:not(:disabled):hover{box-shadow:inset 0 0 0 3px #fff,inset 0 0 0 5px var(--blue),0 4px 0 rgba(0,0,0,.22)}
+  #bNext{align-self:flex-end;margin-top:4px}
+
+  /* run over */
+  #over{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(480px,calc(100vw - 40px));padding:28px 30px 24px;box-sizing:border-box}
+  #over svg{width:64px;height:64px;display:block;margin-bottom:10px}
+  #over h2{margin:0;font-size:42px;font-weight:900;line-height:1}
+  #over p{margin:8px 0 18px;font-size:17px;font-weight:600;line-height:1.35}
+  #over .stats{display:flex;gap:26px;margin-bottom:20px}
+  #over .stats b{display:block;font-size:32px;font-weight:900;line-height:1;font-variant-numeric:tabular-nums}
+  #over .stats span{font-size:13px;font-weight:600;color:#5a6470}
+
+  /* touch */
+  #stick{position:fixed;left:20px;bottom:84px;width:150px;height:150px;border-radius:50%;background:rgba(255,255,255,.16);box-shadow:inset 0 0 0 3px rgba(255,255,255,.6);touch-action:none}
+  #knob{position:absolute;left:50%;top:50%;width:60px;height:60px;margin:-30px 0 0 -30px;border-radius:50%;background:#fff;opacity:.85;pointer-events:none}
+  .tbtn{position:fixed;width:84px;height:84px;border-radius:50%;border:0;color:#fff;font:900 14px var(--font);touch-action:none;box-shadow:inset 0 0 0 3px rgba(255,255,255,.7),0 4px 0 rgba(0,0,0,.25)}
+  #tBoost{right:20px;bottom:178px;background:var(--blue)}
+  #tBrake{right:20px;bottom:84px;background:var(--orange)}
+  #tZap{right:112px;bottom:131px;background:#0a8fa8}
+
+  @media (max-width:640px){#sign h2{font-size:34px}#shop h2{font-size:32px}#hud .plate{font-size:18px;padding:8px 11px 5px}#hud{max-width:calc(100vw - 28px)}}
+  @media (prefers-reduced-motion:reduce){#sign.show,#alert.show{animation:none}}
 </style>
 </head>
 <body>
 <canvas id="ui"></canvas>
-<div id="menu">
-  <button id="bStart" hidden>▶ Start</button>
-  <button id="bHost">🌐 Host online game</button>
-  <span id="joinBox"><input id="code" placeholder="CODE" maxlength="5" autocomplete="off"> <button id="bJoin" class="alt">Join</button></span>
-  <div id="status"></div>
+
+<div id="hud" hidden>
+  <div class="plate"><span class="lbl">Shift</span><b id="hShift">1</b></div>
+  <div class="plate bat" id="hBatPlate">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="7" width="18" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="2.2"/><rect x="20" y="10" width="2.6" height="4" fill="currentColor"/></svg>
+    <span class="meter"><i id="hBat"></i></span><b id="hTime">80</b><span class="lbl">s</span>
+  </div>
+  <div class="plate white">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8l9-4 9 4v8l-9 4-9-4zM3 8l9 4 9-4M12 12v8" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+    <span class="pips" id="hPips"></span><b id="hDel">0 / 3</b>
+  </div>
+  <div class="plate white"><b id="hMoney">0</b><span class="lbl">€</span></div>
+  <div class="plate yellow" id="hWx" hidden>
+    <svg viewBox="0 0 48 42" aria-hidden="true"><path d="M24 4L45 39H3z" fill="#ffcc00" stroke="#d7261e" stroke-width="5" stroke-linejoin="round"/><path d="M24 16v11" stroke="#1d232b" stroke-width="4.5" stroke-linecap="round"/><circle cx="24" cy="33" r="2.6" fill="#1d232b"/></svg>
+    <span id="hWxText"></span>
+  </div>
+  <div class="plate" id="hRoom" hidden><span class="lbl">Room</span><b id="hRoomCode"></b></div>
 </div>
-<div id="shop" hidden></div>
-<div id="touch" hidden><div id="stick"><div id="knob"></div></div><button id="tBoost" class="tbtn">BOOST</button><button id="tBrake" class="tbtn">BRAKE</button></div>
+<div class="plate white" id="joinHint" hidden></div>
+
+<div class="plate" id="sign" hidden>
+  <h2 id="signTitle">Shift 1</h2>
+  <p id="signSub"></p>
+  <div class="plate white num"><span id="signQuota">3</span><small>orders</small></div>
+</div>
+
+<div id="alert" hidden>
+  <svg viewBox="0 0 48 42" aria-hidden="true"><path d="M24 4L45 39H3z" fill="#ffcc00" stroke="#d7261e" stroke-width="4" stroke-linejoin="round"/><path d="M24 16v11" stroke="#1d232b" stroke-width="4.5" stroke-linecap="round"/><circle cx="24" cy="33" r="2.6" fill="#1d232b"/></svg>
+  <div class="plate yellow"><b id="alertTitle"></b><span id="alertSub"></span></div>
+</div>
+
+<div id="title">
+  <div class="plate hero">
+    <svg viewBox="0 0 92 62" aria-hidden="true">
+      <path d="M62 6v26" stroke="#fff" stroke-width="3"/><path d="M62 6l16 5-16 5z" fill="#ff6a13"/>
+      <rect x="10" y="30" width="62" height="20" rx="5" fill="#fff"/><rect x="18" y="35" width="38" height="5" rx="2" fill="#0b4f9c"/>
+      <circle cx="21" cy="54" r="6" fill="#fff"/><circle cx="41" cy="54" r="6" fill="#fff"/><circle cx="61" cy="54" r="6" fill="#fff"/>
+    </svg>
+    <h1>Ruokarobo</h1>
+    <p>Deliver groceries from Alepa to every door on the street, through ice, potholes and very grumpy neighbours.</p>
+  </div>
+  <div class="plate white" id="keys">
+    <table>
+      <tr><th>Who</th><th>Drive</th><th>Boost</th><th>Brake</th><th>Zap</th></tr>
+      <tr><td>Player 1</td><td><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></td><td><kbd>Shift</kbd></td><td><kbd>Space</kbd></td><td><kbd>E</kbd></td></tr>
+      <tr><td>Player 2</td><td><kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd></td><td><kbd>R-Shift</kbd></td><td><kbd>.</kbd></td><td><kbd>,</kbd></td></tr>
+      <tr><td>Player 3</td><td><kbd>I</kbd><kbd>J</kbd><kbd>K</kbd><kbd>L</kbd></td><td><kbd>U</kbd></td><td><kbd>O</kbd></td><td><kbd>P</kbd></td></tr>
+      <tr><td>Player 4</td><td><kbd>T</kbd><kbd>F</kbd><kbd>G</kbd><kbd>H</kbd></td><td><kbd>R</kbd></td><td><kbd>Y</kbd></td><td><kbd>V</kbd></td></tr>
+      <tr><td>Gamepad</td><td>Stick</td><td><kbd>A</kbd></td><td><kbd>B</kbd></td><td><kbd>X</kbd></td></tr>
+    </table>
+  </div>
+  <div class="plate white" id="touchNote" hidden>Steer with the stick on the left. Boost, brake and zap are on the right.</div>
+  <div id="players" class="note"></div>
+  <div class="actions" id="menu">
+    <button class="go" id="bStart">Start shift</button>
+    <button class="ghost" id="bHost">Host online game</button>
+    <span id="joinBox"><input id="code" placeholder="Code" maxlength="5" autocomplete="off" aria-label="Room code"><button class="ghost" id="bJoin">Join</button></span>
+  </div>
+  <p id="status" class="note"></p>
+  <div class="foot note"><span id="bestLine"></span><span><kbd>M</kbd> music on or off</span></div>
+</div>
+
+<div id="shop" hidden>
+  <div class="wrap">
+    <div class="plate head">
+      <div><h2>Workshop</h2><p id="shopSub">Shift 1 done.</p></div>
+      <div class="stats"><div><b id="shopBonus">+0 €</b><span>battery bonus</span></div><div><b id="shopMoney">0 €</b><span>team money</span></div></div>
+    </div>
+    <h3>Upgrades</h3>
+    <div class="cards" id="cardsUp"></div>
+    <h3>Robot style</h3>
+    <div class="cards" id="cardsStyle"></div>
+    <button class="go" id="bNext">Start next shift</button>
+  </div>
+</div>
+
+<div class="plate danger" id="over" hidden>
+  <svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="27" fill="#fff" stroke="#d7261e" stroke-width="8"/><rect x="18" y="25" width="24" height="14" rx="2" fill="none" stroke="#1d232b" stroke-width="3.5"/><rect x="42" y="29" width="4" height="6" fill="#1d232b"/></svg>
+  <h2>Battery dead</h2>
+  <p id="overSub"></p>
+  <div class="stats"><div><b id="overEarned">0 €</b><span>earned this run</span></div><div><b id="overBest">0 €</b><span>best run</span></div></div>
+  <button class="go" id="bRetry">Try again</button>
+</div>
+
+<div id="touch" hidden><div id="stick"><div id="knob"></div></div><button id="tBoost" class="tbtn">Boost</button><button id="tBrake" class="tbtn">Brake</button><button id="tZap" class="tbtn">Zap</button></div>
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script type="module">
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
@@ -352,6 +537,9 @@ const smoke = Array.from({ length: 16 }, (_, i) => {
 });
 // snowballs, tow ropes, wheel tracks and snow spray
 const ballPool = Array.from({ length: 16 }, () => { const m = mesh(sphGeo(.22), '#ffffff', scene); m.visible = false; return m; });
+const bolts = [], BOLT_SEG = 7, boltPos = new Float32Array(8 * BOLT_SEG * 6), boltGeo = new THREE.BufferGeometry();
+boltGeo.setAttribute('position', new THREE.BufferAttribute(boltPos, 3));
+const boltLines = new THREE.LineSegments(boltGeo, new THREE.LineBasicMaterial({ color: '#8ff4ff' })); boltLines.frustumCulled = false; scene.add(boltLines);
 const ropePos = new Float32Array(8 * 6), ropeGeo = new THREE.BufferGeometry();
 ropeGeo.setAttribute('position', new THREE.BufferAttribute(ropePos, 3));
 const rope = new THREE.LineSegments(ropeGeo, new THREE.LineBasicMaterial({ color: '#222' })); rope.frustumCulled = false; scene.add(rope);
@@ -420,10 +608,10 @@ function buildHazards() {
 // ---------- players & input ----------
 const COLORS = ['#ff7a1a', '#2d9cff', '#2fbf6a', '#e84393', '#f5c400', '#9b59b6', '#00c2c7', '#e74c3c'];
 const KB = [
-  { name: 'WASD', u: 'KeyW', d: 'KeyS', l: 'KeyA', r: 'KeyD', b: 'ShiftLeft', h: 'Space' },
-  { name: 'Arrows', u: 'ArrowUp', d: 'ArrowDown', l: 'ArrowLeft', r: 'ArrowRight', b: 'ShiftRight', h: 'Period' },
-  { name: 'IJKL', u: 'KeyI', d: 'KeyK', l: 'KeyJ', r: 'KeyL', b: 'KeyU', h: 'KeyO' },
-  { name: 'TFGH', u: 'KeyT', d: 'KeyG', l: 'KeyF', r: 'KeyH', b: 'KeyR', h: 'KeyY' },
+  { name: 'WASD', u: 'KeyW', d: 'KeyS', l: 'KeyA', r: 'KeyD', b: 'ShiftLeft', h: 'Space', z: 'KeyE' },
+  { name: 'Arrows', u: 'ArrowUp', d: 'ArrowDown', l: 'ArrowLeft', r: 'ArrowRight', b: 'ShiftRight', h: 'Period', z: 'Comma' },
+  { name: 'IJKL', u: 'KeyI', d: 'KeyK', l: 'KeyJ', r: 'KeyL', b: 'KeyU', h: 'KeyO', z: 'KeyP' },
+  { name: 'TFGH', u: 'KeyT', d: 'KeyG', l: 'KeyF', r: 'KeyH', b: 'KeyR', h: 'KeyY', z: 'KeyV' },
 ];
 const keys = new Set(), robots = [];
 const spawn = i => ({ x: 70 + (i % 4) * 42, y: i < 4 ? 582 : 550 });
@@ -473,7 +661,7 @@ function buildRobot(r) {
 function addRobot({ owner = 'H', ctrl = null, lid = 0, id = nextId++, i }) {
   i ??= COLORS.findIndex((_, k) => !robots.some(r => r.i === k));
   const r = { id, owner, ctrl, lid, i, color: COLORS[i], ...spawn(i), a: 0, vx: 0, vy: 0, cargo: null, hole: null, esc: 0,
-              immune: 1, hitCd: 0, stun: 0, say: '', sayT: 0, boost: 1, boosting: false };
+              immune: 1, hitCd: 0, stun: 0, say: '', sayT: 0, boost: 1, boosting: false, zaps: 3, zapCd: 0 };
   buildRobot(r); robots.push(r); return r;
 }
 function removeRobot(r) {
@@ -494,16 +682,16 @@ const ZERO = { t: 0, s: 0 };
 const input = r => r.owner === 'H' ? ctrlInput(r.ctrl) : remoteIn[r.id] || ZERO;
 function ctrlInput(ctrl) {
   if (ctrl.touch) return touchIn;
-  if (ctrl.kb != null) { const k = KB[ctrl.kb]; return { t: keys.has(k.u) - keys.has(k.d), s: keys.has(k.r) - keys.has(k.l), b: keys.has(k.b), h: keys.has(k.h) }; }
+  if (ctrl.kb != null) { const k = KB[ctrl.kb]; return { t: keys.has(k.u) - keys.has(k.d), s: keys.has(k.r) - keys.has(k.l), b: keys.has(k.b), h: keys.has(k.h), z: keys.has(k.z) }; }
   const gp = navigator.getGamepads?.()[ctrl.pad];
   if (!gp) return { t: 0, s: 0 };
   const dz = v => Math.abs(v) < .2 ? 0 : v, b = k => gp.buttons[k]?.pressed;
   let t = -dz(gp.axes[1] || 0), s = dz(gp.axes[0] || 0);
-  if (b(2) || b(7) || b(12)) t = 1;
+  if (b(7) || b(12)) t = 1;
   if (b(6) || b(13)) t = -1;
   if (b(14)) s = -1; if (b(15)) s = 1;
   if (b(0) && !t) t = 1; // boost alone also drives
-  return { t, s, b: b(0) || b(5), h: b(1) || b(4) };
+  return { t, s, b: b(0) || b(5), h: b(1) || b(4), z: b(2) || b(3) };
 }
 addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT') { if (e.code === 'Enter') joinRoom(codeIn.value); return; }
@@ -651,7 +839,7 @@ function startLevel(n) {
   level = n; setupLevel(n);
   time = 75 + n * 5 + up.battery * 12; delivered = 0;
   quota = 2 + n + (robots.length - 1) * 2;
-  robots.forEach(r => Object.assign(r, spawn(r.i), { vx: 0, vy: 0, a: 0, camYaw: 0, boost: 1, cargo: null, hole: null, stun: 0, immune: 1 }));
+  robots.forEach(r => Object.assign(r, spawn(r.i), { vx: 0, vy: 0, a: 0, camYaw: 0, boost: 1, zaps: 3, cargo: null, hole: null, stun: 0, immune: 1 }));
   weather = { k: null, t: 0 }; weatherIn = n >= 2 ? rnd(15, 35) : Infinity;
   state = 'play'; stateT = 0;
   banner = `Shift ${n} – ${LEVEL_NAMES[Math.min(n, 4) - 1]}`; bannerT = 3;
@@ -674,19 +862,21 @@ const SFX = {
   deliver: () => { beep(660, .08); beep(880, .08, .09); beep(1320, .15, .18); },
   alarm: () => [880, 660, 880, 660].forEach((f, i) => beep(f, .12, i * .14, 'square', .04)),
   splat: () => beep(300, .08, 0, 'triangle', .07),
+  zap: () => { beep(1400, .07, 0, 'sawtooth', .05); beep(700, .14, .05, 'square', .04); beep(1800, .05, .1, 'sawtooth', .03); },
   bark: () => { beep(420, .07, 0, 'square', .06); beep(380, .09, .12, 'square', .06); },
   boost: () => { beep(160, .3, 0, 'sawtooth', .04); beep(320, .25, .05, 'sawtooth', .03); },
   clear: () => [523, 659, 784, 1047].forEach((f, i) => beep(f, .15, i * .12)),
   over: () => { beep(300, .2); beep(200, .4, .2); },
 };
 const sfx = n => fx({ k: 'sfx', n });
-let wxMsg = '', wxMsgT = 0;
+let wxKind = '', wxMsgT = 0;
 function fx(e) { // play locally; the host also forwards it to guests
   if (e.k === 'sfx') SFX[e.n]();
   else if (e.k === 'pop') floats.push({ x: e.x, y: e.y, h: 6, text: e.text, color: e.color, t: 1.4 });
   else if (e.k === 'cust') HOUSES[e.i].custT = 2.5;
   else if (e.k === 'burst') burst(e.x, e.y, e.n);
-  else if (e.k === 'wx') { wxMsg = e.text; wxMsgT = 3.5; }
+  else if (e.k === 'zap') bolts.push({ ...e, t: .2 });
+  else if (e.k === 'wx') { wxKind = e.w; wxMsgT = 3.5; }
   if (role === 'host') outbox.push(e);
 }
 function damage(r, amt, msg) {
@@ -694,6 +884,20 @@ function damage(r, amt, msg) {
   r.hitCd = .7; say(r, msg, 1);
   if (r.cargo) r.cargo.cond = Math.max(0, r.cargo.cond - amt * (1 - .22 * up.susp) * (ORDERS[r.cargo.o].dmg || 1));
   sfx('crash');
+}
+function zap(r) {
+  r.zaps -= 1; r.zapCd = .4; sfx('zap');
+  const fx_ = Math.cos(r.a), fy = Math.sin(r.a);
+  let best = null, bd = 120;
+  for (const e of [...peds, ...kids]) {
+    if (e.mode === 'fall') continue;
+    const dx = e.x - r.x, dy = e.y - r.y, d = Math.hypot(dx, dy);
+    if (d < bd && (dx * fx_ + dy * fy) / (d || 1) > .7) { best = e; bd = d; } // within ~45° ahead
+  }
+  fx({ k: 'zap', x1: r.x, y1: r.y, x2: best ? best.x : r.x + fx_ * 70, y2: best ? best.y : r.y + fy * 70 });
+  if (!best) return;
+  best.zapT = 3; say(best, best.kind === 'dog' ? 'Vuh?' : pick(['Bzzzt!', 'Aijai!', 'Auh!']), 1.4);
+  if (best.mode) { best.mode = 'zapped'; best.moving = false; }
 }
 function escape(r, msg, nx = Math.cos(r.a), ny = Math.sin(r.a)) {
   r.hole = null; r.immune = 1.5; r.vx = nx * 150; r.vy = ny * 150;
@@ -737,6 +941,10 @@ function updRobot(r, dt) {
   const boosting = !!(inp.b && inp.t > 0 && r.boost > .02 && control);
   if (boosting && !r.boosting) sfx('boost');
   r.boosting = boosting; r.boost = clamp(r.boost + (boosting ? -dt / 2 : dt / 7), 0, 1);
+  // stun gun: 3 charges, one recharges every 6 s; zaps the nearest local, dog or kid in front
+  r.zaps = Math.min(3, r.zaps + dt / 6); r.zapCd -= dt;
+  if (inp.z && !r.zPrev && control && r.zapCd <= 0 && r.zaps >= 1 && state === 'play') zap(r);
+  r.zPrev = !!inp.z;
   const hb = !!inp.h;
   r.a += inp.s * 3.4 * (hb ? 1.7 : 1) * dt * control;
   const cx = Math.cos(r.a), sy = Math.sin(r.a);
@@ -860,6 +1068,7 @@ function updPeds(dt) {
   for (const p of peds) {
     p.t -= dt; p.cool -= dt; p.kickT -= dt; p.sayT -= dt;
     if (p.mode === 'fall') { if (p.t <= 0) { p.mode = 'walk'; p.cool = 2; } continue; }
+    if (p.mode === 'zapped') { if ((p.zapT -= dt) <= 0) { p.mode = 'walk'; p.cool = 3; } continue; }
     const dog = p.kind === 'dog';
     if (p.mode === 'walk' && state === 'play' && p.cool <= 0) {
       const r = robots.filter(r => !r.hole).sort((a, b) => dist(p, a) - dist(p, b))[0];
@@ -922,7 +1131,7 @@ const ballH = b => b.h0 + b.vh * b.age - .5 * G * b.age * b.age;
 function updKids(dt) {
   for (const k of kids) {
     k.cool -= dt; k.throwT -= dt; k.sayT -= dt;
-    if (state !== 'play') continue;
+    if (state !== 'play' || (k.zapT -= dt) > 0) continue;
     const r = robots.filter(r => !r.hole).sort((a, b) => dist(k, a) - dist(k, b))[0];
     if (!r || dist(k, r) > 260) continue;
     k.a = Math.atan2(r.y - k.y, r.x - k.x);
@@ -950,7 +1159,7 @@ function updWeather(dt) {
   if ((weatherIn -= dt) > 0) return;
   const k = pick(['blizzard', 'freeze']);
   weather = { k, t: k === 'blizzard' ? 20 : 15 };
-  fx({ k: 'wx', text: k === 'blizzard' ? "❄️ BLIZZARD! You can't see a thing" : '🧊 FREEZING RAIN! Everything is ice' }); sfx('alarm');
+  fx({ k: 'wx', w: k }); sfx('alarm');
 }
 function update(dt) {
   T += dt; stateT += dt; bannerT -= dt; wxMsgT -= dt;
@@ -1098,10 +1307,10 @@ function broadcast(dt) {
   netT = 0;
   const m = { type: 's', st: state, level, time, quota, delivered, score, bonus, money, up, banner, bannerT, best,
     r: robots.map(r => ({ id: r.id, i: r.i, owner: r.owner, x: r.x, y: r.y, a: r.a, vx: r.vx, vy: r.vy, cargo: r.cargo,
-                          hole: !!r.hole, esc: r.esc, stun: r.stun, say: r.say, sayT: r.sayT, bo: r.boost, bz: r.boosting, tw: r.towT > 0 ? r.tow : -1 })),
+                          hole: !!r.hole, esc: r.esc, stun: r.stun, say: r.say, sayT: r.sayT, bo: r.boost, bz: r.boosting, zp: r.zaps, tw: r.towT > 0 ? r.tow : -1 })),
     c: cars.map(c => c.x), fx: outbox.splice(0),
     p: peds.map(p => ({ x: p.x, y: p.y, a: p.a, m: p.mode, k: p.kickT > 0, mv: p.moving, s: p.say, st: p.sayT })),
-    kd: kids.map(k => ({ a: k.a, th: k.throwT, s: k.say, st: k.sayT })), b: balls, wx: weather,
+    kd: kids.map(k => ({ a: k.a, th: k.throwT, s: k.say, st: k.sayT, z: k.zapT > 0 })), b: balls, wx: weather,
     pl: plow && { x: plow.x, y: plow.y, a: plow.a }, ig: ice.map(p => p.gone ? 1 : 0).join('') };
   for (const c of conns) c.send(m);
 }
@@ -1113,11 +1322,11 @@ function applySnap(m) {
     let r = robots.find(q => q.id === s.id);
     if (!r) r = Object.assign(addRobot({ id: s.id, owner: s.owner, i: s.i }), { x: s.x, y: s.y, a: s.a });
     Object.assign(r, { owner: s.owner, tx: s.x, ty: s.y, ta: s.a, vx: s.vx, vy: s.vy, cargo: s.cargo, hole: s.hole || null,
-                       esc: s.esc, stun: s.stun, say: s.say, sayT: s.sayT, boost: s.bo, boosting: s.bz, tow: s.tw, towT: s.tw >= 0 ? 1 : 0 });
+                       esc: s.esc, stun: s.stun, say: s.say, sayT: s.sayT, boost: s.bo, boosting: s.bz, zaps: s.zp, tow: s.tw, towT: s.tw >= 0 ? 1 : 0 });
   }
   m.c.forEach((x, i) => cars[i] && (cars[i].tx = x));
   m.p?.forEach((q, i) => peds[i] && Object.assign(peds[i], { tx: q.x, ty: q.y, a: q.a, mode: q.m, kickT: q.k ? .3 : 0, moving: q.mv, say: q.s, sayT: q.st }));
-  m.kd?.forEach((q, i) => kids[i] && Object.assign(kids[i], { a: q.a, throwT: q.th, say: q.s, sayT: q.st }));
+  m.kd?.forEach((q, i) => kids[i] && Object.assign(kids[i], { a: q.a, throwT: q.th, say: q.s, sayT: q.st, zapT: q.z ? 1 : 0 }));
   balls = m.b || []; weather = m.wx || weather;
   if (plow && m.pl) Object.assign(plow, { tx: m.pl.x, ty: m.pl.y, a: m.pl.a });
   [...(m.ig || '')].forEach((g, i) => { if (ice[i] && g === '1' && !ice[i].gone) { ice[i].gone = true; if (ice[i].mesh) ice[i].mesh.visible = false; } });
@@ -1179,13 +1388,31 @@ function sync(dt) {
     const sw = p.moving ? Math.sin(T * (p.mode === 'chase' ? 16 : 9)) * .5 : 0;
     p.legs[0].rotation.z = sw; p.legs[1].rotation.z = p.kickT > 0 && !dog ? 1.4 : -sw;
     p.body.position.y = dog && p.kickT > 0 ? .6 : 0; // dogs jump at you
-    if (p.head) p.head.material.color.set(p.mode === 'chase' ? '#e0675a' : '#f1c7a5');
+    if (p.head) p.head.material.color.set(p.mode === 'chase' ? '#e0675a' : p.mode === 'zapped' ? '#bfe8ff' : '#f1c7a5');
+    p.mesh.rotation.x = p.mode === 'zapped' ? Math.sin(T * 45) * .08 : 0; // twitching
+    if (p.mode === 'zapped' && Math.random() < .3) puff(p.x, p.y, rnd(1, 2.5), rnd(-1, 1), rnd(-1, 1), rnd(0, 2));
   }
   for (const k of kids) {
     if (!k.mesh) continue;
     place(k.mesh, k.x, k.y); k.mesh.rotation.y = -k.a;
     k.arms[1].rotation.z = k.throwT > 0 ? -2.4 + (.3 - k.throwT) * 8 : 0;
+    k.mesh.rotation.x = k.zapT > 0 ? Math.sin(T * 45) * .1 : 0;
   }
+  let nb = 0; // jagged lightning bolts for stun-gun shots
+  for (const b of bolts) {
+    b.t -= dt;
+    if (b.t <= 0 || nb >= 8) continue;
+    let px = b.x1, py = b.y1, ph = .8;
+    for (let k = 1; k <= BOLT_SEG; k++) {
+      const f = k / BOLT_SEG, j = k < BOLT_SEG ? 6 : 0;
+      const nx = b.x1 + (b.x2 - b.x1) * f + rnd(-j, j), ny = b.y1 + (b.y2 - b.y1) * f + rnd(-j, j), nh = .8 + (k < BOLT_SEG ? rnd(-.3, .5) : 1);
+      boltPos.set([px * S - OX, ph, py * S - OZ, nx * S - OX, nh, ny * S - OZ], (nb * BOLT_SEG + k - 1) * 6);
+      px = nx; py = ny; ph = nh;
+    }
+    nb++;
+  }
+  while (bolts.length && bolts[0].t <= 0) bolts.shift();
+  boltGeo.setDrawRange(0, nb * BOLT_SEG * 2); boltGeo.attributes.position.needsUpdate = true;
   ballPool.forEach((m, i) => { const b = balls[i]; m.visible = !!b && b.age < b.ft; if (m.visible) place(m, b.x, b.y, Math.max(.2, ballH(b))); });
   if (plow?.mesh) { place(plow.mesh, plow.x, plow.y); plow.mesh.rotation.y = -plow.a; plow.beacon.visible = (T * 4 | 0) % 2 === 0; }
   let ropes = 0; // tow ropes
@@ -1235,190 +1462,251 @@ function scr(x, y, h, v) {
   _v.set(x * S - OX, h, y * S - OZ).project(v.cam);
   return { x: v.x + (_v.x + 1) / 2 * v.w, y: v.y + (1 - _v.y) / 2 * v.h, ok: _v.z < 1 && Math.abs(_v.x) < 1.1 && Math.abs(_v.y) < 1.1 };
 }
-function panel(lines, y0) {
-  const k = Math.min(1, vw / 1100), w = Math.min(860, vw - 32), h = lines.length * 40 * k + 50 * k;
-  y0 = y0 ?? (vh - h) / 2;
-  ctx.fillStyle = 'rgba(10,22,44,.86)'; ctx.beginPath(); ctx.roundRect(vw / 2 - w / 2, y0, w, h, 18); ctx.fill();
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  lines.forEach(([text, size = 22, color = '#e8f1fb'], i) => {
-    ctx.font = `${size > 30 ? 900 : 600} ${size * k}px system-ui`; ctx.fillStyle = color;
-    ctx.fillText(text, vw / 2, y0 + 45 * k + i * 40 * k);
-  });
+const F = (w, px) => `${w} ${px}px Overpass, system-ui, sans-serif`;
+const INK = '#1d232b', BLUE = '#0b4f9c', YELLOW = '#ffcc00', RED = '#d7261e';
+function rr(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); }
+function plate(x, y, w, h, fill, rim) { // road-sign plate: drop shadow, body, inset rim line
+  ctx.fillStyle = 'rgba(0,0,0,.25)'; rr(x, y + 3, w, h, 7); ctx.fill();
+  ctx.fillStyle = fill; rr(x, y, w, h, 7); ctx.fill();
+  ctx.strokeStyle = rim; ctx.lineWidth = 2; rr(x + 4, y + 4, w - 8, h - 8, 4); ctx.stroke();
+}
+function bubble(x, y, text, edge) { // speech bubble whose tail points down at (x, y)
+  ctx.font = F(800, 14);
+  const w = ctx.measureText(text).width + 20, h = 26, top = y - 7 - h;
+  ctx.fillStyle = '#fff'; ctx.strokeStyle = edge; ctx.lineWidth = 2;
+  rr(x - w / 2, top, w, h, 6); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x - 6, y - 8); ctx.lineTo(x, y); ctx.lineTo(x + 6, y - 8); ctx.fill(); ctx.stroke();
+  ctx.fillRect(x - 5, y - 10, 10, 3); // hide the rim under the tail
+  ctx.fillStyle = INK; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, x, top + h / 2 + 1);
+}
+function warnTriangle(x, y, s) { // small yellow-and-red warning sign above angry people
+  ctx.beginPath(); ctx.moveTo(x, y - s); ctx.lineTo(x + s * 1.1, y + s * .8); ctx.lineTo(x - s * 1.1, y + s * .8); ctx.closePath();
+  ctx.fillStyle = YELLOW; ctx.strokeStyle = RED; ctx.lineWidth = s * .28; ctx.lineJoin = 'round'; ctx.fill(); ctx.stroke();
+  ctx.fillStyle = INK; ctx.fillRect(x - s * .1, y - s * .35, s * .2, s * .65); ctx.fillRect(x - s * .1, y + s * .4, s * .2, s * .2);
 }
 function drawUI(vs) {
   ctx.clearRect(0, 0, vw, vh);
   for (const v of vs) { ctx.save(); ctx.beginPath(); ctx.rect(v.x, v.y, v.w, v.h); ctx.clip(); drawLabels(v); ctx.restore(); }
-  ctx.strokeStyle = '#0d1b2a'; ctx.lineWidth = 4;
-  for (const v of vs) ctx.strokeRect(v.x, v.y, v.w, v.h);
-  drawHUD();
+  ctx.strokeStyle = INK; ctx.lineWidth = 4;
+  for (const v of vs) if (vs.length > 1) ctx.strokeRect(v.x, v.y, v.w, v.h);
+}
+function drawTag(v) { // the player's own order sign at the bottom of their view
+  const r = v.r, cx = v.x + v.w / 2, by = v.y + v.h - 14;
+  let title, sub, num = null, numFill = BLUE, right = '', late = false;
+  if (r.hole) { title = 'Stuck in a pothole'; sub = 'Wiggle out, or wait for a friend to tow you'; }
+  else if (r.cargo) {
+    const O = ORDERS[r.cargo.o];
+    title = `${O.icon} ${O.name}`; sub = `Deliver to house ${r.cargo.dest + 1}`; num = r.cargo.dest + 1;
+    late = r.cargo.t <= 0; right = late ? 'Late' : Math.ceil(r.cargo.t) + ' s';
+  } else { title = 'Pick up at Alepa'; sub = 'Follow the green marker'; num = 'A'; numFill = '#2f9e57'; }
+  ctx.font = F(800, 17); const tw = ctx.measureText(title).width;
+  ctx.font = F(600, 13); const sw = ctx.measureText(sub).width;
+  ctx.font = F(900, 24); const rw = right ? ctx.measureText(right).width + 34 : 0;
+  const h = 58, w = Math.min(v.w - 20, 26 + (num != null ? 48 : 0) + Math.max(tw, sw) + rw + 14), x = cx - w / 2, y = by - h;
+  plate(x, y, w, h, BLUE, '#fff');
+  ctx.fillStyle = r.color; rr(x, y, 9, h, [7, 0, 0, 7]); ctx.fill();
+  let tx = x + 22;
+  if (num != null) { // house-number plate, like the ones on the houses
+    plate(tx, y + 11, 36, 36, numFill, '#fff');
+    ctx.fillStyle = '#fff'; ctx.font = F(900, 20); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(num, tx + 18, y + 31);
+    tx += 48;
+  }
+  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = '#fff'; ctx.font = F(800, 17); ctx.fillText(title, tx, y + 27);
+  ctx.fillStyle = 'rgba(255,255,255,.82)'; ctx.font = F(600, 13); ctx.fillText(sub, tx, y + 45);
+  if (right) {
+    const rx = x + w - rw - 6;
+    if (late) { ctx.fillStyle = YELLOW; rr(rx + 8, y + 12, rw - 14, h - 24, 5); ctx.fill(); }
+    ctx.fillStyle = late ? INK : '#fff'; ctx.font = F(900, 24); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(right, rx + 1 + rw / 2, y + h / 2 + 2);
+  }
+  // boost meter and stun-gun charges on a small supplementary panel above
+  const pw = 230, px = cx - pw / 2, py = y - 30;
+  plate(px, py, pw, 24, '#fff', INK);
+  ctx.fillStyle = INK; ctx.font = F(700, 11); ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.fillText('Boost', px + 11, py + 13); ctx.fillText('Zap', px + 146, py + 13);
+  ctx.fillStyle = '#d8e0e8'; rr(px + 50, py + 8, 84, 8, 2); ctx.fill();
+  ctx.fillStyle = r.boost > .02 ? BLUE : '#9aa5b1'; rr(px + 50, py + 8, 84 * r.boost, 8, 2); ctx.fill();
+  for (let k = 0; k < 3; k++) {
+    const f = clamp((r.zaps ?? 3) - k, 0, 1), zx = px + 172 + k * 17;
+    ctx.fillStyle = '#d8e0e8'; rr(zx, py + 6, 12, 12, 2); ctx.fill();
+    if (f > 0) { ctx.fillStyle = f >= 1 ? '#0a8fa8' : '#8fcfda'; rr(zx, py + 18 - 12 * f, 12, 12 * f, 2); ctx.fill(); }
+  }
 }
 function drawLabels(v) {
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  if (v.r && state === 'play') { // this player's own tag in the corner of their view
-    const r = v.r, txt = r.hole ? 'Stuck! Wiggle or wait for a friend' : r.cargo ? `${ORDERS[r.cargo.o].icon} → House ${r.cargo.dest + 1}   ${r.cargo.t > 0 ? '⏱ ' + Math.ceil(r.cargo.t) + 's' : 'LATE'}` : '🛒 Back to Alepa';
-    ctx.font = 'bold 16px system-ui'; const tw = ctx.measureText(txt).width + 50;
-    ctx.fillStyle = 'rgba(10,22,44,.8)'; ctx.beginPath(); ctx.roundRect(v.x + v.w / 2 - tw / 2, v.y + v.h - 46, tw, 34, 10); ctx.fill();
-    ctx.fillStyle = r.color; ctx.beginPath(); ctx.arc(v.x + v.w / 2 - tw / 2 + 18, v.y + v.h - 29, 8, 0, 7); ctx.fill();
-    ctx.fillStyle = '#e8f1fb'; ctx.fillText(txt, v.x + v.w / 2 + 10, v.y + v.h - 28);
-    const bw = 120, bx = v.x + v.w / 2 - bw / 2, by = v.y + v.h - 58;
-    ctx.fillStyle = 'rgba(10,22,44,.8)'; ctx.fillRect(bx - 2, by - 2, bw + 4, 10);
-    ctx.fillStyle = r.boost > .02 ? '#4fd8ff' : '#556'; ctx.fillRect(bx, by, bw * r.boost, 6);
-    ctx.font = 'bold 11px system-ui'; ctx.fillStyle = '#4fd8ff'; ctx.textAlign = 'right'; ctx.fillText('BOOST', bx - 6, by + 3); ctx.textAlign = 'center';
-    drawMinimap(v);
-  }
   for (const p of [...peds, ...kids]) {
     const q = scr(p.x, p.y, p.dx != null ? 2.4 : 3.3, v);
     if (!q.ok) continue;
-    const txt = p.sayT > 0 ? p.say : p.mode === 'chase' ? '💢' : '';
-    if (!txt) continue;
-    ctx.font = 'bold 14px system-ui'; const tw = ctx.measureText(txt).width + 14;
-    ctx.fillStyle = '#fff'; ctx.strokeStyle = '#d33'; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.roundRect(q.x - tw / 2, q.y - 12, tw, 24, 8); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = '#7a1010'; ctx.fillText(txt, q.x, q.y + 1);
+    if (p.sayT > 0) bubble(q.x, q.y, p.say, RED);
+    else if (p.mode === 'chase') warnTriangle(q.x, q.y - 8, 10);
   }
   for (const r of robots) {
     const p = scr(r.x, r.y, 0, v), top = scr(r.x, r.y, 3, v);
     if (!p.ok) continue;
-    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = r.color; ctx.strokeStyle = 'rgba(0,0,0,.6)'; ctx.lineWidth = 3;
-    ctx.strokeText('P' + (r.i + 1), p.x, p.y + 22); ctx.fillText('P' + (r.i + 1), p.x, p.y + 22);
+    ctx.font = F(900, 11); const lw = ctx.measureText('P' + (r.i + 1)).width + 10;
+    ctx.fillStyle = r.color; rr(p.x - lw / 2, p.y + 15, lw, 16, 4); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('P' + (r.i + 1), p.x, p.y + 24);
     let y = top.y;
-    if (r.cargo) {
-      ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fillRect(top.x - 20, y - 4, 40, 8);
-      ctx.fillStyle = `hsl(${r.cargo.cond * 120},80%,45%)`; ctx.fillRect(top.x - 20, y - 4, 40 * r.cargo.cond, 8);
-      ctx.font = '14px system-ui'; ctx.fillText(ORDERS[r.cargo.o].icon, top.x - 32, y);
-      y -= 12;
+    if (r.cargo) { // package condition
+      ctx.fillStyle = 'rgba(29,35,43,.75)'; rr(top.x - 22, y - 5, 44, 10, 3); ctx.fill();
+      ctx.fillStyle = `hsl(${r.cargo.cond * 120},75%,48%)`; rr(top.x - 20, y - 3, 40 * r.cargo.cond, 6, 2); ctx.fill();
+      y -= 10;
     }
     if (r.hole) {
-      ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fillRect(p.x - 22, p.y + 32, 44, 6);
-      ctx.fillStyle = '#ffd84a'; ctx.fillRect(p.x - 22, p.y + 32, 44 * r.esc, 6);
+      ctx.fillStyle = 'rgba(29,35,43,.75)'; rr(p.x - 24, p.y + 36, 48, 9, 3); ctx.fill();
+      ctx.fillStyle = YELLOW; rr(p.x - 22, p.y + 38, 44 * r.esc, 5, 2); ctx.fill();
     }
-    if (r.sayT > 0) {
-      ctx.font = 'bold 15px system-ui';
-      const tw = ctx.measureText(r.say).width + 16; y -= 18;
-      ctx.fillStyle = '#fff'; ctx.strokeStyle = r.color; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.roundRect(top.x - tw / 2, y - 13, tw, 26, 9); ctx.fill(); ctx.stroke();
-      ctx.fillStyle = '#1b2533'; ctx.fillText(r.say, top.x, y + 1);
-    }
+    if (r.sayT > 0) bubble(top.x, y - 4, r.say, r.color);
   }
   for (const f of floats) {
     const p = scr(f.x, f.y, f.h, v);
     if (!p.ok) continue;
-    ctx.font = '800 24px system-ui'; ctx.fillStyle = f.color; ctx.strokeStyle = '#000'; ctx.lineWidth = 3;
-    ctx.strokeText(f.text, p.x, p.y); ctx.fillText(f.text, p.x, p.y);
+    ctx.font = F(900, 22); ctx.textAlign = 'center'; ctx.lineJoin = 'round';
+    ctx.strokeStyle = INK; ctx.lineWidth = 5; ctx.strokeText(f.text, p.x, p.y);
+    ctx.fillStyle = f.color; ctx.fillText(f.text, p.x, p.y);
   }
+  if (v.r && state === 'play') { drawTag(v); drawMinimap(v); }
 }
 const miniBg = document.createElement('canvas'); miniBg.width = 480; miniBg.height = 270;
 {
   const g = miniBg.getContext('2d'); g.scale(480 / W, 270 / H);
-  g.fillStyle = '#e8eff6'; g.fillRect(0, 0, W, H);
+  g.fillStyle = '#eef3f8'; g.fillRect(0, 0, W, H);
   g.fillStyle = '#b9dcf0'; g.beginPath(); g.ellipse(LAKE.x, LAKE.y, LAKE.rx, LAKE.ry, 0, 0, 7); g.fill();
-  g.fillStyle = '#50555d'; g.fillRect(...ROAD);
+  g.fillStyle = '#4d525a'; g.fillRect(...ROAD);
   g.fillStyle = '#b3bac4'; PATHS.forEach(p => g.fillRect(...p));
   g.fillStyle = '#2f9e57'; g.fillRect(ALEPA.x, ALEPA.y, ALEPA.w, ALEPA.h);
   g.fillStyle = '#6b4226'; g.fillRect(SAUNA.x, SAUNA.y, SAUNA.w, SAUNA.h);
-  g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = 'bold 70px system-ui';
-  for (const h of HOUSES) { g.fillStyle = h.tall ? '#9a8e78' : h.wall; g.fillRect(h.x, h.y, h.w, h.h); g.fillStyle = '#fff'; g.fillText(h.n, h.x + h.w / 2, h.y + h.h / 2); }
-  g.fillStyle = '#fff'; g.fillText('A', ALEPA.x + ALEPA.w / 2, ALEPA.y + ALEPA.h / 2);
+  g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = '900 72px Overpass, system-ui, sans-serif';
+  for (const h of HOUSES) { g.fillStyle = BLUE; g.fillRect(h.x, h.y, h.w, h.h); g.fillStyle = '#fff'; g.fillText(h.n, h.x + h.w / 2, h.y + h.h / 2 + 6); }
+  g.fillStyle = '#fff'; g.fillText('A', ALEPA.x + ALEPA.w / 2, ALEPA.y + ALEPA.h / 2 + 6);
 }
 function drawMinimap(v) {
-  const mw = Math.min(240, v.w * .3), mh = mw * H / W, x = v.x + v.w - mw - 12, y = v.y + (v.y < 1 ? 58 : 12), k = mw / W;
+  const mw = Math.min(232, v.w * .3), mh = mw * H / W, x = v.x + v.w - mw - 18, y = v.y + (v.y < 1 ? 60 : 18), k = mw / W;
+  plate(x - 7, y - 7, mw + 14, mh + 14, '#fff', INK);
   ctx.save();
-  ctx.globalAlpha = .92; ctx.drawImage(miniBg, x, y, mw, mh); ctx.globalAlpha = 1;
   ctx.beginPath(); ctx.rect(x, y, mw, mh); ctx.clip();
+  ctx.drawImage(miniBg, x, y, mw, mh);
   const dot = (px, py, rad, color) => { ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x + px * k, y + py * k, rad, 0, 7); ctx.fill(); };
   ctx.fillStyle = 'rgba(150,210,245,.95)';
   for (const p of ice) if (!p.gone) { ctx.beginPath(); ctx.ellipse(x + p.x * k, y + p.y * k, p.rx * k, p.ry * k, 0, 0, 7); ctx.fill(); }
-  for (const h of holes) dot(h.x, h.y, 2.2, '#111');
+  for (const h of holes) dot(h.x, h.y, 2.2, INK);
   for (const c of cars) { ctx.fillStyle = '#26303b'; ctx.fillRect(x + (c.x - 40) * k, y + (c.y - 18) * k, 80 * k, 36 * k); }
   const tgt = v.r.cargo ? HOUSES[v.r.cargo.dest].door : ALEPA.door;
-  ctx.strokeStyle = v.r.color; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(x + tgt.x * k, y + tgt.y * k, 7 + Math.sin(T * 6) * 2, 0, 7); ctx.stroke();
-  for (const p of peds) dot(p.x, p.y, 2.5, p.mode === 'chase' ? '#ff3b30' : p.kind === 'dog' ? '#8b5a2b' : '#556');
+  ctx.strokeStyle = v.r.color; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x + tgt.x * k, y + tgt.y * k, 7 + Math.sin(T * 6) * 2, 0, 7); ctx.stroke();
+  for (const p of peds) dot(p.x, p.y, 2.6, p.mode === 'chase' ? RED : p.kind === 'dog' ? '#8b5a2b' : '#6b7480');
   for (const q of kids) dot(q.x, q.y, 2.2, '#ff9d00');
   if (plow) { ctx.fillStyle = '#f5a200'; ctx.fillRect(x + plow.x * k - 4, y + plow.y * k - 4, 8, 8); }
   for (const r of robots) {
     ctx.save(); ctx.translate(x + r.x * k, y + r.y * k); ctx.rotate(r.a);
-    const sz = r === v.r ? 6 : 4.5;
-    ctx.fillStyle = r.color; ctx.strokeStyle = '#fff'; ctx.lineWidth = r === v.r ? 1.5 : 0;
+    const sz = r === v.r ? 6.5 : 4.5;
+    ctx.fillStyle = r.color; ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.moveTo(sz, 0); ctx.lineTo(-sz * .7, -sz * .7); ctx.lineTo(-sz * .7, sz * .7); ctx.closePath(); ctx.fill(); if (r === v.r) ctx.stroke();
     ctx.restore();
   }
   ctx.restore();
-  ctx.strokeStyle = 'rgba(10,22,44,.9)'; ctx.lineWidth = 3; ctx.strokeRect(x, y, mw, mh);
-}
-function drawHUD() {
-  if (state !== 'title') {
-    ctx.font = '600 20px system-ui'; ctx.textAlign = 'left';
-    const wxTag = weather.k === 'blizzard' ? '   ❄️ Blizzard' : weather.k === 'freeze' ? '   🧊 Freezing rain' : '';
-    const txt = `Shift ${level}   🔋 ${Math.ceil(time)}s   📦 ${delivered}/${quota}   💶 ${money} €${wxTag}${roomCode ? `   🌐 ${roomCode}` : ''}`;
-    ctx.fillStyle = 'rgba(10,22,44,.8)'; ctx.beginPath(); ctx.roundRect(14, 12, ctx.measureText(txt).width + 32, 42, 10); ctx.fill();
-    ctx.fillStyle = time < 10 && state === 'play' && T % 1 < .5 ? '#ff6b6b' : '#e8f1fb';
-    ctx.fillText(txt, 30, 34);
-  }
-  if (state === 'play' && robots.length < 8 && vw > 900) {
-    const free = KB.filter((k, i) => !myCtrls().some(c => c.kb === i)).map(k => k.name);
-    const txt = `Friends join: ${[...free, 'gamepad'].join(' / ')}`;
-    ctx.font = '600 15px system-ui'; ctx.textAlign = 'right';
-    const tw = ctx.measureText(txt).width;
-    ctx.fillStyle = 'rgba(10,22,44,.75)'; ctx.beginPath(); ctx.roundRect(vw - tw - 38, 14, tw + 24, 32, 8); ctx.fill();
-    ctx.fillStyle = '#e8f1fb'; ctx.fillText(txt, vw - 26, 31);
-  }
-  if (wxMsgT > 0 && state === 'play') {
-    ctx.font = '900 34px system-ui'; ctx.textAlign = 'center'; ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(10,22,44,.9)'; ctx.fillStyle = '#9fe3ff';
-    ctx.strokeText(wxMsg, vw / 2, vh * .2); ctx.fillText(wxMsg, vw / 2, vh * .2);
-  }
-  if (bannerT > 0 && state === 'play') panel([[banner, 34, '#ffd84a'], [`Deliver ${quota} orders before the battery runs out`, 20], ['Fast + careful = bigger tips', 18, '#b8c6d6']], vh * .3);
-  if (state === 'title') {
-    panel([
-      ['RUOKAROBO', 64, '#ff7b00'], ['', 10],
-      ['Deliver groceries from Alepa. Earn tips, upgrade your robots, survive the winter.', 20],
-      ['Stuck in a pothole? A friend can tow you out. Park next to a friend to hand over a package.', 20],
-      ['Watch out for angry locals, dogs, snowball kids, the snowplow and sudden weather!', 18, '#b8c6d6'], ['', 10],
-      ['Join: WASD · Arrows · IJKL · TFGH · or any gamepad button', 22, '#9fd3ff'],
-      ['Up/down = drive, left/right = turn', 18, '#b8c6d6'],
-      ['Boost: L-Shift · R-Shift · U · R    Handbrake: Space · . · O · Y    Pad: A boost, B handbrake', 16, '#b8c6d6'], ['', 10],
-      [robots.length ? `Players: ${robots.map(r => 'P' + (r.i + 1)).join('  ')}` : 'No players yet', 22, '#2fbf6a'],
-      role === 'guest' ? ['Waiting for the host to start…', 24, '#ffd84a'] : ['Press ENTER (or gamepad A/Start) to start', 24, '#ffd84a'],
-      [`${best ? `Best: ${best} €   ·   ` : ''}M = music on/off`, 18, '#b8c6d6'],
-    ], Math.max(10, vh * .06));
-  } else if (state === 'shop') {
-    panel([[`Shift ${level} done! 🎉`, 40, '#2fbf6a'], [`Battery left: +${bonus} €   ·   Team money: ${money} €`, 24],
-           ['Upgrades and robot style (click or press 1–8)', 20, '#b8c6d6']], Math.max(10, vh * .06));
-  } else if (state === 'over') {
-    panel([['Battery dead — quota missed! 🪫', 40, '#ff6b6b'], [`You reached shift ${level} and earned ${score} € in total`, 24],
-           [`Best run: ${best} €`, 20, '#b8c6d6'], [role === 'guest' ? 'Waiting for the host…' : 'ENTER / Start to try again', 22, '#ffd84a']]);
-  }
 }
 
-// ---------- upgrade shop (DOM so everyone can click) ----------
-const shopEl = document.getElementById('shop');
+// ---------- DOM screens: title, HUD, shift sign, weather warning, workshop, run over ----------
+const $ = id => document.getElementById(id);
+const setText = (id, v) => { const el = $(id); v = String(v); if (el.textContent !== v) el.textContent = v; };
+const ICONS = { // white pictograms for the workshop cards
+  tires: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4L7 17M17 7l1.4-1.4"/>',
+  motor: '<path d="M13 2L4 14h7l-1 8 9-12h-7z" fill="#fff" stroke="none"/>',
+  susp: '<path d="M7 3h10M7 21h10M8 6l8 2-8 2 8 2-8 2 8 2-8 2"/>',
+  battery: '<rect x="2" y="7" width="18" height="10" rx="2"/><path d="M22 10v4M6 12h7"/>',
+  pipo: '<path d="M4 18a8 8 0 0116 0z"/><path d="M3 18h18v3H3z"/><circle cx="12" cy="6" r="2.4" fill="#fff"/>',
+  scarf: '<path d="M4 7h16v4H4zM14 11v10h4V11"/>',
+  fiflag: '<path d="M4 3v19"/><rect x="4" y="4" width="16" height="11" fill="#fff" stroke="none"/><path d="M10 4v11M4 9.5h16" stroke="#0b4f9c" stroke-width="2.6"/>',
+  gold: '<path d="M12 2l2.6 6.4L21 11l-6.4 2.6L12 20l-2.6-6.4L3 11l6.4-2.6z" fill="#fff" stroke="none"/>',
+};
+const svgIcon = k => `<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linejoin="round" stroke-linecap="round">${ICONS[k]}</svg>`;
 for (const u of SHOP) {
-  const b = document.createElement('button'); b.dataset.k = u.k; b.onclick = () => buy(u.k); shopEl.append(b);
+  const b = document.createElement('button');
+  b.className = 'card'; b.dataset.k = u.k; b.onclick = () => buy(u.k);
+  b.innerHTML = `<span class="pic">${svgIcon(u.k)}</span><b>${u.name.replace(/^\S+\s/, '')}</b><small>${u.desc}</small><span class="row"><span class="lv"></span><span class="price"></span></span>`;
+  $(u.price ? 'cardsStyle' : 'cardsUp').append(b);
 }
-const nextBtn = document.createElement('button'); nextBtn.id = 'bNext'; nextBtn.onclick = pressStart; shopEl.append(nextBtn);
-let shopKey = '';
-function renderShop() {
-  shopEl.hidden = state !== 'shop';
-  const key = JSON.stringify([state, money, up, role]);
-  if (state !== 'shop' || key === shopKey) return;
-  shopKey = key;
-  for (const b of shopEl.querySelectorAll('button[data-k]')) {
-    const u = SHOP.find(u => u.k === b.dataset.k), lv = up[u.k];
-    if (u.price) { // cosmetic: buy once
-      b.disabled = lv >= 1 || money < u.price;
-      b.innerHTML = `<b>[${u.key}] ${u.name}</b><small>${u.desc}</small><span>${lv ? 'Owned ✓' : u.price + ' €'}</span>`;
-    } else {
-      b.disabled = lv >= 3 || money < PRICES[lv];
-      b.innerHTML = `<b>[${u.key}] ${u.name}</b><small>${u.desc}</small><span>${'●'.repeat(lv)}${'○'.repeat(3 - lv)} · ${lv >= 3 ? 'MAX' : PRICES[lv] + ' €'}</span>`;
+$('bNext').onclick = $('bStart').onclick = $('bRetry').onclick = pressStart;
+const WX_TEXT = { blizzard: ['Blizzard', 'You can barely see the street'], freeze: ['Freezing rain', 'Every surface is ice for a while'] };
+let lastBannerT = 0, lastWxT = 0, playersKey = '', shopKey = '', pipsKey = '';
+function restartAnim(el) { el.classList.remove('show'); void el.offsetWidth; el.classList.add('show'); }
+function updateDOM() {
+  const play = state === 'play';
+  // title
+  $('title').hidden = state !== 'title';
+  if (state === 'title') {
+    $('bStart').hidden = role === 'guest';
+    $('keys').hidden = touchDev; $('touchNote').hidden = !touchDev;
+    const pk = robots.map(r => r.i).join();
+    if (pk !== playersKey) {
+      playersKey = pk;
+      $('players').innerHTML = robots.length
+        ? robots.map(r => `<span class="chip"><i style="background:${r.color}"></i>Player ${r.i + 1}</span>`).join('')
+        : (touchDev ? 'Touch the stick to join.' : 'Press any key from the table to join. Each row is one player.');
     }
+    setText('bestLine', best ? `Best run ${best} €` : '');
   }
-  nextBtn.disabled = role === 'guest';
-  nextBtn.textContent = role === 'guest' ? 'Waiting for the host to start the next shift…' : 'Start next shift ▶  (Enter)';
+  // HUD
+  $('hud').hidden = !play;
+  if (play) {
+    setText('hShift', level); setText('hTime', Math.ceil(time)); setText('hMoney', money); setText('hDel', `${delivered} / ${quota}`);
+    $('hBat').style.width = clamp(time / (75 + level * 5 + up.battery * 12), 0, 1) * 100 + '%';
+    $('hBatPlate').classList.toggle('low', time < 15);
+    const pk = `${delivered}/${quota}`;
+    if (pk !== pipsKey) { pipsKey = pk; $('hPips').innerHTML = quota <= 12 ? Array.from({ length: quota }, (_, i) => `<i class="${i < delivered ? 'on' : ''}"></i>`).join('') : ''; }
+    $('hWx').hidden = !weather.k;
+    if (weather.k) setText('hWxText', `${WX_TEXT[weather.k][0]} ${Math.ceil(weather.t)} s`);
+    $('hRoom').hidden = !roomCode; setText('hRoomCode', roomCode);
+    const free = KB.filter((k, i) => !myCtrls().some(c => c.kb === i)).map(k => k.name);
+    $('joinHint').hidden = robots.length >= 8 || vw < 900 || touchDev;
+    setText('joinHint', `More players can join with ${free.length ? free.join(', ') + ' or ' : ''}a gamepad`);
+  } else $('joinHint').hidden = true;
+  // shift sign drops in when a new shift starts
+  if (play && bannerT > lastBannerT + .5) {
+    setText('signTitle', `Shift ${level}`);
+    setText('signSub', `${LEVEL_NAMES[Math.min(level, 4) - 1]}. Deliver before the battery runs out.`);
+    setText('signQuota', quota);
+    $('sign').hidden = false; restartAnim($('sign'));
+  }
+  lastBannerT = bannerT;
+  if (!play || bannerT <= 0) $('sign').hidden = true;
+  // weather warning
+  if (play && wxMsgT > lastWxT + .5 && WX_TEXT[wxKind]) {
+    setText('alertTitle', WX_TEXT[wxKind][0]); setText('alertSub', WX_TEXT[wxKind][1]);
+    $('alert').hidden = false; restartAnim($('alert'));
+  }
+  lastWxT = wxMsgT;
+  if (!play || wxMsgT <= 0) $('alert').hidden = true;
+  // workshop
+  $('shop').hidden = state !== 'shop';
+  const sk = JSON.stringify([state, money, up, role, level]);
+  if (state === 'shop' && sk !== shopKey) {
+    shopKey = sk;
+    setText('shopSub', `Shift ${level} done. Spend the team's money before the next one.`);
+    setText('shopBonus', `+${bonus} €`); setText('shopMoney', `${money} €`);
+    for (const b of document.querySelectorAll('.card')) {
+      const u = SHOP.find(u => u.k === b.dataset.k), lv = up[u.k], max = u.price ? 1 : 3, price = u.price || PRICES[lv];
+      b.disabled = lv >= max || money < price; b.classList.toggle('owned', lv >= max);
+      b.querySelector('.lv').innerHTML = u.price ? `<kbd>${u.key}</kbd>` : `<kbd>${u.key}</kbd>` + Array.from({ length: 3 }, (_, i) => `<i class="${i < lv ? 'on' : ''}"></i>`).join('');
+      b.querySelector('.price').textContent = lv >= max ? (u.price ? 'Owned' : 'Maxed') : `${price} €`;
+    }
+    $('bNext').disabled = role === 'guest';
+    $('bNext').textContent = role === 'guest' ? 'Waiting for the host to start the next shift' : 'Start next shift';
+  }
+  // run over
+  $('over').hidden = state !== 'over';
+  if (state === 'over') {
+    setText('overSub', `The team missed the quota on shift ${level}.`);
+    setText('overEarned', `${score} €`); setText('overBest', `${best} €`);
+    $('bRetry').disabled = role === 'guest' || stateT < 1;
+    setText('bRetry', role === 'guest' ? 'Waiting for the host' : 'Try again');
+  }
 }
 
 // ---------- touch controls ----------
-const $ = id => document.getElementById(id);
 const touchDev = matchMedia('(pointer: coarse)').matches;
-const touchIn = { t: 0, s: 0, b: false, h: false };
+const touchIn = { t: 0, s: 0, b: false, h: false, z: false };
 const stick = $('stick'), knob = $('knob');
 const joinTouch = () => { if (!myCtrls().some(c => c.touch)) join({ touch: 1 }); };
 function moveStick(e) {
@@ -1433,12 +1721,11 @@ let stickId = null; // follow the finger that grabbed the stick
 stick.onpointerdown = e => { stickId = e.pointerId; try { stick.setPointerCapture(e.pointerId); } catch (_) {} joinTouch(); moveStick(e); };
 stick.onpointermove = e => { if (e.pointerId === stickId) moveStick(e); };
 stick.onpointerup = stick.onpointercancel = e => { if (e.pointerId !== stickId) return; stickId = null; touchIn.t = touchIn.s = 0; knob.style.transform = ''; };
-for (const [id, k] of [['tBoost', 'b'], ['tBrake', 'h']]) {
+for (const [id, k] of [['tBoost', 'b'], ['tBrake', 'h'], ['tZap', 'z']]) {
   const el = $(id);
   el.onpointerdown = e => { try { el.setPointerCapture(e.pointerId); } catch (_) {} joinTouch(); touchIn[k] = true; };
   el.onpointerup = el.onpointercancel = () => { touchIn[k] = false; };
 }
-$('bStart').onclick = pressStart;
 
 // ---------- music: an original little polka loop, M toggles ----------
 let musicOn = true, musicNext = 0, musicStep = 0;
@@ -1470,9 +1757,7 @@ renderer.setAnimationLoop(now => {
     renderer.render(scene, v.cam);
   }
   drawUI(vs);
-  menu.hidden = state !== 'title' && state !== 'over'; menu.classList.toggle('over', state === 'over');
-  renderShop();
-  $('bStart').hidden = !(state === 'title' || (state === 'over' && stateT > 1)) || role === 'guest';
+  updateDOM();
   $('touch').hidden = !touchDev || !(state === 'play' || state === 'title');
   musicTick();
 });
