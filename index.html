@@ -1396,6 +1396,9 @@ const ENDING = { title: 'The end', intro: 'S-1 drives back to the warehouse as t
 // chapter override, or the endless-shift value when there is none
 const chap = () => campaign ? CHAPTERS[chapter] : null;
 const cv = (k, v) => chap()?.[k] ?? v;
+// co-op (endless, 2+ robots): each extra robot means +50% hazards (max 2x) and -20% battery (min 60%). story and pvp keep their own balance
+const coopX = () => campaign || pvp ? 0 : Math.max(0, robots.length - 1);
+const hz = v => Math.round(v * Math.min(2, 1 + coopX() * .5)); // hazard count, scaled for co-op
 function storyLoad() {
   try { const s = JSON.parse(localStorage.getItem('ruokarobo-story')); return s && s.ch >= 1 && s.ch <= 8 ? s : null; } catch (e) { return null; }
 }
@@ -1430,30 +1433,30 @@ function setupLevel(n) {
   ice = []; holes = []; cars = [];
   eetu = chap()?.goal === 'rescue' ? { x: AVANTO.x, y: AVANTO.y, state: 'ice', say: '', sayT: 0, cool: 1 } : null; // ch 5: holding on to the edge
   presents = chap()?.goal !== 'collect' ? [] : Array.from({ length: cv('quota', 0) + (robots.length - 1) * 2 }, () => ({ x: rnd(500, 1300), y: rnd(615, 705), gone: false }));
-  for (let i = 0; i < cv('ice', 2 + n * 2) * BLOCKS; i++) ice.push({ ...spot(), rx: rnd(40, 90), ry: rnd(18, 36) });
-  for (let i = 0; i < cv('holes', 2 + n * 2) * BLOCKS; i++) {
+  for (let i = 0; i < hz(cv('ice', 2 + n * 2)) * BLOCKS; i++) ice.push({ ...spot(), rx: rnd(40, 90), ry: rnd(18, 36) });
+  for (let i = 0; i < hz(cv('holes', 2 + n * 2)) * BLOCKS; i++) {
     const s = spot();
     if (!holes.some(h => Math.hypot(h.x - s.x, h.y - s.y) < 60)) holes.push({ ...s, r: rnd(15, 21) });
   }
   for (let lane = 0; lane < 2; lane++) {
-    const count = cv('cars', n > 3 ? 2 : 1) * BLOCKS, base = 130 + n * 15 + lane * 20;
+    const count = hz(cv('cars', n > 3 ? 2 : 1)) * BLOCKS, base = 130 + n * 15 + lane * 20;
     for (let k = 0; k < count; k++)
       cars.push({ x: (k + Math.random() * .4) * (W + 200) / count, y: lane ? 690 : 630, dir: lane ? -1 : 1, base, v: base,
                   color: pick(['#c0392b', '#2c3e50', '#f1f1f1', '#2e86de', '#7f8c8d', '#16a085']) });
   }
   peds = [];
-  for (let i = 0; i < cv('peds', Math.min(8, 1 + n)) * BLOCKS; i++) {
+  for (let i = 0; i < hz(cv('peds', Math.min(8, 1 + n))) * BLOCKS; i++) {
     const side = Math.random() < .75 ? 0 : 1;
     let pos; do pos = pathPoint(side); while (dist(pos, nearShop(pos).door) < 160);
     peds.push({ ...pos, ...waypoint(side), side, kind: 'person', a: 0, vx: 0, vy: 0, mode: 'walk', t: 0, cool: 2, kickT: 0, say: '', sayT: 0,
                 color: pick(['#3b6ea5', '#7a2e3a', '#2e6b4f', '#5b4a8a', '#a0522d', '#333a44']), hat: pick(['#d33', '#f5c400', '#1f4e9c', '#2fbf6a', '#e84393']) });
   }
-  for (let i = 0; i < cv('dogs', n >= 4 ? 2 : n >= 2 ? 1 : 0) * BLOCKS; i++) { // dogs from shift 2
+  for (let i = 0; i < hz(cv('dogs', n >= 4 ? 2 : n >= 2 ? 1 : 0)) * BLOCKS; i++) { // dogs from shift 2
     const side = Math.random() < .7 ? 0 : 1, pos = pathPoint(side);
     peds.push({ ...pos, ...waypoint(side), side, kind: 'dog', a: 0, vx: 0, vy: 0, mode: 'walk', t: 0, cool: 3, kickT: 0, say: '', sayT: 0 });
   }
   kids = []; balls = [];
-  const nKids = cv('kids', Math.min(4, n)) * BLOCKS, nBums = campaign && !nKids ? 0 : BLOCKS; // no bottles in story chapters without kids
+  const nKids = hz(cv('kids', Math.min(4, n))) * BLOCKS, nBums = campaign && !nKids ? 0 : BLOCKS; // no bottles in story chapters without kids
   const home = chap()?.kidsNearHome && HOUSES[KIDS_HOME].door; // ch 3: the kids guard their own house
   for (let i = 0, tries = 0; i < nKids + nBums && tries < 400 * BLOCKS; tries++) { // kids hide in the snow next to sidewalks; one bum per block
     const q = pathPoint(Math.random() < .7 ? 0 : 1), [dx, dy] = pick([[0, 1], [0, -1], [1, 0], [-1, 0]]), off = rnd(45, 70);
@@ -1499,7 +1502,7 @@ function applyLevel(n) {
 }
 function startLevel(n) {
   level = n; setupLevel(n);
-  time = cv('time', 75 + n * 5) + up.battery * 12; delivered = 0; goalDone = false;
+  time = Math.round((cv('time', 75 + n * 5) + up.battery * 12) * Math.max(.6, 1 - coopX() * .2)); delivered = 0; goalDone = false;
   quota = cv('quota', 2 + n) + (robots.length - 1) * 2;
   robots.forEach(r => Object.assign(r, spawn(r.i), { vx: 0, vy: 0, a: 0, camYaw: 0, boost: 1, zaps: 3 + up.tesla, cargo: null, hole: null, stun: 0, immune: 1, hp: 1, earn: 0, towT: 0, hookCd: 0, dDir: 0, dCh: 0, dTier: 0, mt: 0, drunk: 0, lag: 0 }));
   BOXES.forEach(b => b.t = 0);
