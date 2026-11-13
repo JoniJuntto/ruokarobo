@@ -235,7 +235,7 @@
   </div>
   <div class="plate white" id="keys">
     <table>
-      <tr><th>Who</th><th>Drive</th><th>Boost</th><th>Brake</th><th>Zap</th><th>Hook</th></tr>
+      <tr><th>Who</th><th>Drive</th><th>Boost</th><th>Brake / drift</th><th>Zap</th><th>Hook</th></tr>
       <tr><td>Player 1</td><td><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></td><td><kbd>Shift</kbd></td><td><kbd>Space</kbd></td><td><kbd>E</kbd></td><td><kbd>Q</kbd></td></tr>
       <tr><td>Player 2</td><td><kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd></td><td><kbd>R-Shift</kbd></td><td><kbd>.</kbd></td><td><kbd>,</kbd></td><td><kbd>/</kbd></td></tr>
       <tr><td>Player 3</td><td><kbd>I</kbd><kbd>J</kbd><kbd>K</kbd><kbd>L</kbd></td><td><kbd>U</kbd></td><td><kbd>O</kbd></td><td><kbd>P</kbd></td><td><kbd>N</kbd></td></tr>
@@ -243,7 +243,7 @@
       <tr><td>Gamepad</td><td>Stick</td><td><kbd>A</kbd></td><td><kbd>B</kbd></td><td><kbd>X</kbd></td><td><kbd>Y</kbd></td></tr>
     </table>
   </div>
-  <div class="plate white" id="touchNote" hidden>Steer with the stick on the left. Boost, brake, zap and hook are on the right.</div>
+  <div class="plate white" id="touchNote" hidden>Steer with the stick on the left. Boost, brake, zap and hook are on the right. Hold brake while steering at speed to drift; let go for a mini-turbo.</div>
   <details class="plate white fold" id="achBox">
     <summary>Achievements<span id="achCount"></span></summary>
     <div class="achGrid" id="achGrid"></div>
@@ -925,6 +925,8 @@ function buildRobot(r) {
   mesh(sphGeo(.2), mat('#14181d', null, .1, .3), body, 1.4, 2.12, 0); // camera dome
   for (const sz of [-1.33, 1.33]) box(body, .5, .14, .04, mat('#ff7b00', '#ff5500'), -1.3, 1.1, sz); // reflectors
   const flame = mesh(coneGeo(.45, 1.6), mat('#7ef9ff', '#4fd8ff'), body, -2.6, 1.2, 0); flame.rotation.z = Math.PI / 2; flame.castShadow = false;
+  const sparkMat = new THREE.MeshBasicMaterial({ color: '#3aa8ff' }), sparks = new THREE.Group(); body.add(sparks); // drift sparks at the back wheels
+  for (const sz of [-1.5, 1.5]) mesh(sphGeo(.32), sparkMat, sparks, -1.6, .35, sz).castShadow = false;
   for (const wx of [-1.2, 0, 1.2]) for (const sz of [-1.38, 1.38]) {
     const wg = new THREE.Group(); wg.position.set(wx, .45, sz); wg.rotation.x = Math.PI / 2; body.add(wg);
     mesh(cylGeo(.45, .45, .32, 20), rubber, wg); mesh(cylGeo(.24, .24, .36, 16), metalGray, wg);
@@ -945,7 +947,7 @@ function buildRobot(r) {
   spot.position.set(1.9, 1.4, 0); spot.target.position.set(12, 0, 0); g.add(spot, spot.target);
   const arrow = new THREE.Mesh(arrowGeo, new THREE.MeshBasicMaterial({ color: r.color, side: THREE.DoubleSide }));
   arrow.scale.setScalar(.6); scene.add(arrow);
-  Object.assign(r, { mesh: g, body, flag, fl, fiFlag, pipo, scarf, shell, flame, spot, arrow, beam: beam(r.color), cam: new THREE.PerspectiveCamera(60, 1, .5, 700), camYaw: r.a });
+  Object.assign(r, { mesh: g, body, flag, fl, fiFlag, pipo, scarf, shell, flame, sparks, sparkMat, spot, arrow, beam: beam(r.color), cam: new THREE.PerspectiveCamera(60, 1, .5, 700), camYaw: r.a });
 }
 // owner 'H' = this machine when local/hosting; a guest's robots are owned by its peer id
 // online every robot shows its player's nickname; couch play keeps Player N
@@ -1185,7 +1187,7 @@ function startLevel(n) {
   level = n; setupLevel(n);
   time = 75 + n * 5 + up.battery * 12; delivered = 0;
   quota = 2 + n + (robots.length - 1) * 2;
-  robots.forEach(r => Object.assign(r, spawn(r.i), { vx: 0, vy: 0, a: 0, camYaw: 0, boost: 1, zaps: 3 + up.tesla, cargo: null, hole: null, stun: 0, immune: 1, hp: 1, earn: 0, towT: 0, hookCd: 0 }));
+  robots.forEach(r => Object.assign(r, spawn(r.i), { vx: 0, vy: 0, a: 0, camYaw: 0, boost: 1, zaps: 3 + up.tesla, cargo: null, hole: null, stun: 0, immune: 1, hp: 1, earn: 0, towT: 0, hookCd: 0, dDir: 0, dCh: 0, dTier: 0, mt: 0 }));
   weather = { k: null, t: 0 }; weatherIn = n >= 2 ? rnd(15, 35) : Infinity;
   mark = { ...stats }; // "clear a shift without X" is measured against this snapshot
   most('players', robots.length);
@@ -1213,6 +1215,7 @@ const SFX = {
   zap: () => { beep(1400, .07, 0, 'sawtooth', .05); beep(700, .14, .05, 'square', .04); beep(1800, .05, .1, 'sawtooth', .03); },
   hook: () => { beep(900, .05, 0, 'triangle', .06); beep(300, .12, .05, 'sawtooth', .05); },
   bark: () => { beep(420, .07, 0, 'square', .06); beep(380, .09, .12, 'square', .06); },
+  spark: () => beep(1250, .06, 0, 'triangle', .04),
   boost: () => { beep(160, .3, 0, 'sawtooth', .04); beep(320, .25, .05, 'sawtooth', .03); },
   clear: () => [523, 659, 784, 1047].forEach((f, i) => beep(f, .15, i * .12)),
   over: () => { beep(300, .2); beep(200, .4, .2); },
@@ -1516,7 +1519,7 @@ function updRobot(r, dt) {
   if (r.boost >= 1) r.boostLock = false;
   const boosting = !!(inp.b && inp.t > 0 && !r.boostLock && control); // drains to exactly 0 (clamp) so the lock below engages
   if (boosting && !r.boosting) sfx('boost');
-  r.boosting = boosting; r.boost = clamp(r.boost + (boosting ? -dt / (2 + .7 * up.turbo) : dt / (7 - 1.5 * up.turbo)), 0, 1);
+  r.boost = clamp(r.boost + (boosting ? -dt / (2 + .7 * up.turbo) : dt / (7 - 1.5 * up.turbo)), 0, 1);
   if (r.boost <= 0) r.boostLock = true;
   // stun gun: 3 charges, one recharges every 6 s; zaps the nearest local, dog or kid in front
   r.zaps = Math.min(3 + up.tesla, r.zaps + dt / 6); r.zapCd -= dt;
@@ -1526,11 +1529,28 @@ function updRobot(r, dt) {
   if (inp.g && !r.gPrev && control && r.hookCd <= 0 && robots.length > 1 && state === 'play') hook(r);
   r.gPrev = !!inp.g;
   const hb = !!inp.h;
-  r.a += inp.s * 3.4 * (hb ? 1.7 : 1) * dt * control;
+  // drift, kart-style manual: brake + gas + steer at speed. the direction locks in; steer into it to tighten, away to widen.
+  // hold it to charge sparks (blue → orange → purple), let go of brake for a mini-turbo. slow down or get stunned and the charge is lost
+  const sp0 = Math.hypot(r.vx, r.vy);
+  if (!r.dDir && hb && inp.t > 0 && inp.s && sp0 > 70 && control) { r.dDir = Math.sign(inp.s); r.dCh = 0; }
+  if (r.dDir && (!hb || inp.t <= 0 || sp0 < 40 || !control)) {
+    if (!hb && control && r.dTier) { r.mt = [0, .6, 1.1, 1.7][r.dTier]; sfx('boost'); }
+    r.dDir = r.dCh = r.dTier = 0;
+  }
+  if (r.dDir) {
+    r.dCh += dt * (.7 + .5 * Math.max(0, inp.s * r.dDir)); // tighter line charges faster
+    const tier = (r.dCh >= 1) + (r.dCh >= 2) + (r.dCh >= 3.2);
+    if (tier > r.dTier) sfx('spark');
+    r.dTier = tier;
+  }
+  r.mt = Math.max(0, (r.mt || 0) - dt);
+  const turbo = boosting || r.mt > 0;
+  r.boosting = turbo;
+  r.a += (r.dDir ? r.dDir * (.75 + .45 * inp.s * r.dDir) : inp.s * (hb ? 1.7 : 1)) * 3.4 * dt * control;
   const cx = Math.cos(r.a), sy = Math.sin(r.a);
-  const acc = Sf.acc * inp.t * (inp.t < 0 ? .6 : 1) * control * (boosting ? 1.9 + .2 * up.turbo : 1) * (hb ? .2 : 1);
+  const acc = Sf.acc * inp.t * (inp.t < 0 ? .6 : 1) * control * (turbo ? 1.9 + .2 * up.turbo : 1) * (r.dDir ? .9 : hb ? .2 : 1);
   r.vx += cx * acc * dt; r.vy += sy * acc * dt;
-  const kF = hb ? Sf.kF + (Sf.ice ? .4 : 3) : Sf.kF, kL = hb ? Sf.kL * .2 : Sf.kL, max = Sf.max * (boosting ? 1.5 + .1 * up.turbo : 1);
+  const kF = r.dDir ? Sf.kF : hb ? Sf.kF + (Sf.ice ? .4 : 3) : Sf.kF, kL = Sf.kL * (r.dDir ? .4 : hb ? .2 : 1), max = Sf.max * (turbo ? 1.5 + .1 * up.turbo : 1);
   let f = r.vx * cx + r.vy * sy, l = -r.vx * sy + r.vy * cx;
   f *= Math.exp(-kF * dt); l *= Math.exp(-kL * dt);
   r.vx = f * cx - l * sy; r.vy = f * sy + l * cx;
@@ -1989,7 +2009,7 @@ function broadcast(dt) {
   netT = 0;
   const m = { type: 's', st: state, pvp, pz: paused, level, time, quota, delivered, score, bonus, money, up, banner, bannerT, best,
     r: robots.map(r => ({ id: r.id, i: r.i, n: nameOf(r), owner: r.owner, x: r.x, y: r.y, a: r.a, vx: r.vx, vy: r.vy, cargo: r.cargo,
-                          hole: typeof r.hole === 'string' ? r.hole : !!r.hole, esc: r.esc, stun: r.stun, say: r.say, sayT: r.sayT, bo: r.boost, bl: r.boostLock, bz: r.boosting, zp: r.zaps, hp: r.hp, e: r.earn, tw: r.towT > 0 ? r.tow : -1 })),
+                          hole: typeof r.hole === 'string' ? r.hole : !!r.hole, esc: r.esc, stun: r.stun, say: r.say, sayT: r.sayT, bo: r.boost, bl: r.boostLock, bz: r.boosting, dk: r.dTier, zp: r.zaps, hp: r.hp, e: r.earn, tw: r.towT > 0 ? r.tow : -1 })),
     c: cars.map(c => c.x), fx: outbox.splice(0),
     p: peds.map(p => ({ x: p.x, y: p.y, a: p.a, m: p.mode, k: p.kickT > 0, mv: p.moving, s: p.say, st: p.sayT })),
     kd: kids.map(k => ({ a: k.a, th: k.throwT, s: k.say, st: k.sayT, z: k.zapT > 0 })), b: balls, wx: weather,
@@ -2005,7 +2025,7 @@ function applySnap(m) {
     let r = robots.find(q => q.id === s.id);
     if (!r) r = Object.assign(addRobot({ id: s.id, owner: s.owner, i: s.i, n: s.n }), { x: s.x, y: s.y, a: s.a });
     Object.assign(r, { owner: s.owner, n: s.n, tx: s.x, ty: s.y, ta: s.a, vx: s.vx, vy: s.vy, cargo: s.cargo, hole: s.hole || null,
-                       esc: s.esc, stun: s.stun, say: s.say, sayT: s.sayT, boost: s.bo, boostLock: s.bl, boosting: s.bz, zaps: s.zp, hp: s.hp ?? 1, earn: s.e ?? 0, tow: s.tw, towT: s.tw >= 0 ? 1 : 0 });
+                       esc: s.esc, stun: s.stun, say: s.say, sayT: s.sayT, boost: s.bo, boostLock: s.bl, boosting: s.bz, dTier: s.dk || 0, zaps: s.zp, hp: s.hp ?? 1, earn: s.e ?? 0, tow: s.tw, towT: s.tw >= 0 ? 1 : 0 });
   }
   m.c.forEach((x, i) => cars[i] && (cars[i].tx = x));
   m.p?.forEach((q, i) => peds[i] && Object.assign(peds[i], { tx: q.x, ty: q.y, a: q.a, mode: q.m, kickT: q.k ? .3 : 0, moving: q.mv, say: q.s, sayT: q.st }));
@@ -2034,6 +2054,7 @@ function guestTick(dt) {
   for (const b of balls) { b.age += dt; b.x += b.vx * dt; b.y += b.vy * dt; }
   for (const q of kids) { q.throwT -= dt; q.sayT -= dt; }
 }
+const SPARK = [0, '#3aa8ff', '#ff8a1f', '#c04bff'];
 function sync(dt) {
   for (const r of robots) {
     place(r.mesh, r.x, r.y); r.mesh.rotation.y = -r.a;
@@ -2041,6 +2062,8 @@ function sync(dt) {
     r.body.rotation.x = r.hole ? Math.sin(T * 18) * .12 : 0;
     r.body.rotation.z = r.stun > 0 ? Math.sin(T * 30) * .15 : 0;
     r.flame.visible = !!r.boosting; r.flame.scale.set(1 + .25 * up.turbo, (.8 + Math.random() * .5) * (1 + .35 * up.turbo), 1 + .25 * up.turbo);
+    r.sparks.visible = !!r.dTier && !r.hole;
+    if (r.dTier) { r.sparkMat.color.set(SPARK[r.dTier]); r.sparks.scale.setScalar(.7 + Math.random() * .6 + .2 * r.dTier); }
     r.pipo.visible = !!up.pipo; r.scarf.visible = !!up.scarf; r.fiFlag.visible = !!up.fiflag; r.fl.visible = !up.fiflag;
     r.shell.material = up.gold ? goldMat : mat('#f4f4f2');
     if (!r.hole && (!r.lt || Math.hypot(r.x - r.lt.x, r.y - r.lt.y) > 5)) { // wheel tracks in the snow
