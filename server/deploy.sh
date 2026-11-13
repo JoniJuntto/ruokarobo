@@ -16,7 +16,7 @@ scp -q server/turnserver.conf "$HOST:/etc/turnserver.conf"
 
 # TURN relay for players who can't connect peer-to-peer. ufw only if it's on; a cloud firewall
 # in front of the box needs the same ports opened by hand.
-ssh "$HOST" "command -v turnserver >/dev/null || DEBIAN_FRONTEND=noninteractive apt-get install -y -q coturn
+ssh "$HOST" "command -v turnserver >/dev/null || DEBIAN_FRONTEND=noninteractive apt-get install -y -q -o Dpkg::Options::=--force-confold coturn
   ! ufw status 2>/dev/null | grep -q 'Status: active' || { ufw allow 3478 >/dev/null; ufw allow 49160:49260/udp >/dev/null; }
   systemctl enable -q coturn && systemctl restart coturn && systemctl is-active coturn"
 
