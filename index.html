@@ -149,7 +149,8 @@
       border-right:2px solid #e3ebf3;border-bottom:7px solid var(--rc);font:800 13px var(--font);color:var(--ink);text-align:center;line-height:1.1}
   .sk i{width:48px;height:48px;border-radius:50%;background:var(--sc);box-shadow:inset -6px -8px 0 rgba(0,0,0,.18),0 0 0 2px var(--ink)}
   .sk.r3 i{box-shadow:inset -6px -8px 0 rgba(0,0,0,.18),0 0 0 2px var(--ink),0 0 16px 4px var(--sc)}
-  .sk.r4 i{box-shadow:inset -6px -8px 0 rgba(0,0,0,.18),0 0 0 2px var(--ink),0 0 18px 5px #ff2d55}
+  .sk.r4 i{box-shadow:inset -6px -8px 0 rgba(0,0,0,.18),0 0 0 2px var(--ink),0 0 18px 5px #ff2d55;animation:ultra 1.6s ease-in-out infinite alternate}
+  @keyframes ultra{to{filter:hue-rotate(40deg) brightness(1.15)}}
   #caseMsg:empty{display:none}
   #skinGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px}
   #skinGrid .sk{height:108px;border:0;border-bottom:7px solid var(--rc);border-radius:8px;background:#fff;box-shadow:0 4px 0 rgba(0,0,0,.22)}
@@ -950,6 +951,13 @@ function buildHazards() {
   }
   for (const l of loot) { // a small glowing crate, spinning so it catches the eye once you're close
     l.mesh = place(new THREE.Group(), l.x, l.y); hazardGroup.add(l.mesh);
+    if (l.ham) { // meat thermometer: red-rimmed dial on a steel probe
+      const dial = new THREE.Group(); dial.position.y = .5; l.mesh.add(dial); dial.rotation.x = Math.PI / 2;
+      mesh(cylGeo(.7, .7, .14, 24), mat('#d42a36', '#7a0010', .35), dial); mesh(cylGeo(.56, .56, .2, 24), mat('#f6f4ee', null, .25), dial);
+      box(dial, .07, .04, .46, '#14181d', 0, .12, .12).rotation.y = .7; // needle
+      mesh(cylGeo(.07, .02, 1.4, 8), mat('#c9cfd6', null, .2, 1), l.mesh, 0, -.25, 0);
+      continue;
+    }
     rbox(l.mesh, 1.5, 1, 1.1, .12, mat('#ffb400', '#8a5200', .3, .4), 0, 0, 0);
     box(l.mesh, 1.54, .22, 1.14, '#1d232b', 0, 0, 0); box(l.mesh, .24, 1.04, 1.14, '#1d232b', 0, 0, 0);
   }
@@ -1025,7 +1033,7 @@ function buildRobot(r) {
   const body = new THREE.Group(); g.add(body); // body tilts/sinks; g holds position
   const shell = rbox(body, 3.6, 1.45, 2.6, .38, mat('#f2f2ee', null, .45), 0, 1.25, 0);
   rbox(body, 3.66, .42, 2.66, .16, mat('#2a2f36', null, .6), 0, .62, 0); // dark skirt
-  rbox(body, 3, .22, 2.25, .1, mat('#e3e6ea', null, .5), -.08, 2.02, 0); // lid
+  const lidM = rbox(body, 3, .22, 2.25, .1, mat('#e3e6ea', null, .5), -.08, 2.02, 0); // lid
   rbox(body, 3.02, .24, .46, .08, mat(r.color, null, .4), -.08, 2.04, 0);
   box(body, 3.08, .05, 2.32, '#8d949b', -.08, 1.9, 0); // lid seam
   rbox(body, .1, .62, 2, .05, mat('#14181d', null, .2), 1.8, 1.35, 0); // sensor face
@@ -1055,7 +1063,7 @@ function buildRobot(r) {
   spot.position.set(1.9, 1.4, 0); spot.target.position.set(12, 0, 0); g.add(spot, spot.target);
   const arrow = new THREE.Mesh(arrowGeo, new THREE.MeshBasicMaterial({ color: r.color, side: THREE.DoubleSide }));
   arrow.scale.setScalar(.6); scene.add(arrow);
-  Object.assign(r, { mesh: g, body, flag, fl, fiFlag, pipo, scarf, shell, flame, sparks, sparkMat, spot, arrow, beam: beam(r.color), cam: new THREE.PerspectiveCamera(60, 1, .5, 700), camYaw: r.a });
+  Object.assign(r, { mesh: g, body, lidM, flag, fl, fiFlag, pipo, scarf, shell, flame, sparks, sparkMat, spot, arrow, beam: beam(r.color), cam: new THREE.PerspectiveCamera(60, 1, .5, 700), camYaw: r.a });
 }
 // owner 'H' = this machine when local/hosting; a guest's robots are owned by its peer id
 // online every robot shows its player's nickname; couch play keeps Player N
@@ -1197,8 +1205,26 @@ const isStyle = k => COSMETICS.some(c => c.k === k);
 const freshUp = () => ({ tires: 0, motor: 0, susp: 0, battery: 0, turbo: 0, tesla: 0, heat: 0, box: 0, pipo: 0, scarf: 0, fiflag: 0, gold: 0 });
 up = freshUp();
 // skin cases: found hidden on the map during shifts, opened on the title screen; skins live on this machine
-const RARITY = [{ n: 'Common', c: '#9aa5b1', w: 60 }, { n: 'Rare', c: '#2d7cff', w: 28 }, { n: 'Epic', c: '#9b4dff', w: 10 }, { n: 'Legendary', c: '#ffb400', w: 2 }, { n: 'Ultra Rare', c: '#ff2d55', w: 0 }]; // ultra rare: never in a case
-const SKINS = [ // c = shell colour, ro/me = roughness/metalness, e = glow
+const RARITY = [{ n: 'Common', c: '#9aa5b1', w: 59 }, { n: 'Rare', c: '#2d7cff', w: 28 }, { n: 'Epic', c: '#9b4dff', w: 10 }, { n: 'Legendary', c: '#ffb400', w: 2 }, { n: 'Ultra Rare', c: '#ff2d55', w: 1 }, { n: 'Sauna', c: '#e8657a', w: 0 }]; // w 0: never in a case
+// ultra rare skins paint a pattern p(ctx, w, h) onto the shell; c is only the fallback swatch colour
+const blobs = (g, w, cols, n, r) => cols.forEach(c => { g.fillStyle = c; for (let i = 0; i < n; i++) {
+  const x = rnd(0, w), y = rnd(0, w); for (let j = 0; j < 4; j++) { g.beginPath(); g.ellipse(x + rnd(-r, r), y + rnd(-r, r) * .6, rnd(r * .5, r), rnd(r * .3, r * .6), rnd(0, 3), 0, 7); g.fill(); } } });
+const PAT = {
+  camo: (g, w) => { g.fillStyle = '#6b7a45'; g.fillRect(0, 0, w, w); blobs(g, w, ['#8c7f55', '#3f4d28', '#26281a'], 9, w / 10); },
+  frost: (g, w) => { const q = w / 16, cs = ['#f3f6f8', '#dfe6ec', '#b9c4ce', '#8796a4']; // digital snow camo
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { g.fillStyle = pick(Math.random() < .55 ? cs.slice(0, 2) : cs); g.fillRect(x * q, y * q, q, q); } },
+  tiger: (g, w) => { g.fillStyle = '#f2871c'; g.fillRect(0, 0, w, w); g.strokeStyle = '#151210'; g.lineCap = 'round';
+    for (let x = -8; x < w; x += w / 7) { g.lineWidth = rnd(4, 9); g.beginPath(); g.moveTo(x, -4); g.bezierCurveTo(x + rnd(-20, 20), w * .3, x + rnd(-20, 20), w * .6, x + rnd(-10, 10), w * .75); g.stroke(); } },
+  alpha: (g, w) => { const q = w / 8; for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) { g.fillStyle = (x + y) % 2 ? '#cccccc' : '#fff'; g.fillRect(x * q, y * q, q, q); } },
+  ham: (g, w) => { g.fillStyle = '#e98d8d'; g.fillRect(0, 0, w, w); blobs(g, w, ['#f4b3ae', '#d9706f'], 6, w / 9); // pink with marbling
+    g.fillStyle = '#fbeee6'; g.fillRect(0, w * .82, w, w * .18); }, // fat rim
+  galaxy: (g, w) => { g.fillStyle = '#0a0620'; g.fillRect(0, 0, w, w);
+    for (const c of ['#7b2cff55', '#1fa2ff44', '#ff3fa455']) { const x = rnd(0, w), y = rnd(0, w), gr = g.createRadialGradient(x, y, 0, x, y, w * .45);
+      gr.addColorStop(0, c); gr.addColorStop(1, '#0000'); g.fillStyle = gr; g.fillRect(0, 0, w, w); }
+    g.fillStyle = '#fff'; for (let i = 0; i < 70; i++) g.fillRect(rnd(0, w), rnd(0, w), i % 9 ? 1 : 2, i % 9 ? 1 : 2); },
+};
+const skinCanvas = s => s.cv ??= (() => { const c = document.createElement('canvas'); c.width = c.height = 128; s.p(c.getContext('2d'), 128, 128); return c; })();
+const SKINS = [ // c = shell colour, ro/me = roughness/metalness, e = glow, p = pattern
   { k: '', n: 'Tehdasvalkoinen', r: 0, c: '#f4f4f2' }, // the default, never in a case
   { k: 'mint', n: 'Minttu', r: 0, c: '#9be3c4' },
   { k: 'peach', n: 'Persikka', r: 0, c: '#ffb38a' },
@@ -1214,19 +1240,27 @@ const SKINS = [ // c = shell colour, ro/me = roughness/metalness, e = glow
   { k: 'onyx', n: 'Onyx', r: 2, c: '#15171b', ro: .18, me: .6 },
   { k: 'aurora', n: 'Revontuli', r: 3, c: '#3fe0b0', e: '#0d6b55', ro: .25 },
   { k: 'lava', n: 'Laava', r: 3, c: '#ff5a1f', e: '#7a1800', ro: .4 },
-  // dad's flannel shirt: unlocked by finishing the story (p paints a pattern onto the shell)
-  { k: 'isi', n: 'Isi', r: 4, c: '#b3261e', hint: 'Finish the story', p: (g, w) => {
+  { k: 'camo', n: 'Maastokuvio', r: 4, c: '#6b7a45', p: PAT.camo },
+  { k: 'frost', n: 'Pakkaskamo', r: 4, c: '#dfe6ec', p: PAT.frost, ro: .6 },
+  { k: 'tiger', n: 'Tiikeri', r: 4, c: '#f2871c', p: PAT.tiger, ro: .5 },
+  { k: 'galaxy', n: 'Linnunrata', r: 4, c: '#0a0620', p: PAT.galaxy, ro: .3, glow: 1 }, // stars light up
+  { k: 'alpha', n: 'Alfakanava', r: 4, c: '#fff', p: PAT.alpha }, // the "transparent" checkerboard, painted on for real
+  { k: 'ham', n: 'Joulukinkku', r: 5, c: '#e98d8d', p: PAT.ham, ro: .45, lid: '#a8551c' }, // only from the kinkkumittari by the sauna; lid = glazed crust
+  { k: 'cena', n: 'John Cena', r: 4, c: 'transparent', op: 0 }, // you can't see me: shell gone, shadow and wheels stay
+  // dad's flannel shirt: only from finishing the story (story: never in a case)
+  { k: 'isi', n: 'Isi', r: 4, c: '#b3261e', story: true, hint: 'Finish the story', p: (g, w) => {
     g.fillStyle = '#b3261e'; g.fillRect(0, 0, w, w); g.fillStyle = 'rgba(20,8,8,.55)'; // buffalo check: dark bands both ways
     for (let i = 0; i < w; i += w / 4) { g.fillRect(i, 0, w / 8, w); g.fillRect(0, i, w, w / 8); } } },
 ];
-const skinCanvas = s => s.cv ??= (() => { const c = document.createElement('canvas'); c.width = c.height = 64; s.p(c.getContext('2d'), 64); return c; })();
 let skins = { cases: 0, own: [], sel: '' }; // cases are found on the map, see loot
 try { Object.assign(skins, JSON.parse(localStorage.getItem('ruokarobo-skins') || '{}')); } catch (e) {}
 const saveSkins = () => { try { localStorage.setItem('ruokarobo-skins', JSON.stringify(skins)); } catch (e) {} };
-const skinMat = k => { const s = SKINS.find(s => s.k === k) || SKINS[0]; if (!s.p) return mat(s.c, s.e, s.ro ?? .82, s.me ?? 0);
-  return _m['skin:' + k] ??= new THREE.MeshStandardMaterial({ map: Object.assign(new THREE.CanvasTexture(skinCanvas(s)), { colorSpace: THREE.SRGBColorSpace }), roughness: s.ro ?? .82 }); };
+const skinMat = k => { const s = SKINS.find(s => s.k === k) || SKINS[0]; if (!s.p && s.op == null) return mat(s.c, s.e, s.ro ?? .82, s.me ?? 0);
+  return _m['skin:' + k] ??= (t => new THREE.MeshStandardMaterial({ map: t, roughness: s.ro ?? .82, metalness: s.me ?? 0,
+    ...s.glow && { emissive: '#fff', emissiveMap: t, emissiveIntensity: .8 }, ...s.op != null && { transparent: true, opacity: s.op, depthWrite: false } }))(
+    s.p ? Object.assign(new THREE.CanvasTexture(skinCanvas(s)), { colorSpace: THREE.SRGBColorSpace }) : null); };
 const skinOf = r => r.owner === myOwner ? skins.sel : r.skin || '';
-function rollSkin() { let x = Math.random() * 100; const r = RARITY.findIndex(q => (x -= q.w) < 0); return pick(SKINS.filter(s => s.k && s.r === r)); }
+function rollSkin() { let x = Math.random() * 100; const r = RARITY.findIndex(q => (x -= q.w) < 0); return pick(SKINS.filter(s => s.k && s.r === r && !s.story)); }
 function buy(k) {
   if (state !== 'shop') return;
   if (role === 'guest') return hostConn.send({ type: 'buy', k });
@@ -1382,6 +1416,7 @@ function setupLevel(n) {
         || loot.some(l => Math.abs(l.x - x) < BW / 2)) continue; // spread out: not both in the same block
     loot.push({ x, y, got: 0 });
   }
+  if (Math.random() < .2) loot.push({ x: SAUNA.x + SAUNA.w / 2, y: SAUNA.y + SAUNA.h + 25, got: 0, ham: 1 }); // rare: a kinkkumittari left by the sauna
   plow = cv('plow', n >= 2) ? { x: 20, y: 580, a: 0, wi: 1, dir: 1 } : null;
   applyLevel(n);
   if (role === 'host') for (const c of conns) c.send(levelMsg());
@@ -1466,7 +1501,8 @@ function fx(e) { // play locally; the host also forwards it to guests
   else if (e.k === 'bowl' && cars[e.i]) cars[e.i].fly = 1.4;
   else if (e.k === 'loot' && loot[e.i]) {
     loot[e.i].got = 1; burst(e.x, e.y, 20);
-    if (e.o === myOwner) { skins.cases++; saveSkins(); achToast({ i: '🎁', n: 'Skin case found!', d: 'Open it from 🎁 Skins on the title screen' }); }
+    if (e.o === myOwner && loot[e.i].ham) { if (!skins.own.includes('ham')) skins.own.push('ham'); equipSkin('ham'); achToast({ i: '🍖', n: 'Kinkkumittari!', d: 'Joulukinkku skin unlocked and equipped' }); }
+    else if (e.o === myOwner) { skins.cases++; saveSkins(); achToast({ i: '🎁', n: 'Skin case found!', d: 'Open it from 🎁 Skins on the title screen' }); }
   }
   if (role === 'host') outbox.push(e);
 }
@@ -2161,7 +2197,7 @@ function update(dt) {
   updKids(dt);
   if (state === 'play') for (const [i, l] of loot.entries()) {
     const r = !l.got && robots.find(r => !r.hole && Math.hypot(r.x - l.x, r.y - l.y) < 22);
-    if (r) { say(r, '🎁 Skin case!', 2); fx({ k: 'loot', i, o: r.owner, x: l.x, y: l.y }); }
+    if (r) { say(r, l.ham ? '🌡️ Kinkkumittari!' : '🎁 Skin case!', 2); fx({ k: 'loot', i, o: r.owner, x: l.x, y: l.y }); }
   }
   for (const b of BOXES) { // item boxes respawn 8 s after someone drives through
     b.t = Math.max(0, b.t - dt);
@@ -2348,7 +2384,7 @@ function levelMsg() {
   return { type: 'lvl', n: level, cg: campaign, ch: chapter, pr: presents.map(({ x, y, gone }) => ({ x, y, gone })), et: eetu?.state, ice: ice.map(({ x, y, rx, ry, gone }) => ({ x, y, rx, ry, gone })), holes,
            cars: cars.map(({ x, y, dir, base, v, color }) => ({ x, y, dir, base, v, color })),
            peds: peds.map(({ x, y, side, kind, color, hat }) => ({ x, y, side, kind, color, hat })),
-           kids: kids.map(({ x, y, a, dx, dy, coat, hat, bum }) => ({ x, y, a, dx, dy, coat, hat, bum })), loot: loot.map(({ x, y, got }) => ({ x, y, got })), plow: !!plow };
+           kids: kids.map(({ x, y, a, dx, dy, coat, hat, bum }) => ({ x, y, a, dx, dy, coat, hat, bum })), loot: loot.map(({ x, y, got, ham }) => ({ x, y, got, ham })), plow: !!plow };
 }
 function applyLevelMsg(m) {
   level = m.n; campaign = !!m.cg; chapter = m.ch || 0; presents = m.pr || []; eetu = m.et ? { x: AVANTO.x, y: AVANTO.y, state: m.et, say: '', sayT: 0 } : null; ice = m.ice; holes = m.holes; cars = m.cars;
@@ -2425,6 +2461,7 @@ function sync(dt) {
     if (r.dTier) { r.sparkMat.color.set(SPARK[r.dTier]); r.sparks.scale.setScalar(.7 + Math.random() * .6 + .2 * r.dTier); }
     r.pipo.visible = !!up.pipo; r.scarf.visible = !!up.scarf; r.fiFlag.visible = !!up.fiflag; r.fl.visible = !up.fiflag;
     r.shell.material = up.gold ? goldMat : skinMat(skinOf(r));
+    const lid = SKINS.find(s => s.k === skinOf(r))?.lid; r.lidM.material = mat(lid || '#e3e6ea', null, lid ? .3 : .5);
     if (!r.hole && (!r.lt || Math.hypot(r.x - r.lt.x, r.y - r.lt.y) > 5)) { // wheel tracks in the snow
       if (surface(r.x, r.y) !== 'ice') { const px = -Math.sin(r.a) * 3, py = Math.cos(r.a) * 3; addTrack(r.x + px, r.y + py, r.a); addTrack(r.x - px, r.y - py, r.a); }
       r.lt = { x: r.x, y: r.y };
@@ -3074,7 +3111,8 @@ renderer.setAnimationLoop(now => {
 });
 // campaign data invariants: any failure shows as "Assertion failed" in the console
 function storyCheck() {
-  console.assert(SKINS.some(s => s.k === 'isi' && s.p && RARITY[s.r].n === 'Ultra Rare' && !RARITY[s.r].w), 'Isi: Ultra Rare, patterned, never in a case');
+  console.assert(SKINS.some(s => s.k === 'isi' && s.p && RARITY[s.r].n === 'Ultra Rare' && s.story), 'Isi: Ultra Rare, patterned, story-only');
+  console.assert(Array.from({ length: 5000 }, rollSkin).every(s => s?.k !== 'isi'), 'cases never roll Isi');
   console.assert(CHAPTERS.length === 9, 'prologue + 8 chapters');
   console.assert(CHAPTERS.every(c => c.title && c.intro), 'every chapter has title + intro');
   console.assert(HOUSES[KIDS_HOME] && HOUSES[KIDS_HOME].door.x < BW, 'kids home is in block 0');
