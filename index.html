@@ -133,6 +133,28 @@
   .card.owned .price{background:#e3ebf3}
   .card:disabled{cursor:default}
   .card:disabled:not(.owned){opacity:.5}
+
+  /* skin cases */
+  #cases{position:fixed;inset:0;display:grid;place-items:center;background:rgba(13,27,42,.6);overflow:auto;padding:20px;box-sizing:border-box;z-index:9;grid-template-columns:minmax(0,1fr);justify-items:center}
+  #cases .wrap{width:min(760px,100%);display:flex;flex-direction:column;gap:12px}
+  #cases .head{padding:18px 22px 14px;display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap}
+  #cases h2{margin:0;font-size:36px;font-weight:900;line-height:1}
+  #cases .head p{margin:6px 0 0;font-weight:600;max-width:34ch}
+  #cases h3{margin:4px 2px -2px;color:#fff;font-size:17px;font-weight:800;text-shadow:0 1px 3px rgba(0,0,0,.6)}
+  #caseCount{font-size:24px;font-weight:900;font-variant-numeric:tabular-nums}
+  #reel{position:relative;overflow:hidden;contain:inline-size;height:122px;padding:0}
+  #reel::after{content:'';position:absolute;left:50%;top:0;bottom:0;width:4px;margin-left:-2px;background:var(--orange);box-shadow:0 0 0 2px #fff}
+  #strip{display:flex;height:100%;will-change:transform}
+  .sk{flex:0 0 104px;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;padding:0 4px;
+      border-right:2px solid #e3ebf3;border-bottom:7px solid var(--rc);font:800 13px var(--font);color:var(--ink);text-align:center;line-height:1.1}
+  .sk i{width:48px;height:48px;border-radius:50%;background:var(--sc);box-shadow:inset -6px -8px 0 rgba(0,0,0,.18),0 0 0 2px var(--ink)}
+  .sk.r3 i{box-shadow:inset -6px -8px 0 rgba(0,0,0,.18),0 0 0 2px var(--ink),0 0 16px 4px var(--sc)}
+  #caseMsg:empty{display:none}
+  #skinGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px}
+  #skinGrid .sk{height:108px;border:0;border-bottom:7px solid var(--rc);border-radius:8px;background:#fff;box-shadow:0 4px 0 rgba(0,0,0,.22)}
+  #skinGrid .sk.on{outline:4px solid var(--orange);outline-offset:-4px}
+  #skinGrid .sk:disabled{background:#e9eef3;color:#8a96a3;cursor:default}
+  #skinGrid .sk:disabled i{background:#c9d1da}
   .card:not(:disabled):hover{box-shadow:inset 0 0 0 3px #fff,inset 0 0 0 5px var(--blue),0 4px 0 rgba(0,0,0,.22)}
   #bNext{align-self:flex-end;margin-top:4px}
 
@@ -187,6 +209,7 @@
   #tBrake{right:20px;bottom:84px;background:var(--orange)}
   #tZap{right:112px;bottom:131px;background:#0a8fa8}
   #tHook{right:112px;bottom:225px;background:#6b3b1c}
+  #tBall{right:20px;bottom:272px;background:#5aa9d6}
 
   @media (max-width:640px){#sign h2{font-size:34px}#shop h2{font-size:32px}#hud .plate{font-size:18px;padding:8px 11px 5px}#hud{max-width:calc(100vw - 28px)}}
   @media (prefers-reduced-motion:reduce){#sign.show,#alert.show,.ach{animation:none}}
@@ -196,7 +219,7 @@
 <canvas id="ui"></canvas>
 
 <div id="hud" hidden>
-  <div class="plate"><span class="lbl" id="hShiftLbl">Shift</span><b id="hShift">1</b></div>
+  <div class="plate" id="hShiftPlate"><span class="lbl" id="hShiftLbl">Shift</span><b id="hShift">1</b></div>
   <div class="plate bat" id="hBatPlate">
     <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="7" width="18" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="2.2"/><rect x="20" y="10" width="2.6" height="4" fill="currentColor"/></svg>
     <span class="meter"><i id="hBat"></i></span><b id="hTime">80</b><span class="lbl">s</span>
@@ -238,15 +261,15 @@
   </div>
   <div class="plate white" id="keys">
     <table>
-      <tr><th>Who</th><th>Drive</th><th>Boost</th><th>Brake / drift</th><th>Zap</th><th>Hook</th></tr>
-      <tr><td>Player 1</td><td><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></td><td><kbd>Shift</kbd></td><td><kbd>Space</kbd></td><td><kbd>E</kbd></td><td><kbd>Q</kbd></td></tr>
-      <tr><td>Player 2</td><td><kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd></td><td><kbd>R-Shift</kbd></td><td><kbd>.</kbd></td><td><kbd>,</kbd></td><td><kbd>/</kbd></td></tr>
-      <tr><td>Player 3</td><td><kbd>I</kbd><kbd>J</kbd><kbd>K</kbd><kbd>L</kbd></td><td><kbd>U</kbd></td><td><kbd>O</kbd></td><td><kbd>P</kbd></td><td><kbd>N</kbd></td></tr>
-      <tr><td>Player 4</td><td><kbd>T</kbd><kbd>F</kbd><kbd>G</kbd><kbd>H</kbd></td><td><kbd>R</kbd></td><td><kbd>Y</kbd></td><td><kbd>V</kbd></td><td><kbd>B</kbd></td></tr>
-      <tr><td>Gamepad</td><td>Stick</td><td><kbd>A</kbd></td><td><kbd>B</kbd></td><td><kbd>X</kbd></td><td><kbd>Y</kbd></td></tr>
+      <tr><th>Who</th><th>Drive</th><th>Boost</th><th>Brake / drift</th><th>Zap</th><th>Hook</th><th>Snowball (PvP)</th></tr>
+      <tr><td>Player 1</td><td><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></td><td><kbd>Shift</kbd></td><td><kbd>Space</kbd></td><td><kbd>E</kbd></td><td><kbd>Q</kbd></td><td><kbd>Z</kbd></td></tr>
+      <tr><td>Player 2</td><td><kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd></td><td><kbd>R-Shift</kbd></td><td><kbd>.</kbd></td><td><kbd>,</kbd></td><td><kbd>/</kbd></td><td><kbd>R-Alt</kbd></td></tr>
+      <tr><td>Player 3</td><td><kbd>I</kbd><kbd>J</kbd><kbd>K</kbd><kbd>L</kbd></td><td><kbd>U</kbd></td><td><kbd>O</kbd></td><td><kbd>P</kbd></td><td><kbd>N</kbd></td><td><kbd>Ö</kbd></td></tr>
+      <tr><td>Player 4</td><td><kbd>T</kbd><kbd>F</kbd><kbd>G</kbd><kbd>H</kbd></td><td><kbd>R</kbd></td><td><kbd>Y</kbd></td><td><kbd>V</kbd></td><td><kbd>B</kbd></td><td><kbd>C</kbd></td></tr>
+      <tr><td>Gamepad</td><td>Stick</td><td><kbd>A</kbd></td><td><kbd>B</kbd></td><td><kbd>X</kbd></td><td><kbd>Y</kbd></td><td><kbd>LB</kbd></td></tr>
     </table>
   </div>
-  <div class="plate white" id="touchNote" hidden>Steer with the stick on the left. Boost, brake, zap and hook are on the right. Hold brake while steering at speed to drift; let go for a mini-turbo.</div>
+  <div class="plate white" id="touchNote" hidden>Steer with the stick on the left. Boost, brake, zap, hook and (in PvP) snowball are on the right. Hold brake while steering at speed to drift; let go for a mini-turbo.</div>
   <details class="plate white fold" id="achBox">
     <summary>Achievements<span id="achCount"></span></summary>
     <div class="achGrid" id="achGrid"></div>
@@ -260,9 +283,11 @@
   <div class="actions" id="menu">
     <input id="pname" placeholder="Name" maxlength="12" autocomplete="off" aria-label="Name for the leaderboard">
     <button class="go" id="bStart">Start shift</button>
+    <button class="ghost" id="bRoam">Free roam</button>
     <button class="ghost mode" id="bMode" hidden>Mode: Co-op</button>
     <button class="go" id="bStory">Story</button>
     <button class="ghost" id="bNewStory" hidden>New story</button>
+    <button class="ghost" id="bCases">🎁 Skins</button>
     <button class="ghost" id="bHost">Host online game</button>
     <button class="ghost" id="bInvite" hidden>Copy invite link</button>
     <span id="joinBox"><input id="code" placeholder="Code" maxlength="5" autocomplete="off" aria-label="Room code"><button class="ghost" id="bJoin">Join</button></span>
@@ -290,6 +315,19 @@
   <h2 id="storyTitle"></h2>
   <p id="storyText"></p>
   <div class="actions"><button class="go" id="bStoryGo">Continue</button></div>
+</div>
+
+<div id="cases" hidden>
+  <div class="wrap">
+    <div class="plate head">
+      <div><h2>Skin cases</h2><p>Cases are hidden around the map on every shift, tucked in beside buildings. Drive into one to grab it.</p></div>
+      <div class="actions"><span id="caseCount">0 🎁</span><button class="go" id="bOpen">Open case</button><button class="ghost" id="bCasesX">Close</button></div>
+    </div>
+    <div class="plate white" id="reel"><div id="strip"></div></div>
+    <p class="note" id="caseMsg"></p>
+    <h3>Your skins</h3>
+    <div id="skinGrid"></div>
+  </div>
 </div>
 
 <div class="plate danger" id="over" hidden>
@@ -325,7 +363,7 @@
 </div>
 
 <div id="achs"></div>
-<div id="touch" hidden><div id="stick"><div id="knob"></div></div><button id="tBoost" class="tbtn">Boost</button><button id="tBrake" class="tbtn">Brake</button><button id="tZap" class="tbtn">Zap</button><button id="tHook" class="tbtn">Hook</button></div>
+<div id="touch" hidden><div id="stick"><div id="knob"></div></div><button id="tBoost" class="tbtn">Boost</button><button id="tBrake" class="tbtn">Brake</button><button id="tZap" class="tbtn">Zap</button><button id="tHook" class="tbtn">Hook</button><button id="tBall" class="tbtn" hidden>Snow</button></div>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script type="module">
@@ -345,6 +383,9 @@ const pick = a => a[Math.random() * a.length | 0];
 const BX = Array.from({ length: BLOCKS }, (_, k) => k * BW); // left edge of each block
 const PATHS = [[0, 560, W, 40], [0, 720, W, 40], ...BX.flatMap(bx => [[bx + 620, 256, 40, 304], [bx + 400, 220, 950, 36], [bx + 1300, 256, 40, 304]])];
 const ROAD = [0, 600, W, 120];
+// item boxes: a row across the road mid-block plus one on each sidewalk; t = seconds until it respawns
+const BOXES = BX.flatMap(bx => [{ x: bx + 960, y: 625 }, { x: bx + 960, y: 660 }, { x: bx + 960, y: 695 }, { x: bx + 300, y: 580 }, { x: bx + 1450, y: 740 }]).map(b => ({ ...b, t: 0 }));
+const LAG = 1; // 3G input delay in seconds; the knob for how awful it feels
 const CROSS = BX.flatMap(bx => [[bx + 620, 600, 40, 120], [bx + 1300, 600, 40, 120]]);
 const LAKE = { x: 980, y: 400, rx: 210, ry: 95 };
 const AVANTO = { x: 1100, y: 420, r: 20 }; // ice-swimming hole by the sauna pier
@@ -398,7 +439,7 @@ const SURF = {
   snow: { acc: 380, kF: 2.6, kL: 3.5, max: 120 },
   ice:  { acc: 110, kF: 0.12, kL: 0.18, max: 270 },
 };
-let presents = [], eetu = null, ice = [], holes = [], cars = [], peds = [], kids = [], balls = [], plow = null, santa = null, santaIn = Infinity;
+let presents = [], eetu = null, ice = [], holes = [], cars = [], peds = [], kids = [], balls = [], loot = [], plow = null, santa = null, santaIn = Infinity;
 let weather = { k: null, t: 0 }, weatherIn = Infinity;
 function surf(x, y) { // surface feel with upgrades applied
   const s = SURF[surface(x, y)];
@@ -463,6 +504,9 @@ function mesh(geo, m, parent, x = 0, y = 0, z = 0) {
   const o = new THREE.Mesh(geo, typeof m === 'string' ? mat(m) : m);
   o.position.set(x, y, z); o.castShadow = o.receiveShadow = true; parent.add(o); return o;
 }
+const boxMat = new THREE.MeshStandardMaterial({ map: tex(128, 128, (g, w) => { g.fillStyle = '#fff'; g.fillRect(0, 0, w, w); g.strokeStyle = '#1d232b'; g.lineWidth = 10; g.strokeRect(5, 5, w - 10, w - 10);
+  g.font = '900 96px Overpass, system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#1d232b'; g.fillText('?', w / 2, w / 2 + 6); }),
+  transparent: true, opacity: .8, roughness: .2, emissive: '#444', emissiveIntensity: .5 });
 const box = (p, w, h, d, c, x, y, z) => mesh(boxGeo(w, h, d), c, p, x, y, z);
 const rbox = (p, w, h, d, r, c, x, y, z) => mesh(boxGeo(w, h, d, r), c, p, x, y, z);
 const place = (o, x, y, h = 0) => (o.position.set(x * S - OX, h, y * S - OZ), o);
@@ -827,6 +871,8 @@ const smoke = Array.from({ length: 16 }, (_, i) => {
 });
 // snowballs, tow ropes, wheel tracks and snow spray
 const ballPool = Array.from({ length: 16 }, () => { const m = mesh(sphGeo(.22), '#ffffff', scene); m.visible = false; return m; });
+const bottleM = mat('#2f7a3a', null, .15, .1);
+const bottlePool = Array.from({ length: 8 }, () => { const m = mesh(cylGeo(.09, .12, .5, 8), bottleM, scene); m.visible = false; return m; });
 const bolts = [], BOLT_SEG = 7, boltPos = new Float32Array(8 * BOLT_SEG * 6), boltGeo = new THREE.BufferGeometry();
 boltGeo.setAttribute('position', new THREE.BufferAttribute(boltPos, 3));
 const boltLines = new THREE.LineSegments(boltGeo, new THREE.LineBasicMaterial({ color: '#8ff4ff' })); boltLines.frustumCulled = false; scene.add(boltLines);
@@ -858,6 +904,13 @@ function burst(x, y, n = 12) { for (let k = 0; k < n; k++) puff(x, y, .3, rnd(-3
 let hazardGroup = new THREE.Group(); scene.add(hazardGroup);
 const iceMat = new THREE.MeshStandardMaterial({ color: '#dff2fe', roughness: .05, metalness: .1, transparent: true, opacity: .9 });
 const rimGeo = new THREE.TorusGeometry(1, .28, 6, 20);
+function holeMesh(h) {
+  const r = h.r * S;
+  const rim = new THREE.Mesh(rimGeo, mat('#6c6f75')); rim.rotation.x = Math.PI / 2; rim.scale.set(r + .2, r, 1);
+  place(rim, h.x, h.y, .06); rim.receiveShadow = true; hazardGroup.add(rim);
+  flat(_g.circ ??= new THREE.CircleGeometry(1, 32), mat('#141518'), h.x, h.y, .09, r, r * .85, hazardGroup);
+  flat(_g.circ, mat('#34506b'), h.x + 3, h.y + 2, .1, r * .5, r * .3, hazardGroup);
+}
 function buildHazards() {
   scene.remove(hazardGroup); hazardGroup = new THREE.Group(); scene.add(hazardGroup);
   for (const p of ice) { p.mesh = flat(_g.circ ??= new THREE.CircleGeometry(1, 32), iceMat, p.x, p.y, .06, p.rx * S, p.ry * S, hazardGroup); p.mesh.visible = !p.gone; }
@@ -870,13 +923,7 @@ function buildHazards() {
     box(g, 1.1, .8, 1.1, mat('#c0262d'), 0, .4, 0); box(g, 1.14, .82, .2, mat('#f5c400', null, .3, .6), 0, .4, 0); box(g, .2, .82, 1.14, mat('#f5c400', null, .3, .6), 0, .4, 0);
     g.rotation.y = rnd(0, 3); g.visible = !p.gone;
   }
-  for (const h of holes) {
-    const r = h.r * S;
-    const rim = new THREE.Mesh(rimGeo, mat('#6c6f75')); rim.rotation.x = Math.PI / 2; rim.scale.set(r + .2, r, 1);
-    place(rim, h.x, h.y, .06); rim.receiveShadow = true; hazardGroup.add(rim);
-    flat(_g.circ, mat('#141518'), h.x, h.y, .09, r, r * .85, hazardGroup);
-    flat(_g.circ, mat('#34506b'), h.x + 3, h.y + 2, .1, r * .5, r * .3, hazardGroup);
-  }
+  holes.forEach(holeMesh);
   for (const c of cars) {
     const g = c.mesh = new THREE.Group(); hazardGroup.add(g);
     const paint = mat(c.color, null, .3, .3);
@@ -896,9 +943,24 @@ function buildHazards() {
     const m = p.kind === 'dog' ? buildDog(hazardGroup) : buildPerson(hazardGroup, p.color, p.hat);
     Object.assign(p, { mesh: m.g, body: m.body, legs: m.legs, head: m.head });
   }
-  for (const k of kids) { // kid behind a snowdrift
-    const m = buildPerson(hazardGroup, k.coat, k.hat, .62);
+  for (const b of BOXES) { // translucent rainbow cube with a ? on every face
+    b.mesh = place(new THREE.Group(), b.x, b.y); hazardGroup.add(b.mesh);
+    mesh(boxGeo(2.2, 2.2, 2.2, .25), boxMat, b.mesh).castShadow = false;
+  }
+  for (const l of loot) { // a small glowing crate, spinning so it catches the eye once you're close
+    l.mesh = place(new THREE.Group(), l.x, l.y); hazardGroup.add(l.mesh);
+    rbox(l.mesh, 1.5, 1, 1.1, .12, mat('#ffb400', '#8a5200', .3, .4), 0, 0, 0);
+    box(l.mesh, 1.54, .22, 1.14, '#1d232b', 0, 0, 0); box(l.mesh, .24, 1.04, 1.14, '#1d232b', 0, 0, 0);
+  }
+  for (const k of kids) { // kid behind a snowdrift, or a bum lounging on cardboard with his bottles
+    const m = buildPerson(hazardGroup, k.coat, k.hat, k.bum ? 1 : .62);
     Object.assign(k, { mesh: m.g, arms: m.arms });
+    if (k.bum) {
+      m.body.rotation.z = 1.15; m.body.position.set(.9, .35, 0); // reclined, feet towards the path
+      box(m.g, 3, .06, 1.4, '#a07a4a', -.2, .03, 0);
+      for (const z of [-.9, .9]) { const b = mesh(cylGeo(.09, .12, .5, 8), bottleM, m.g, 1.4, .25, z); if (z > 0) b.rotation.z = 1.5; }
+      continue;
+    }
     const d = mesh(sphGeo(1), '#f7fafc', hazardGroup); place(d, k.x + k.dx * 12, k.y + k.dy * 12);
     d.scale.set(1.4, .9, 1.4);
   }
@@ -933,10 +995,10 @@ const sleigh = new THREE.Group(); scene.add(sleigh); sleigh.visible = false;
 // ---------- players & input ----------
 const COLORS = ['#ff7a1a', '#2d9cff', '#2fbf6a', '#e84393', '#f5c400', '#9b59b6', '#00c2c7', '#e74c3c'];
 const KB = [
-  { name: 'WASD', u: 'KeyW', d: 'KeyS', l: 'KeyA', r: 'KeyD', b: 'ShiftLeft', h: 'Space', z: 'KeyE', g: 'KeyQ', bn: 'Shift' },
-  { name: 'Arrows', u: 'ArrowUp', d: 'ArrowDown', l: 'ArrowLeft', r: 'ArrowRight', b: 'ShiftRight', h: 'Period', z: 'Comma', g: 'Slash', bn: 'R-Shift' },
-  { name: 'IJKL', u: 'KeyI', d: 'KeyK', l: 'KeyJ', r: 'KeyL', b: 'KeyU', h: 'KeyO', z: 'KeyP', g: 'KeyN', bn: 'U' },
-  { name: 'TFGH', u: 'KeyT', d: 'KeyG', l: 'KeyF', r: 'KeyH', b: 'KeyR', h: 'KeyY', z: 'KeyV', g: 'KeyB', bn: 'R' },
+  { name: 'WASD', u: 'KeyW', d: 'KeyS', l: 'KeyA', r: 'KeyD', b: 'ShiftLeft', h: 'Space', z: 'KeyE', g: 'KeyQ', x: 'KeyZ', bn: 'Shift' },
+  { name: 'Arrows', u: 'ArrowUp', d: 'ArrowDown', l: 'ArrowLeft', r: 'ArrowRight', b: 'ShiftRight', h: 'Period', z: 'Comma', g: 'Slash', x: 'AltRight', bn: 'R-Shift' },
+  { name: 'IJKL', u: 'KeyI', d: 'KeyK', l: 'KeyJ', r: 'KeyL', b: 'KeyU', h: 'KeyO', z: 'KeyP', g: 'KeyN', x: 'Semicolon', bn: 'U' },
+  { name: 'TFGH', u: 'KeyT', d: 'KeyG', l: 'KeyF', r: 'KeyH', b: 'KeyR', h: 'KeyY', z: 'KeyV', g: 'KeyB', x: 'KeyC', bn: 'R' },
 ];
 // ponytail: the street is sized for 4; grow the map before raising this
 const MAX_PLAYERS = 4;
@@ -997,9 +1059,9 @@ function buildRobot(r) {
 // owner 'H' = this machine when local/hosting; a guest's robots are owned by its peer id
 // online every robot shows its player's nickname; couch play keeps Player N
 function nameOf(r) { return (role !== 'local' && (r.n || (r.owner === 'H' && pname))) || `Player ${r.i + 1}`; }
-function addRobot({ owner = 'H', ctrl = null, lid = 0, id = nextId++, i, n = '' }) {
+function addRobot({ owner = 'H', ctrl = null, lid = 0, id = nextId++, i, n = '', skin = '' }) {
   i ??= COLORS.findIndex((_, k) => !robots.some(r => r.i === k));
-  const r = { id, owner, ctrl, lid, i, n, color: COLORS[i], ...spawn(i), a: 0, vx: 0, vy: 0, cargo: null, hole: null, esc: 0,
+  const r = { id, owner, ctrl, lid, i, n, skin, color: COLORS[i], ...spawn(i), a: 0, vx: 0, vy: 0, cargo: null, hole: null, esc: 0,
               immune: 1, hitCd: 0, stun: 0, say: '', sayT: 0, boost: 1, boosting: false, zaps: 3, zapCd: 0, hookCd: 0, hp: 1, earn: 0 };
   buildRobot(r); robots.push(r);
   achToast({ i: `<i style="display:block;width:24px;height:24px;border-radius:5px;background:${r.color}"></i>`, n: `${esc(nameOf(r))} joined`,
@@ -1015,7 +1077,7 @@ const myCtrls = () => role === 'guest' ? localCtrls : robots.filter(r => r.owner
 function join(ctrl) {
   if (role === 'guest') {
     if (localCtrls.length >= 4) return;
-    localCtrls.push(ctrl); hostConn.send({ type: 'add', lid: localCtrls.length - 1, n: pname });
+    localCtrls.push(ctrl); hostConn.send({ type: 'add', lid: localCtrls.length - 1, n: pname, sk: skins.sel });
     return;
   }
   if (robots.length >= MAX_PLAYERS) return;
@@ -1040,7 +1102,7 @@ const ZERO = { t: 0, s: 0 };
 const input = r => r.owner === 'H' ? ctrlInput(r.ctrl) : remoteIn[r.id] || ZERO;
 function ctrlInput(ctrl) {
   if (ctrl.touch) return touchIn;
-  if (ctrl.kb != null) { const k = KB[ctrl.kb]; return { t: keys.has(k.u) - keys.has(k.d), s: keys.has(k.r) - keys.has(k.l), b: keys.has(k.b), h: keys.has(k.h), z: keys.has(k.z), g: keys.has(k.g) }; }
+  if (ctrl.kb != null) { const k = KB[ctrl.kb]; return { t: keys.has(k.u) - keys.has(k.d), s: keys.has(k.r) - keys.has(k.l), b: keys.has(k.b), h: keys.has(k.h), z: keys.has(k.z), g: keys.has(k.g), x: keys.has(k.x) }; }
   const gp = navigator.getGamepads?.()[ctrl.pad];
   if (!gp) return { t: 0, s: 0 };
   const dz = v => Math.abs(v) < .2 ? 0 : v, b = k => gp.buttons[k]?.pressed;
@@ -1049,9 +1111,10 @@ function ctrlInput(ctrl) {
   if (b(6) || b(13)) t = -1;
   if (b(14)) s = -1; if (b(15)) s = 1;
   if (b(0) && !t) t = 1; // boost alone also drives
-  return { t, s, b: b(0) || b(5), h: b(1) || b(4), z: b(2), g: b(3) };
+  return { t, s, b: b(0) || b(5), h: b(1), z: b(2), g: b(3), x: b(4) };
 }
 addEventListener('keydown', e => {
+  if (!document.getElementById('cases').hidden) { if (e.code === 'Escape') closeCases(); return; } // skins screen eats keys, so Enter can't start a shift under it
   if (e.code === 'Escape' && !e.repeat) { if (e.target.tagName === 'INPUT') e.target.blur(); return setMenu(!menuOpen); }
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') { if (e.code === 'Enter' && e.target === codeIn) joinRoom(codeIn.value); return; }
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
@@ -1105,6 +1168,8 @@ let state = 'title', stateT = 0, level = 1, time = 0, quota = 0, delivered = 0, 
 let darkness = 0, banner = '', bannerT = 0, snowCount = 0, wind = 0;
 // pvp: one shift, each robot banks its own € (r.earn), most € when the battery dies wins. no quota, no workshop
 let pvp = false;
+// roam: free roam, a shift with no battery drain and no quota. it never ends; quit from the menu. no score, no leaderboard
+let roam = false;
 let best = 0; try { best = +localStorage.getItem('ruokarobo-best') || 0; } catch (e) {}
 const floats = [];
 // team money buys robot upgrades between shifts; each upgrade has 3 levels
@@ -1130,6 +1195,31 @@ const SHOP = [...UPGRADES, ...COSMETICS];
 const isStyle = k => COSMETICS.some(c => c.k === k);
 const freshUp = () => ({ tires: 0, motor: 0, susp: 0, battery: 0, turbo: 0, tesla: 0, heat: 0, box: 0, pipo: 0, scarf: 0, fiflag: 0, gold: 0 });
 up = freshUp();
+// skin cases: found hidden on the map during shifts, opened on the title screen; skins live on this machine
+const RARITY = [{ n: 'Common', c: '#9aa5b1', w: 60 }, { n: 'Rare', c: '#2d7cff', w: 28 }, { n: 'Epic', c: '#9b4dff', w: 10 }, { n: 'Legendary', c: '#ffb400', w: 2 }];
+const SKINS = [ // c = shell colour, ro/me = roughness/metalness, e = glow
+  { k: '', n: 'Tehdasvalkoinen', r: 0, c: '#f4f4f2' }, // the default, never in a case
+  { k: 'mint', n: 'Minttu', r: 0, c: '#9be3c4' },
+  { k: 'peach', n: 'Persikka', r: 0, c: '#ffb38a' },
+  { k: 'sky', n: 'Taivas', r: 0, c: '#8cc8ff' },
+  { k: 'sand', n: 'Hiekka', r: 0, c: '#d9c49a' },
+  { k: 'lilac', n: 'Syreeni', r: 0, c: '#c9b3f0' },
+  { k: 'navy', n: 'Yönsininen', r: 1, c: '#1f3a68', ro: .35 },
+  { k: 'ruby', n: 'Rubiini', r: 1, c: '#c0263a', ro: .3 },
+  { k: 'forest', n: 'Kuusikko', r: 1, c: '#2f6b3a', ro: .5 },
+  { k: 'lemon', n: 'Sitruuna', r: 1, c: '#f5d90a', ro: .35 },
+  { k: 'chrome', n: 'Kromi', r: 2, c: '#dfe4ea', ro: .12, me: 1 },
+  { k: 'bubble', n: 'Purkka', r: 2, c: '#ff5fb0', ro: .2, me: .3 },
+  { k: 'onyx', n: 'Onyx', r: 2, c: '#15171b', ro: .18, me: .6 },
+  { k: 'aurora', n: 'Revontuli', r: 3, c: '#3fe0b0', e: '#0d6b55', ro: .25 },
+  { k: 'lava', n: 'Laava', r: 3, c: '#ff5a1f', e: '#7a1800', ro: .4 },
+];
+let skins = { cases: 0, own: [], sel: '' }; // cases are found on the map, see loot
+try { Object.assign(skins, JSON.parse(localStorage.getItem('ruokarobo-skins') || '{}')); } catch (e) {}
+const saveSkins = () => { try { localStorage.setItem('ruokarobo-skins', JSON.stringify(skins)); } catch (e) {} };
+const skinMat = k => { const s = SKINS.find(s => s.k === k) || SKINS[0]; return mat(s.c, s.e, s.ro ?? .82, s.me ?? 0); };
+const skinOf = r => r.owner === myOwner ? skins.sel : r.skin || '';
+function rollSkin() { let x = Math.random() * 100; const r = RARITY.findIndex(q => (x -= q.w) < 0); return pick(SKINS.filter(s => s.k && s.r === r)); }
 function buy(k) {
   if (state !== 'shop') return;
   if (role === 'guest') return hostConn.send({ type: 'buy', k });
@@ -1212,7 +1302,7 @@ function storyLoad() {
 function storySave(ch) { try { localStorage.setItem('ruokarobo-story', JSON.stringify({ ch, money, up })); } catch (e) {} }
 // ch 0 is the prologue card; save carries the team money and upgrades of a continued story
 function startStory(ch, save) {
-  campaign = true; pvp = false; score = 0; money = save?.money || 0; up = { ...freshUp(), ...save?.up };
+  campaign = true; pvp = false; roam = false; score = 0; money = save?.money || 0; up = { ...freshUp(), ...save?.up };
   for (const k in stats) delete stats[k];
   chapter = ch; state = 'story'; stateT = 0;
 }
@@ -1263,15 +1353,27 @@ function setupLevel(n) {
     peds.push({ ...pos, ...waypoint(side), side, kind: 'dog', a: 0, vx: 0, vy: 0, mode: 'walk', t: 0, cool: 3, kickT: 0, say: '', sayT: 0 });
   }
   kids = []; balls = [];
+  const nKids = cv('kids', Math.min(4, n)) * BLOCKS, nBums = campaign && !nKids ? 0 : BLOCKS; // no bottles in story chapters without kids
   const home = chap()?.kidsNearHome && HOUSES[KIDS_HOME].door; // ch 3: the kids guard their own house
-  for (let i = 0, tries = 0; i < cv('kids', Math.min(4, n)) * BLOCKS && tries < 400 * BLOCKS; tries++) { // kids hide in the snow next to sidewalks
+  for (let i = 0, tries = 0; i < nKids + nBums && tries < 400 * BLOCKS; tries++) { // kids hide in the snow next to sidewalks; one bum per block
     const q = pathPoint(Math.random() < .7 ? 0 : 1), [dx, dy] = pick([[0, 1], [0, -1], [1, 0], [-1, 0]]), off = rnd(45, 70);
     const x = q.x + dx * off, y = q.y + dy * off;
     if (x < 20 || x > W - 20 || y < 20 || y > H - 20 || [...PATHS, ROAD].some(p => inR(x, y, p)) || inLake(x, y, 10) || insideSolid(x, y)
-        || DOORS.some(d => Math.hypot(d.x - x, d.y - y) < 90) || home && Math.hypot(home.x - x, home.y - y) > 250) continue;
-    kids.push({ x, y, dx: -dx, dy: -dy, a: Math.atan2(-dy, -dx), cool: rnd(1, 3), throwT: 0, say: '', sayT: 0,
-                coat: pick(['#ff7b00', '#2d9cff', '#e84393', '#2fbf6a']), hat: pick(['#d33', '#f5c400', '#1f4e9c']) });
+        || DOORS.some(d => Math.hypot(d.x - x, d.y - y) < 90) || home && i < nKids && Math.hypot(home.x - x, home.y - y) > 250) continue;
+    const bum = i >= nKids;
+    kids.push({ x, y, dx: -dx, dy: -dy, a: Math.atan2(-dy, -dx), cool: rnd(1, 3), throwT: 0, say: '', sayT: 0, bum,
+                coat: bum ? pick(['#5a4d3a', '#4a4f3a', '#3d3a36']) : pick(['#ff7b00', '#2d9cff', '#e84393', '#2fbf6a']),
+                hat: bum ? pick(['#6b6b6b', '#7a3b2e']) : pick(['#d33', '#f5c400', '#1f4e9c']) });
     i++;
+  }
+  loot = []; // skin cases tucked in beside a building, well off the sidewalks: you have to go looking
+  const rectD = (x, y, p) => Math.hypot(Math.max(p[0] - x, 0, x - p[0] - p[2]), Math.max(p[1] - y, 0, y - p[1] - p[3]));
+  for (let tries = 0; loot.length < 2 && tries < 5000; tries++) {
+    const x = rnd(25, W - 25), y = rnd(25, H - 15), sd = Math.min(...SOLIDS.map(b => rectD(x, y, [b.x, b.y, b.w, b.h])));
+    if (sd < 14 || sd > 45 || [...PATHS, ROAD].some(p => rectD(x, y, p) < 70) || inLake(x, y, 20)
+        || DOORS.some(d => Math.hypot(d.x - x, d.y - y) < 120) || trees.some(t => Math.hypot(t.x - x, t.y - y) < t.r + 15)
+        || loot.some(l => Math.abs(l.x - x) < BW / 2)) continue; // spread out: not both in the same block
+    loot.push({ x, y, got: 0 });
   }
   plow = cv('plow', n >= 2) ? { x: 20, y: 580, a: 0, wi: 1, dir: 1 } : null;
   applyLevel(n);
@@ -1298,7 +1400,8 @@ function startLevel(n) {
   level = n; setupLevel(n);
   time = cv('time', 75 + n * 5) + up.battery * 12; delivered = 0; goalDone = false;
   quota = cv('quota', 2 + n) + (robots.length - 1) * 2;
-  robots.forEach(r => Object.assign(r, spawn(r.i), { vx: 0, vy: 0, a: 0, camYaw: 0, boost: 1, zaps: 3 + up.tesla, cargo: null, hole: null, stun: 0, immune: 1, hp: 1, earn: 0, towT: 0, hookCd: 0, dDir: 0, dCh: 0, dTier: 0, mt: 0 }));
+  robots.forEach(r => Object.assign(r, spawn(r.i), { vx: 0, vy: 0, a: 0, camYaw: 0, boost: 1, zaps: 3 + up.tesla, cargo: null, hole: null, stun: 0, immune: 1, hp: 1, earn: 0, towT: 0, hookCd: 0, dDir: 0, dCh: 0, dTier: 0, mt: 0, drunk: 0, lag: 0 }));
+  BOXES.forEach(b => b.t = 0);
   weather = { k: null, t: 0 }; weatherIn = n >= 2 ? rnd(15, 35) : Infinity;
   if (chap()?.weather) { weather = { k: chap().weather, t: 1e9 }; fx({ k: 'wx', w: weather.k }); sfx('alarm'); } // ch 7: blizzard all chapter
   santa = null; santaIn = campaign ? Infinity : rnd(20, 45); // no sleigh knocking cars over on the night of the crash
@@ -1310,7 +1413,7 @@ function startLevel(n) {
 }
 function pressStart() {
   if (role === 'guest') return; // the host starts the game
-  if (state === 'title') { if (!robots.length) join(touchDev ? { touch: 1 } : { kb: 0 }); newRun(); }
+  if (state === 'title') { roam = false; if (!robots.length) join(touchDev ? { touch: 1 } : { kb: 0 }); newRun(); }
   else if (state === 'over' && stateT > 1) campaign ? retryChapter() : newRun();
   else if (state === 'shop' && stateT > 1) campaign ? (chapter++, state = 'story', stateT = 0) : startLevel(level + 1);
   else if (state === 'story' && stateT > .5) {
@@ -1331,6 +1434,7 @@ const SFX = {
   deliver: () => { beep(660, .08); beep(880, .08, .09); beep(1320, .15, .18); },
   alarm: () => [880, 660, 880, 660].forEach((f, i) => beep(f, .12, i * .14, 'square', .04)),
   splat: () => beep(300, .08, 0, 'triangle', .07),
+  clink: () => { beep(2400, .05, 0, 'triangle', .05); beep(1800, .07, .04, 'triangle', .04); beep(520, .12, .25, 'sine', .06); beep(380, .1, .35, 'sine', .05); },
   zap: () => { beep(1400, .07, 0, 'sawtooth', .05); beep(700, .14, .05, 'square', .04); beep(1800, .05, .1, 'sawtooth', .03); },
   honk: () => [0, .2, .4].forEach((t, i) => { const d = i < 2 ? .12 : .45; beep(415, d, t, 'square', .06); beep(523, d, t, 'square', .05); }),
   hook: () => { beep(900, .05, 0, 'triangle', .06); beep(300, .12, .05, 'sawtooth', .05); },
@@ -1351,7 +1455,12 @@ function fx(e) { // play locally; the host also forwards it to guests
   else if (e.k === 'burst') burst(e.x, e.y, e.n);
   else if (e.k === 'zap') bolts.push({ ...e, t: .2 });
   else if (e.k === 'wx') { wxKind = e.w; wxMsgT = 3.5; }
+  else if (e.k === 'hole') { holes.push(e.h); holeMesh(e.h); burst(e.h.x, e.h.y, 16); }
   else if (e.k === 'bowl' && cars[e.i]) cars[e.i].fly = 1.4;
+  else if (e.k === 'loot' && loot[e.i]) {
+    loot[e.i].got = 1; burst(e.x, e.y, 20);
+    if (e.o === myOwner) { skins.cases++; saveSkins(); achToast({ i: '🎁', n: 'Skin case found!', d: 'Open it from 🎁 Skins on the title screen' }); }
+  }
   if (role === 'host') outbox.push(e);
 }
 // ---------- achievements ----------
@@ -1426,6 +1535,7 @@ const ACH = [
   { k: 'ball25',   i: '⛄', n: 'Lumisodan uhri',   d: 'Take 25 snowballs in one run',          w: s => s.balls >= 25 },
   { k: 'car',      i: '🚗', n: 'Auts',             d: 'Get hit by a car',                      w: (s, t) => t.carHit >= 1 },
   { k: 'car10',    i: '🚑', n: 'Liikenneturva',    d: 'Get hit by cars 10 times in one run',   w: s => s.carHit >= 10 },
+  { k: 'bottle',   i: '🍾', n: 'Kännissä',         d: 'Get hit by a bottle from a bum',        w: (s, t) => t.bottle >= 1 },
   { k: 'santa',    i: '🎅', n: 'Hohoho',           d: 'Get bowled over by Santa',              w: (s, t) => t.santaHit >= 1 },
   { k: 'plow',     i: '🚜', n: 'Aurauskone',       d: 'Get shoved by the snowplow',            w: (s, t) => t.plowHit >= 1 },
   { k: 'kick',     i: '👢', n: 'Potkittu',         d: 'Get kicked by a local',                 w: (s, t) => t.kick >= 1 },
@@ -1605,6 +1715,43 @@ function hook(r) { // grappling hook: the nearest robot ahead is dragged behind 
   if (!best) return say(r, 'Ohi!', 1);
   Object.assign(best, { tow: r.id, towT: 5 }); say(best, 'Hei! 🪝', 1.4); say(r, 'Mukaan! 🪝', 1.4);
 }
+function snowball(r) { // pvp only: lob a snowball at the nearest rival ahead, or straight ahead if nobody's there
+  r.ballCd = .7;
+  const fx_ = Math.cos(r.a), fy = Math.sin(r.a);
+  let q = null, bd = 260;
+  for (const o of robots) {
+    if (o === r || o.hole) continue;
+    const dx = o.x - r.x, dy = o.y - r.y, d = Math.hypot(dx, dy);
+    if (d < bd && (dx * fx_ + dy * fy) / (d || 1) > .6) { q = o; bd = d; } // within ~53° ahead
+  }
+  const ft = (q ? bd : 160) / 300 + .15, h0 = 1.6; // same arc as the kids' throws
+  const tx = q ? q.x + q.vx * ft : r.x + fx_ * 160 + r.vx * ft, ty = q ? q.y + q.vy * ft : r.y + fy * 160 + r.vy * ft; // lead the target
+  balls.push({ x: r.x, y: r.y, vx: (tx - r.x) / ft, vy: (ty - r.y) / ft, h0, vh: (.5 * G * ft * ft - (h0 - .3)) / ft, age: 0, ft, o: r.id });
+}
+// power-ups fire the moment you drive through an item box; 3G only shows up when there's someone to lag
+function powerUp(r) {
+  const others = robots.filter(q => q !== r);
+  const k = pick(others.length ? ['3g', '3g', 'turbo', 'star', 'booze', 'storm', 'refill', 'pulla', 'hole'] : ['turbo', 'star', 'refill', 'pulla']);
+  sfx('pickup');
+  if (k === 'turbo') { r.mt = 2.5; r.boost = 1; say(r, '🍄 Turbo!', 1.6); sfx('boost'); }
+  if (k === 'star') { r.immune = 6; r.stun = 0; say(r, '⭐ Koskematon!', 2); }
+  if (k === '3g') {
+    say(r, '📶 3G kaikille!', 2);
+    for (const q of others) { q.lag = 10; say(q, pick(['Lagaa…', 'Yhteys pätkii', '📶 E-verkko?!']), 2); }
+    bump('lag3g');
+  }
+  if (k === 'booze') { say(r, '🍾 Kippis kaikille!', 2); sfx('clink'); for (const q of others) { q.drunk = 5; say(q, 'Hik! 🍾', 1.6); } }
+  if (k === 'storm') { // every rival gets a bolt, wherever they are
+    say(r, '⚡ Ukkosmyrsky!', 2); sfx('zap');
+    for (const q of others) { fx({ k: 'zap', x1: r.x, y1: r.y, x2: q.x, y2: q.y }); q.stun = Math.max(q.stun, 1.5); q.vx = q.vy = 0; say(q, 'Bzzzt! ⚡', 1.4); }
+  }
+  if (k === 'refill') { r.hookCd = 0; r.zaps = 3 + up.tesla; say(r, '🪝 Koukku ja ⚡ täynnä!', 1.8); }
+  if (k === 'pulla') { r.boost = 1; r.hp = 1; say(r, '🥐 Mummon pulla!', 1.8); }
+  if (k === 'hole') { // a fresh pothole dug right behind you, for whoever's following
+    say(r, '🕳️ Kuoppa taakse!', 1.8);
+    fx({ k: 'hole', h: { x: clamp(r.x - Math.cos(r.a) * 40, 20, W - 20), y: clamp(r.y - Math.sin(r.a) * 40, 20, H - 20), r: 18 } });
+  }
+}
 function escape(r, msg, nx = Math.cos(r.a), ny = Math.sin(r.a)) {
   r.hole = null; r.immune = 1.5; r.vx = nx * 150; r.vy = ny * 150;
   say(r, msg); sfx('escape');
@@ -1624,7 +1771,15 @@ function pushOut(r, cx, cy, minD) {
 function updRobot(r, dt) {
   r.hitCd -= dt; r.immune -= dt; r.sayT -= dt; r.stun -= dt;
   if (r.stun <= 0 && r.hitCd <= 0) r.hp = Math.min(1, r.hp + dt * .012); // ponytail: flat self-repair, no repair stations
-  const inp = input(r);
+  r.drunk = Math.max(0, (r.drunk || 0) - dt);
+  r.lag = Math.max(0, (r.lag || 0) - dt);
+  let in0 = input(r);
+  if (r.lag) { // 3G: inputs arrive LAG seconds late; the first second just replays whatever you were doing when it hit
+    const q = r.lagQ ||= []; q.push({ T, i: in0 });
+    while (q.length > 1 && q[1].T <= T - LAG) q.shift();
+    in0 = q[0].i;
+  } else r.lagQ = null;
+  const inp = r.drunk ? { ...in0, s: clamp(-in0.s + Math.sin(T * 2.3 + r.i) * .7, -1, 1) } : in0; // drunk: steering flips and sways
   if (r.hole) {
     if (inp.t || inp.s) r.esc += dt * .35 * (1 + .5 * up.susp);
     if (r.esc >= 1) { escape(r, 'Ylös! 💪'); bump('holes'); }
@@ -1660,6 +1815,9 @@ function updRobot(r, dt) {
   r.hookCd -= dt;
   if (inp.g && !r.gPrev && control && r.hookCd <= 0 && (robots.length > 1 || eetu?.state === 'ice') && state === 'play') hook(r);
   r.gPrev = !!inp.g;
+  r.ballCd = (r.ballCd || 0) - dt;
+  if (inp.x && !r.xPrev && control && pvp && r.ballCd <= 0 && state === 'play') snowball(r);
+  r.xPrev = !!inp.x;
   const hb = !!inp.h;
   // drift, kart-style manual: brake + gas + steer at speed. the direction locks in; steer into it to tighten, away to widen.
   // hold it to charge sparks (blue → orange → purple), let go of brake for a mini-turbo. slow down or get stunned and the charge is lost
@@ -1944,18 +2102,20 @@ function updKids(dt) {
     k.a = Math.atan2(r.y - k.y, r.x - k.x);
     if (k.cool > 0) continue;
     const ft = dist(k, r) / 300 + .15, tx = r.x + r.vx * ft, ty = r.y + r.vy * ft; // lead the target
-    balls.push({ x: k.x, y: k.y, vx: (tx - k.x) / ft, vy: (ty - k.y) / ft, h0: 1.4, vh: (.5 * G * ft * ft - 1.1) / ft, age: 0, ft });
-    k.cool = rnd(2.2, 3.5); k.throwT = .3;
-    if (Math.random() < .4) say(k, pick(['Hihi!', 'Ota tästä!', 'Lumisota!']), 1.2);
+    const h0 = k.bum ? .9 : 1.4;
+    balls.push({ x: k.x, y: k.y, vx: (tx - k.x) / ft, vy: (ty - k.y) / ft, h0, vh: (.5 * G * ft * ft - (h0 - .3)) / ft, age: 0, ft, bot: k.bum });
+    k.cool = k.bum ? rnd(4, 6) : rnd(2.2, 3.5); k.throwT = .3;
+    if (Math.random() < .4) say(k, pick(k.bum ? ['Ota huikka!', 'Skool!', 'Hei kaveri!', 'Mitä sä tuijotat?'] : ['Hihi!', 'Ota tästä!', 'Lumisota!']), 1.2);
   }
   for (const b of balls) {
     b.age += dt; b.x += b.vx * dt; b.y += b.vy * dt;
     if (b.age < b.ft) continue;
     b.done = true; fx({ k: 'burst', x: b.x, y: b.y, n: 10 });
-    for (const r of robots) if (!r.hole && Math.hypot(r.x - b.x, r.y - b.y) < R + 9) {
+    for (const r of robots) if (r.id !== b.o && !r.hole && Math.hypot(r.x - b.x, r.y - b.y) < R + 9) {
       const s = Math.hypot(b.vx, b.vy) || 1;
       r.vx += b.vx / s * 170; r.vy += b.vy / s * 170; r.stun = Math.max(r.stun, .3);
-      damage(r, .06, 'Läts! ❄️'); sfx('splat'); bump('balls');
+      if (b.bot) { r.drunk = 5; damage(r, .04, 'Hik! 🍾'); sfx('clink'); bump('bottle'); }
+      else { damage(r, .06, 'Läts! ❄️'); sfx('splat'); bump('balls'); }
     }
   }
   balls = balls.filter(b => !b.done);
@@ -1992,10 +2152,19 @@ function update(dt) {
   updPlow(dt);
   updSanta(dt);
   updKids(dt);
+  if (state === 'play') for (const [i, l] of loot.entries()) {
+    const r = !l.got && robots.find(r => !r.hole && Math.hypot(r.x - l.x, r.y - l.y) < 22);
+    if (r) { say(r, '🎁 Skin case!', 2); fx({ k: 'loot', i, o: r.owner, x: l.x, y: l.y }); }
+  }
+  for (const b of BOXES) { // item boxes respawn 8 s after someone drives through
+    b.t = Math.max(0, b.t - dt);
+    const r = state === 'play' && !b.t && robots.find(r => !r.hole && Math.hypot(r.x - b.x, r.y - b.y) < 20);
+    if (r) { b.t = 8; fx({ k: 'burst', x: b.x, y: b.y, n: 14 }); powerUp(r); }
+  }
   updWeather(dt);
   updEetu(dt);
   broadcast(dt);
-  if (state === 'play') {
+  if (state === 'play' && !roam) {
     if (!goalDone) time -= dt; // the battery waits while a story moment plays out
     if (!pvp && (chap()?.goal && chap().goal !== 'collect' ? goalDone && T - goalT > 3 : delivered >= quota)) {
       bonus = Math.ceil(time); money += bonus; score += bonus; state = 'shop'; stateT = 0;
@@ -2060,7 +2229,8 @@ function updCameras(dt) {
     while (back > 25 && insideSolid(r.x - cx * back, r.y - sy * back)) back -= 10;
     r.cam.position.set((r.x - cx * back) * S - OX, 1.2 + back * .025, (r.y - sy * back) * S - OZ);
     r.cam.lookAt((r.x + cx * 45) * S - OX, .6, (r.y + sy * 45) * S - OZ);
-    r.cam.fov += ((r.boosting ? 74 : 60) - r.cam.fov) * Math.min(1, dt * 5);
+    if (r.drunk > 0) r.cam.rotateZ(Math.sin(T * 1.7) * .22 * Math.min(1, r.drunk));
+    r.cam.fov += ((r.boosting ? 74 : 60) + (r.drunk > 0 ? Math.sin(T * 2.9) * 12 : 0) - r.cam.fov) * Math.min(1, dt * 5);
     const sh = Math.max(0, r.stun) * .5 + (r.boosting ? .03 : 0); // screen shake on hits
     if (sh) r.cam.position.add(_v.set(rnd(-sh, sh), rnd(-sh, sh), rnd(-sh, sh)));
   }
@@ -2123,8 +2293,9 @@ function hostRoom() {
     c.on('data', m => {
       if (onNet(c, c.peer, m)) return;
       if (m.type === 'add' && robots.length < MAX_PLAYERS && !robots.some(r => r.owner === c.peer && r.lid === m.lid)) {
-        const r = addRobot({ owner: c.peer, lid: m.lid, n: String(m.n || '').trim().slice(0, 12) }); say(r, 'Moi!'); sfx('join');
+        const r = addRobot({ owner: c.peer, lid: m.lid, n: String(m.n || '').trim().slice(0, 12), skin: String(m.sk || '') }); say(r, 'Moi!'); sfx('join');
       } else if (m.type === 'buy') buy(m.k);
+      else if (m.type === 'skin') robots.forEach(r => r.owner === c.peer && (r.skin = String(m.k || '')));
       else if (m.type === 'in') {
         for (const r of robots) if (r.owner === c.peer && m.in[r.lid]) remoteIn[r.id] = m.in[r.lid];
       }
@@ -2149,7 +2320,7 @@ function joinRoom(code) {
       localCtrls.push(...robots.map(r => r.ctrl)); [...robots].forEach(removeRobot);
       // nobody on this machine yet: give them a robot now, joining should be enough to play
       if (!localCtrls.length) localCtrls.push(touchDev ? { touch: 1 } : { kb: 0 });
-      localCtrls.forEach((_, lid) => hostConn.send({ type: 'add', lid, n: pname }));
+      localCtrls.forEach((_, lid) => hostConn.send({ type: 'add', lid, n: pname, sk: skins.sel }));
       status(`Joined room ${code}. ${touchDev ? 'Touch the stick to drive' : 'You drive with WASD'}. Waiting for the host to start…`);
     });
     hostConn.on('data', m => onNet(hostConn, 'host', m) || (m.type === 'lvl' ? applyLevelMsg(m) : applySnap(m)));
@@ -2170,43 +2341,44 @@ function levelMsg() {
   return { type: 'lvl', n: level, cg: campaign, ch: chapter, pr: presents.map(({ x, y, gone }) => ({ x, y, gone })), et: eetu?.state, ice: ice.map(({ x, y, rx, ry, gone }) => ({ x, y, rx, ry, gone })), holes,
            cars: cars.map(({ x, y, dir, base, v, color }) => ({ x, y, dir, base, v, color })),
            peds: peds.map(({ x, y, side, kind, color, hat }) => ({ x, y, side, kind, color, hat })),
-           kids: kids.map(({ x, y, a, dx, dy, coat, hat }) => ({ x, y, a, dx, dy, coat, hat })), plow: !!plow };
+           kids: kids.map(({ x, y, a, dx, dy, coat, hat, bum }) => ({ x, y, a, dx, dy, coat, hat, bum })), loot: loot.map(({ x, y, got }) => ({ x, y, got })), plow: !!plow };
 }
 function applyLevelMsg(m) {
   level = m.n; campaign = !!m.cg; chapter = m.ch || 0; presents = m.pr || []; eetu = m.et ? { x: AVANTO.x, y: AVANTO.y, state: m.et, say: '', sayT: 0 } : null; ice = m.ice; holes = m.holes; cars = m.cars;
   peds = m.peds.map(p => ({ ...p, a: 0, mode: 'walk', kickT: 0, say: '', sayT: 0 }));
-  kids = m.kids.map(k => ({ ...k, throwT: 0, say: '', sayT: 0 })); balls = [];
+  kids = m.kids.map(k => ({ ...k, throwT: 0, say: '', sayT: 0 })); balls = []; loot = m.loot || [];
   plow = m.plow ? { x: 20, y: 580, a: 0 } : null;
   applyLevel(m.n);
 }
 function broadcast(dt) {
   if (role !== 'host' || (netT += dt) < .05) return;
   netT = 0;
-  const m = { type: 's', st: state, pvp, cg: campaign, ch: chapter, pz: paused, level, time, quota, delivered, score, bonus, money, up, banner, bannerT, best,
-    r: robots.map(r => ({ id: r.id, i: r.i, n: nameOf(r), owner: r.owner, x: r.x, y: r.y, a: r.a, vx: r.vx, vy: r.vy, cargo: r.cargo,
-                          hole: typeof r.hole === 'string' ? r.hole : !!r.hole, esc: r.esc, stun: r.stun, say: r.say, sayT: r.sayT, bo: r.boost, bl: r.boostLock, bz: r.boosting, dk: r.dTier, zp: r.zaps, hp: r.hp, e: r.earn, tw: r.towT > 0 ? r.tow : -1 })),
+  const m = { type: 's', st: state, pvp, roam, cg: campaign, ch: chapter, pz: paused, level, time, quota, delivered, score, bonus, money, up, banner, bannerT, best,
+    r: robots.map(r => ({ id: r.id, i: r.i, n: nameOf(r), sk: skinOf(r), owner: r.owner, x: r.x, y: r.y, a: r.a, vx: r.vx, vy: r.vy, cargo: r.cargo,
+                          hole: typeof r.hole === 'string' ? r.hole : !!r.hole, esc: r.esc, stun: r.stun, say: r.say, sayT: r.sayT, bo: r.boost, bl: r.boostLock, bz: r.boosting, dk: r.dTier, zp: r.zaps, hp: r.hp, e: r.earn, dr: r.drunk, lg: r.lag, tw: r.towT > 0 ? r.tow : -1 })),
     c: cars.map(c => c.x), fx: outbox.splice(0),
     p: peds.map(p => ({ x: p.x, y: p.y, a: p.a, m: p.mode, k: p.kickT > 0, mv: p.moving, s: p.say, st: p.sayT })),
     kd: kids.map(k => ({ a: k.a, th: k.throwT, s: k.say, st: k.sayT, z: k.zapT > 0 })), b: balls, wx: weather,
-    pl: plow && { x: plow.x, y: plow.y, a: plow.a }, sa: santa, ig: ice.map(p => p.gone ? 1 : 0).join(''), pg: presents.map(p => p.gone ? 1 : 0).join(''), et: eetu && { s: eetu.state, say: eetu.say, sayT: eetu.sayT } };
+    pl: plow && { x: plow.x, y: plow.y, a: plow.a }, sa: santa, ig: ice.map(p => p.gone ? 1 : 0).join(''), pg: presents.map(p => p.gone ? 1 : 0).join(''), bxs: BOXES.map(b => b.t ? 1 : 0).join(''), et: eetu && { s: eetu.state, say: eetu.say, sayT: eetu.sayT } };
   for (const c of conns) c.send(m);
 }
 function applySnap(m) {
   campaign = !!m.cg; chapter = m.ch || 0;
-  ({ st: state, pvp, level, time, quota, delivered, score, bonus, money, up, banner, bannerT, best } = m);
+  ({ st: state, pvp, roam, level, time, quota, delivered, score, bonus, money, up, banner, bannerT, best } = m);
   hostPaused = !!m.pz; net.snaps++; net.lastSnap = performance.now();
   const ids = new Set(m.r.map(s => s.id));
   robots.filter(r => !ids.has(r.id)).forEach(removeRobot);
   for (const s of m.r) {
     let r = robots.find(q => q.id === s.id);
     if (!r) r = Object.assign(addRobot({ id: s.id, owner: s.owner, i: s.i, n: s.n }), { x: s.x, y: s.y, a: s.a });
-    Object.assign(r, { owner: s.owner, n: s.n, tx: s.x, ty: s.y, ta: s.a, vx: s.vx, vy: s.vy, cargo: s.cargo, hole: s.hole || null,
-                       esc: s.esc, stun: s.stun, say: s.say, sayT: s.sayT, boost: s.bo, boostLock: s.bl, boosting: s.bz, dTier: s.dk || 0, zaps: s.zp, hp: s.hp ?? 1, earn: s.e ?? 0, tow: s.tw, towT: s.tw >= 0 ? 1 : 0 });
+    Object.assign(r, { owner: s.owner, n: s.n, skin: s.sk || '', tx: s.x, ty: s.y, ta: s.a, vx: s.vx, vy: s.vy, cargo: s.cargo, hole: s.hole || null,
+                       esc: s.esc, stun: s.stun, say: s.say, sayT: s.sayT, boost: s.bo, boostLock: s.bl, boosting: s.bz, dTier: s.dk || 0, zaps: s.zp, hp: s.hp ?? 1, earn: s.e ?? 0, drunk: s.dr || 0, lag: s.lg || 0, tow: s.tw, towT: s.tw >= 0 ? 1 : 0 });
   }
   m.c.forEach((x, i) => cars[i] && (cars[i].tx = x));
   m.p?.forEach((q, i) => peds[i] && Object.assign(peds[i], { tx: q.x, ty: q.y, a: q.a, mode: q.m, kickT: q.k ? .3 : 0, moving: q.mv, say: q.s, sayT: q.st }));
   m.kd?.forEach((q, i) => kids[i] && Object.assign(kids[i], { a: q.a, throwT: q.th, say: q.s, sayT: q.st, zapT: q.z ? 1 : 0 }));
   balls = m.b || []; weather = m.wx || weather;
+  BOXES.forEach((b, i) => b.t = +(m.bxs?.[i] === '1'));
   if (plow && m.pl) Object.assign(plow, { tx: m.pl.x, ty: m.pl.y, a: m.pl.a });
   if (!m.sa) santa = null; else if (!santa || Math.abs(santa.x - m.sa.x) > 150) santa = m.sa; // guests run him ahead between snaps
   if (eetu && m.et) { Object.assign(eetu, { state: m.et.s, say: m.et.say, sayT: m.et.sayT }); if (eetu.mesh) eetu.mesh.visible = eetu.state === 'ice'; }
@@ -2245,7 +2417,7 @@ function sync(dt) {
     r.sparks.visible = !!r.dTier && !r.hole;
     if (r.dTier) { r.sparkMat.color.set(SPARK[r.dTier]); r.sparks.scale.setScalar(.7 + Math.random() * .6 + .2 * r.dTier); }
     r.pipo.visible = !!up.pipo; r.scarf.visible = !!up.scarf; r.fiFlag.visible = !!up.fiflag; r.fl.visible = !up.fiflag;
-    r.shell.material = up.gold ? goldMat : mat('#f4f4f2');
+    r.shell.material = up.gold ? goldMat : skinMat(skinOf(r));
     if (!r.hole && (!r.lt || Math.hypot(r.x - r.lt.x, r.y - r.lt.y) > 5)) { // wheel tracks in the snow
       if (surface(r.x, r.y) !== 'ice') { const px = -Math.sin(r.a) * 3, py = Math.cos(r.a) * 3; addTrack(r.x + px, r.y + py, r.a); addTrack(r.x - px, r.y - py, r.a); }
       r.lt = { x: r.x, y: r.y };
@@ -2299,7 +2471,12 @@ function sync(dt) {
   }
   while (bolts.length && bolts[0].t <= 0) bolts.shift();
   boltGeo.setDrawRange(0, nb * BOLT_SEG * 2); boltGeo.attributes.position.needsUpdate = true;
-  ballPool.forEach((m, i) => { const b = balls[i]; m.visible = !!b && b.age < b.ft; if (m.visible) place(m, b.x, b.y, Math.max(.2, ballH(b))); });
+  const fly = balls.filter(b => b.age < b.ft), sb = fly.filter(b => !b.bot), bt = fly.filter(b => b.bot);
+  ballPool.forEach((m, i) => { const b = sb[i]; m.visible = !!b; if (b) place(m, b.x, b.y, Math.max(.2, ballH(b))); });
+  bottlePool.forEach((m, i) => { const b = bt[i]; m.visible = !!b; if (b) { place(m, b.x, b.y, Math.max(.2, ballH(b))); m.rotation.z = b.age * 14; } });
+  for (const b of BOXES) if (b.mesh) { b.mesh.visible = !b.t; b.mesh.rotation.set(T * .7, T * 1.3, 0); b.mesh.position.y = 1.6 + Math.sin(T * 2.5 + b.x) * .2; }
+  boxMat.color.setHSL(T * .15 % 1, .9, .6);
+  for (const l of loot) if (l.mesh) { l.mesh.visible = !l.got; l.mesh.rotation.y = T * 1.5; l.mesh.position.y = .7 + Math.sin(T * 3) * .15; }
   if (plow?.mesh) { place(plow.mesh, plow.x, plow.y); plow.mesh.rotation.y = -plow.a; plow.beacon.visible = (T * 4 | 0) % 2 === 0; }
   let ropes = 0; // tow ropes, and straps between a sofa and its helper
   for (const r of robots) {
@@ -2469,6 +2646,10 @@ function drawLabels(v) {
       ctx.fillStyle = 'rgba(29,35,43,.75)'; rr(p.x - 24, p.y + 36, 48, 9, 3); ctx.fill();
       ctx.fillStyle = YELLOW; rr(p.x - 22, p.y + 38, 44 * r.esc, 5, 2); ctx.fill();
     }
+    if (r.lag > 0) { // 3G: show the victim how long the misery lasts
+      ctx.font = F(900, 14); ctx.lineJoin = 'round'; ctx.strokeStyle = INK; ctx.lineWidth = 4;
+      const t = `📶 3G ${Math.ceil(r.lag)}s`; ctx.strokeText(t, top.x, y - 4); ctx.fillStyle = '#ff5a78'; ctx.fillText(t, top.x, y - 4); y -= 18;
+    }
     if (r.sayT > 0) bubble(top.x, y - 4, r.say, r.color);
   }
   for (const f of floats) {
@@ -2560,6 +2741,57 @@ function storyButton(fresh) {
 $('bStory').onclick = () => storyButton(false);
 $('bNewStory').onclick = () => storyButton(true);
 $('bMode').onclick = $('bMode2').onclick = () => { if (role !== 'guest') pvp = !pvp; };
+$('bRoam').onclick = () => { if (state !== 'title' || role === 'guest') return; pvp = false; pressStart(); roam = true; };
+// skin cases: a reel of random skins slides under a marker and stops on the one already rolled
+const TILE = 104, WIN_AT = 40;
+let spinning = false, unrevealed = ''; // unrevealed: already saved as owned, but the reel hasn't stopped on it yet
+const skinTile = (s, tag = 'div', mine = true) =>
+  `<${tag} class="sk r${s.r}${s.k === skins.sel && tag === 'button' ? ' on' : ''}" data-k="${s.k}" style="--sc:${s.c};--rc:${RARITY[s.r].c}"${mine ? '' : ' disabled'}><i></i>${mine ? s.n : '???'}</${tag}>`;
+function renderSkins() {
+  setText('caseCount', `${skins.cases} 🎁`);
+  $('bOpen').disabled = spinning || !skins.cases;
+  setText('bOpen', skins.cases ? 'Open case' : 'No cases yet');
+  $('skinGrid').innerHTML = [...SKINS].sort((a, b) => a.r - b.r).map(s => skinTile(s, 'button', !s.k || (skins.own.includes(s.k) && s.k !== unrevealed))).join('');
+}
+function equipSkin(k) {
+  skins.sel = k; saveSkins(); renderSkins();
+  if (role === 'guest') hostConn.send({ type: 'skin', k });
+}
+function openCases() {
+  if (!$('strip').childElementCount) $('strip').innerHTML = Array.from({ length: 12 }, rollSkin).map(s => skinTile(s)).join('');
+  $('cases').hidden = false; renderSkins();
+}
+function closeCases() { $('cases').hidden = true; }
+function openCase() {
+  if (spinning || !skins.cases) return;
+  const win = rollSkin(), dup = skins.own.includes(win.k);
+  skins.cases--;
+  if (!dup) skins.own.push(unrevealed = win.k);
+  saveSkins(); // ponytail: saved before the reel stops, so reloading mid-spin can't reroll
+  spinning = true; setText('caseMsg', ''); renderSkins();
+  const strip = $('strip'), w = $('reel').clientWidth;
+  strip.innerHTML = Array.from({ length: WIN_AT + 6 }, (_, i) => i === WIN_AT ? win : rollSkin()).map(s => skinTile(s)).join('');
+  strip.style.transition = 'none'; strip.style.transform = 'translateX(0)'; void strip.offsetWidth;
+  strip.style.transition = 'transform 5.5s cubic-bezier(.1,.7,.12,1)';
+  strip.style.transform = `translateX(${-(WIN_AT * TILE + TILE / 2 - w / 2 + rnd(-40, 40))}px)`;
+  let last = 0;
+  (function tick() { // a click each time a tile passes the marker
+    const n = Math.floor((w / 2 - new DOMMatrix(getComputedStyle(strip).transform).m41) / TILE);
+    if (n !== last) { last = n; beep(1100, .025, 0, 'square', .03); }
+    if (spinning) requestAnimationFrame(tick);
+  })();
+  strip.ontransitionend = strip.ontransitioncancel = () => {
+    if (!spinning) return;
+    spinning = false; unrevealed = '';
+    (win.r >= 2 ? SFX.ach : SFX.pickup)();
+    setText('caseMsg', `${RARITY[win.r].n}: ${win.n}! ` + (dup ? 'You had it already.' : 'Your robots wear it now.'));
+    if (!dup) equipSkin(win.k); else renderSkins();
+  };
+}
+$('bCases').onclick = openCases;
+$('bCasesX').onclick = closeCases;
+$('bOpen').onclick = openCase;
+$('skinGrid').onclick = e => { const b = e.target.closest('button.sk'); if (b && !b.disabled) equipSkin(b.dataset.k); };
 const BOARD_WHERE = { local: 'best runs on this machine', loading: 'loading…', global: 'best runs anywhere', offline: 'offline — showing this machine' };
 const WX_TEXT = { santa: ['Hohoho! 🎅', 'Santa is bowling down the road. Stay off it!'], blizzard: ['Blizzard', 'You can barely see the street'], freeze: ['Freezing rain', 'Every surface is ice for a while'] };
 let lastBannerT = 0, lastWxT = 0, playersKey = null, shopKey = '', pipsKey = '', scoresKey = '';
@@ -2578,10 +2810,11 @@ function updateDOM() {
       : 'PvP: 2nd player, press a key');
   }
   const ranked = [...robots].sort((a, b) => b.earn - a.earn);
+  if (state !== 'title') closeCases();
   // title
   $('title').hidden = state !== 'title';
   if (state === 'title') {
-    $('bStart').hidden = role === 'guest';
+    $('bStart').hidden = $('bRoam').hidden = role === 'guest';
     const sv = storyLoad();
     $('bStory').hidden = role === 'guest'; $('bNewStory').hidden = role === 'guest' || !sv || !!urlChapter;
     setText('bStory', urlChapter ? `Story: chapter ${urlChapter}` : sv ? `Continue story: chapter ${sv.ch}` : 'Story');
@@ -2618,6 +2851,7 @@ function updateDOM() {
     const pk = `${delivered}/${quota}`;
     if (pk !== pipsKey) { pipsKey = pk; $('hPips').innerHTML = quota <= 12 ? Array.from({ length: quota }, (_, i) => `<i class="${i < delivered ? 'on' : ''}"></i>`).join('') : ''; }
     $('hDelPlate').hidden = $('hMoneyPlate').hidden = pvp; $('hScores').hidden = !pvp;
+    $('hShiftPlate').hidden = $('hBatPlate').hidden = $('hPips').hidden = roam; if (roam) setText('hDel', delivered); // no quota to count towards
     const sc = pvp ? ranked.map(r => `<i style="background:${r.color}"></i><b>${r.earn}</b>`).join('') + '<span class="lbl">€</span>' : '';
     if (sc !== scoresKey) $('hScores').innerHTML = scoresKey = sc;
     $('hWx').hidden = !weather.k;
@@ -2640,9 +2874,9 @@ function updateDOM() {
   if (menuOpen) updateMenu();
   // shift sign drops in when a new shift starts
   if (play && bannerT > lastBannerT + .5) {
-    setText('signTitle', pvp ? 'PvP' : campaign ? `Chapter ${chapter}` : `Shift ${level}`);
-    setText('signSub', pvp ? 'Most € when the battery dies wins. Zap rivals to stun them.' : campaign ? CHAPTERS[chapter].title : `${LEVEL_NAMES[Math.min(level, 4) - 1]}. Deliver before the battery runs out.`);
-    setText('signQuota', quota); $('signQuota').parentElement.hidden = pvp || chap()?.goal === 'rescue';
+    setText('signTitle', roam ? 'Free roam' : pvp ? 'PvP' : campaign ? `Chapter ${chapter}` : `Shift ${level}`);
+    setText('signSub', roam ? 'No battery, no quota. Drive anywhere. Esc to quit.' : pvp ? 'Most € when the battery dies wins. Zap rivals, pelt them with snowballs.' : campaign ? CHAPTERS[chapter].title : `${LEVEL_NAMES[Math.min(level, 4) - 1]}. Deliver before the battery runs out.`);
+    setText('signQuota', quota); $('signQuota').parentElement.hidden = pvp || roam || chap()?.goal === 'rescue';
     $('sign').hidden = false; restartAnim($('sign'));
   }
   lastBannerT = bannerT;
@@ -2764,7 +2998,7 @@ function updateMenu() {
 
 // ---------- touch controls ----------
 const touchDev = matchMedia('(pointer: coarse)').matches;
-const touchIn = { t: 0, s: 0, b: false, h: false, z: false, g: false };
+const touchIn = { t: 0, s: 0, b: false, h: false, z: false, g: false, x: false };
 const stick = $('stick'), knob = $('knob');
 const joinTouch = () => { if (!myCtrls().some(c => c.touch)) join({ touch: 1 }); };
 function moveStick(e) {
@@ -2779,7 +3013,7 @@ let stickId = null; // follow the finger that grabbed the stick
 stick.onpointerdown = e => { stickId = e.pointerId; try { stick.setPointerCapture(e.pointerId); } catch (_) {} joinTouch(); moveStick(e); };
 stick.onpointermove = e => { if (e.pointerId === stickId) moveStick(e); };
 stick.onpointerup = stick.onpointercancel = e => { if (e.pointerId !== stickId) return; stickId = null; touchIn.t = touchIn.s = 0; knob.style.transform = ''; };
-for (const [id, k] of [['tBoost', 'b'], ['tBrake', 'h'], ['tZap', 'z'], ['tHook', 'g']]) {
+for (const [id, k] of [['tBoost', 'b'], ['tBrake', 'h'], ['tZap', 'z'], ['tHook', 'g'], ['tBall', 'x']]) {
   const el = $(id);
   el.onpointerdown = e => { try { el.setPointerCapture(e.pointerId); } catch (_) {} joinTouch(); touchIn[k] = true; };
   el.onpointerup = el.onpointercancel = () => { touchIn[k] = false; };
@@ -2824,6 +3058,7 @@ renderer.setAnimationLoop(now => {
   drawUI(vs);
   updateDOM();
   $('touch').hidden = !touchDev || !(state === 'play' || state === 'title');
+  $('tBall').hidden = !pvp;
   musicTick();
 });
 // campaign data invariants: any failure shows as "Assertion failed" in the console
