@@ -861,8 +861,10 @@ function buildStatue() {
   const plaque = new THREE.Mesh(new THREE.PlaneGeometry(2.8, 1.05), new THREE.MeshStandardMaterial({ map: t, roughness: .35, metalness: .7 }));
   plaque.position.set(0, 1.6, 1.82); g.add(plaque);
   const p = buildPerson(g, '#000', '#000', 1.7); p.g.position.y = 2.7; p.g.rotation.y = -Math.PI / 2; // faces the road
-  p.arms[1].rotation.z = 2.4; // singing into a mic, arm up
-  mesh(cylGeo(.05, .08, .45, 8), '#000', p.arms[1], .05, -.95, 0); mesh(sphGeo(.11), '#000', p.arms[1], .05, -1.2, 0);
+  // singing: hand held at the chin, mic tilted up to the mouth (not a raised arm)
+  p.arms[1].quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), new THREE.Vector3(.42, .2, -.44).normalize());
+  const mic = mesh(cylGeo(.05, .08, .3, 8), '#000', p.body, .46, 2.2, -.04); mic.rotation.z = .5;
+  mesh(sphGeo(.1), '#000', p.body, .39, 2.34, -.04);
   const bronze = mat('#8c6a3a', null, .35, .85);
   p.g.traverse(o => { if (o.isMesh) o.material = bronze; });
 }
