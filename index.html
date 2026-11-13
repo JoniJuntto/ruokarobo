@@ -333,6 +333,7 @@ const PATHS = [[0, 560, W, 40], [0, 720, W, 40], [620, 256, 40, 304], [400, 220,
 const ROAD = [0, 600, W, 120];
 const CROSS = [[620, 600, 40, 120], [1300, 600, 40, 120]];
 const LAKE = { x: 980, y: 400, rx: 210, ry: 95 };
+const AVANTO = { x: 1100, y: 420, r: 20 }; // ice-swimming hole by the sauna pier
 const SALEPA = { x: 30, y: 330, w: 190, h: 200, door: { x: 125, y: 552 } };
 const SAUNA = { x: 1205, y: 420, w: 70, h: 50 };
 const HOUSES = [
@@ -556,6 +557,8 @@ function plateMesh(n) {
   }
   const lake = new THREE.MeshStandardMaterial({ map: crackTex, roughness: .12, metalness: .05 });
   flat(new THREE.CircleGeometry(1, 64), lake, LAKE.x, LAKE.y, .025, LAKE.rx * S, LAKE.ry * S);
+  flat(new THREE.CircleGeometry(1, 32), mat('#e8f4fb'), AVANTO.x, AVANTO.y, .03, (AVANTO.r + 6) * S, (AVANTO.r + 4) * S); // snowy rim
+  flat(new THREE.CircleGeometry(1, 32), mat('#0f3a55', null, .05, .2), AVANTO.x, AVANTO.y, .04, AVANTO.r * S, AVANTO.r * .8 * S);
   const pier = group(1173, 446);
   for (let k = -3; k <= 3; k++) rbox(pier, .85, .22, 1.7, .05, '#8a5a33', k * .93, .25, 0);
   for (const sx of [-2.8, 2.8]) for (const sz of [-.7, .7]) mesh(cylGeo(.12, .12, 1), '#5c3b20', pier, sx, .1, sz);
@@ -1518,6 +1521,13 @@ function updRobot(r, dt) {
     say(r, 'Apua! 🆘', 3); sfx('hole');
     return;
   }
+  // avanto: like a pothole, but the cold water also drains the battery and soaks the cargo
+  if (r.immune <= 0 && Math.hypot(r.x - AVANTO.x, r.y - AVANTO.y) < AVANTO.r) {
+    r.hole = 'avanto'; r.esc = 0; r.x = AVANTO.x; r.y = AVANTO.y; r.vx = r.vy = 0;
+    if (r.cargo) r.cargo.cond = Math.max(0, r.cargo.cond - .3 * (ORDERS[r.cargo.o].dmg || 1));
+    damage(r, .2, ''); say(r, 'Kylmää! 🥶', 3); sfx('hole'); fx({ k: 'burst', x: r.x, y: r.y, n: 20 });
+    return;
+  }
   for (const b of SOLIDS) {
     const hit = pushOut(r, clamp(r.x, b.x, b.x + b.w), clamp(r.y, b.y, b.y + b.h), R);
     if (hit > 150) { damage(r, .08, surface(r.x, r.y) === 'ice' ? 'Hups!' : 'Auts!'); bump('bumps'); }
@@ -1936,7 +1946,7 @@ function broadcast(dt) {
   netT = 0;
   const m = { type: 's', st: state, pvp, pz: paused, level, time, quota, delivered, score, bonus, money, up, banner, bannerT, best,
     r: robots.map(r => ({ id: r.id, i: r.i, n: nameOf(r), owner: r.owner, x: r.x, y: r.y, a: r.a, vx: r.vx, vy: r.vy, cargo: r.cargo,
-                          hole: r.hole === 'snow' ? 'snow' : !!r.hole, esc: r.esc, stun: r.stun, say: r.say, sayT: r.sayT, bo: r.boost, bz: r.boosting, zp: r.zaps, hp: r.hp, e: r.earn, tw: r.towT > 0 ? r.tow : -1 })),
+                          hole: typeof r.hole === 'string' ? r.hole : !!r.hole, esc: r.esc, stun: r.stun, say: r.say, sayT: r.sayT, bo: r.boost, bz: r.boosting, zp: r.zaps, hp: r.hp, e: r.earn, tw: r.towT > 0 ? r.tow : -1 })),
     c: cars.map(c => c.x), fx: outbox.splice(0),
     p: peds.map(p => ({ x: p.x, y: p.y, a: p.a, m: p.mode, k: p.kickT > 0, mv: p.moving, s: p.say, st: p.sayT })),
     kd: kids.map(k => ({ a: k.a, th: k.throwT, s: k.say, st: k.sayT, z: k.zapT > 0 })), b: balls, wx: weather,
@@ -2123,7 +2133,7 @@ function drawUI(vs) {
 function drawTag(v) { // the player's own order sign at the bottom of their view
   const r = v.r, cx = v.x + v.w / 2, by = v.y + v.h - 14;
   let title, sub, num = null, numFill = BLUE, right = '', late = false;
-  if (r.hole) { title = r.hole === 'snow' ? 'Buried in snow' : 'Stuck in a pothole'; sub = pvp ? 'Wiggle out: nobody is coming to help' : 'Wiggle out, or wait for a friend to tow you'; }
+  if (r.hole) { title = r.hole === 'snow' ? 'Buried in snow' : r.hole === 'avanto' ? 'Fell through the ice' : 'Stuck in a pothole'; sub = pvp ? 'Wiggle out: nobody is coming to help' : 'Wiggle out, or wait for a friend to tow you'; }
   else if (r.cargo) {
     const O = ORDERS[r.cargo.o];
     title = `${O.icon} ${O.name}`; num = r.cargo.dest + 1;
@@ -2218,6 +2228,7 @@ const miniBg = document.createElement('canvas'); miniBg.width = 480; miniBg.heig
   const g = miniBg.getContext('2d'); g.scale(480 / W, 270 / H);
   g.fillStyle = '#eef3f8'; g.fillRect(0, 0, W, H);
   g.fillStyle = '#b9dcf0'; g.beginPath(); g.ellipse(LAKE.x, LAKE.y, LAKE.rx, LAKE.ry, 0, 0, 7); g.fill();
+  g.fillStyle = '#0f3a55'; g.beginPath(); g.arc(AVANTO.x, AVANTO.y, AVANTO.r, 0, 7); g.fill();
   g.fillStyle = '#4d525a'; g.fillRect(...ROAD);
   g.fillStyle = '#b3bac4'; PATHS.forEach(p => g.fillRect(...p));
   g.fillStyle = '#2f9e57'; g.fillRect(SALEPA.x, SALEPA.y, SALEPA.w, SALEPA.h);
