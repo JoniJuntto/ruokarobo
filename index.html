@@ -391,12 +391,13 @@
 
 <div id="achs"></div>
 <div id="touch" hidden><div id="stick"><div id="knob"></div></div><button id="tBoost" class="tbtn">Boost</button><button id="tBrake" class="tbtn">Brake</button><button id="tZap" class="tbtn">Zap</button><button id="tHook" class="tbtn">Hook</button><button id="tBall" class="tbtn" hidden>Snow</button><button id="tHorn" class="tbtn">Tööt</button></div>
-<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
-<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.min.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+<script defer src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script type="module">
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 // Simulation runs on a flat 8000x900 map (px): five 1600px blocks along one road. Rendering maps px → 3D units.
 const BW = 1600, BLOCKS = 5, W = BW * BLOCKS, H = 900, R = 7, S = .1, OX = W * S / 2, OZ = H * S / 2;
@@ -485,10 +486,11 @@ function surface(x, y) {
 }
 
 // ---------- three.js setup ----------
-const renderer = new THREE.WebGLRenderer({ antialias: true });
+const MOBILE = matchMedia('(pointer: coarse)').matches; // phones/tablets: lighter shadows and fewer lamp lights
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = MOBILE ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
 document.body.prepend(renderer.domElement);
 const scene = new THREE.Scene();
 scene.fog = new THREE.Fog('#cfdbe8', 60, 220);
@@ -501,7 +503,7 @@ function resize() {
   const cs = getComputedStyle(document.documentElement);
   for (const k in safe) safe[k] = parseFloat(cs.getPropertyValue('--s' + k)) || 0;
   renderer.setSize(vw, vh); camera.aspect = vw / vh; camera.updateProjectionMatrix();
-  const d = devicePixelRatio || 1;
+  const d = Math.min(devicePixelRatio || 1, 2); // HUD at 3x on phones is a full-screen clear for nothing
   ui.width = vw * d; ui.height = vh * d; ui.style.width = vw + 'px'; ui.style.height = vh + 'px';
   ctx.setTransform(d, 0, 0, d, 0, 0);
 }
@@ -516,23 +518,53 @@ scene.add(hemi);
 const sun = new THREE.DirectionalLight('#fff0dc', 2.6);
 sun.position.set(-60, 70, 55); // low winter sun, long shadows
 sun.castShadow = true;
-sun.shadow.mapSize.set(4096, 4096);
+sun.shadow.mapSize.setScalar(MOBILE ? 2048 : 4096);
 Object.assign(sun.shadow.camera, { left: -100, right: 100, top: 70, bottom: -70, near: 10, far: 300 });
 sun.shadow.bias = -.0004; sun.shadow.normalBias = .04;
 scene.add(sun);
 
 const _g = {}, _m = {};
-const boxGeo = (w, h, d, r = 0) => _g[`b${w},${h},${d},${r}`] ??= r ? new RoundedBoxGeometry(w, h, d, 3, r) : new THREE.BoxGeometry(w, h, d);
+const boxGeo = (w, h, d, r = 0) => _g[`b${w},${h},${d},${r}`] ??= r ? new RoundedBoxGeometry(w, h, d, 2, r) : new THREE.BoxGeometry(w, h, d);
 const cylGeo = (a, b, h, n = 16) => _g[`c${a},${b},${h},${n}`] ??= new THREE.CylinderGeometry(a, b, h, n);
 const coneGeo = (r, h, n = 14) => _g[`k${r},${h},${n}`] ??= new THREE.ConeGeometry(r, h, n);
-const sphGeo = r => _g[`s${r}`] ??= new THREE.SphereGeometry(r, 22, 16);
+const sphGeo = r => _g[`s${r}`] ??= new THREE.SphereGeometry(r, r < .5 ? 12 : 18, r < .5 ? 9 : 13);
 const capGeo = (r, l) => _g[`p${r},${l}`] ??= new THREE.CapsuleGeometry(r, l, 6, 14);
 // physically based materials; rough = matte by default, lower it for paint, glass and metal
 const mat = (c, e, rough = .82, metal = 0) => _m[`${c}|${e || ''}|${rough}|${metal}`] ??= new THREE.MeshStandardMaterial(
   e ? { color: c, emissive: e, emissiveIntensity: .9, roughness: rough, metalness: metal } : { color: c, roughness: rough, metalness: metal });
 function mesh(geo, m, parent, x = 0, y = 0, z = 0) {
   const o = new THREE.Mesh(geo, typeof m === 'string' ? mat(m) : m);
-  o.position.set(x, y, z); o.castShadow = o.receiveShadow = true; parent.add(o); return o;
+  o.position.set(x, y, z); o.receiveShadow = true; parent.add(o);
+  o.castShadow = (geo.boundingSphere ?? (geo.computeBoundingSphere(), geo.boundingSphere)).radius > .12; return o;
+}
+// fuse a group's plain-coloured mesh children into one vertex-coloured mesh per (roughness, metalness): one draw
+// instead of ten. `rough` given = treat all as that roughness (tiny parts on people). Skips textured, glowing,
+// see-through meshes and `keep` (parts whose material changes at runtime).
+const _vc = {};
+function paint(q, col) { // solid vertex colour + an index (mergeGeometries wants all indexed); typed loops, this runs on ~1M verts at load
+  const n = q.attributes.position.count, c = new Float32Array(n * 3);
+  for (let i = 0; i < n * 3; i += 3) { c[i] = col.r; c[i + 1] = col.g; c[i + 2] = col.b; }
+  q.setAttribute('color', new THREE.BufferAttribute(c, 3)); if (!q.index) q.setIndex(seqIndex(n)); return q;
+}
+// ponytail: geometry.clone() on a SphereGeometry etc. first builds a default sphere, then overwrites it: 90% of load-time baking
+const plainCopy = geo => new THREE.BufferGeometry().copy(geo);
+function seqIndex(n) { const a = new Uint32Array(n); for (let i = 0; i < n; i++) a[i] = i; return new THREE.BufferAttribute(a, 1); }
+function fuse(g, keep = [], rough = null) {
+  const by = {};
+  for (const o of g.children) {
+    const m = o.material;
+    if (!o.isMesh || keep.includes(o) || Array.isArray(m) || m.map || m.transparent || m.emissive.getHex() || !m.isMeshStandardMaterial) continue;
+    (by[rough ?? `${m.roughness}|${m.metalness}`] ??= []).push(o);
+  }
+  for (const [k, ms] of Object.entries(by)) {
+    if (ms.length < 2) continue;
+    const gs = ms.map(o => {
+      o.updateMatrix(); const q = plainCopy(o.geometry).applyMatrix4(o.matrix); q.deleteAttribute('uv'); return paint(q, o.material.color);
+    });
+    const [r, me = 0] = String(k).split('|').map(Number);
+    const f = new THREE.Mesh(mergeGeometries(gs), _vc[k] ??= new THREE.MeshStandardMaterial({ vertexColors: true, roughness: r, metalness: me }));
+    f.castShadow = f.receiveShadow = true; ms.forEach(o => g.remove(o)); g.add(f);
+  }
 }
 const boxMat = new THREE.MeshStandardMaterial({ map: tex(128, 128, (g, w) => { g.fillStyle = '#fff'; g.fillRect(0, 0, w, w); g.strokeStyle = '#1d232b'; g.lineWidth = 10; g.strokeRect(5, 5, w - 10, w - 10);
   g.font = '900 96px Overpass, system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#1d232b'; g.fillText('?', w / 2, w / 2 + 6); }),
@@ -635,6 +667,7 @@ function plateMesh(n) {
 }
 
 // ---------- static scene ----------
+const staticFrom = scene.children.length; // everything added from here to bakeStatic() never moves
 {
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(W * S + 120, 400), groundMat);
   ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
@@ -672,8 +705,8 @@ LAMPS.forEach(l => { // modern street lamp with an arm
   rbox(g, .9, .22, .5, .08, pole, 1.45, 6.3, 0);
   box(g, .7, .04, .34, mat('#fff3c4', '#ffd877'), 1.45, 6.18, 0);
 });
-// ponytail: 14 real lights follow the players around 42 lamps; more lights = slower shaders and a recompile per change
-const lampLights = Array.from({ length: 14 }, () => { const pl = new THREE.PointLight('#ffd9a0', 0, 28, 1); scene.add(pl); return pl; });
+// ponytail: 14 (6 on phones) real lights follow the players around 42 lamps; more lights = slower shaders and a recompile per change
+const lampLights = Array.from({ length: MOBILE ? 6 : 14 }, () => { const pl = new THREE.PointLight('#ffd9a0', 0, 28, 1); scene.add(pl); return pl; });
 function moveLamps(fx) {
   const near = [...LAMPS].sort((a, b) => Math.abs(a.x - fx) - Math.abs(b.x - fx));
   lampLights.forEach((pl, i) => place(pl, near[i].x + 14.5, near[i].y, 6));
@@ -789,6 +822,7 @@ function buildSauna() {
 }
 let flagMesh;
 const barkMat = new THREE.MeshStandardMaterial({ map: barkTex, roughness: .8 });
+const crown = new THREE.MeshStandardMaterial({ color: '#7d6658', roughness: 1, transparent: true, opacity: .22, depthWrite: false }); // bare birch twigs, seen as a haze
 function buildTree(t) {
   const g = group(t.x, t.y); g.rotation.y = rnd(0, 6);
   if (t.kind === 'spruce') {
@@ -813,7 +847,6 @@ function buildTree(t) {
       const q = new THREE.Group(); q.position.y = rnd(1.6, 3); q.rotation.z = rnd(-.7, .7); p.add(q);
       mesh(cylGeo(.015, .04, 1.6, 5), twig, q, 0, .8, 0);
     }
-    const crown = new THREE.MeshStandardMaterial({ color: '#7d6658', roughness: 1, transparent: true, opacity: .22, depthWrite: false });
     for (let i = 0; i < 3; i++) { const c = mesh(sphGeo(2.2), crown, g, rnd(-1, 1), hgt - rnd(0, 1.5), rnd(-1, 1)); c.castShadow = false; c.scale.y = 1.2; }
   } else if (t.kind === 'snowman') {
     for (const [r, y] of [[1.4, 1.2], [1, 3.1], [.72, 4.5]]) mesh(sphGeo(r), snowMat, g, 0, y, 0);
@@ -857,6 +890,7 @@ function buildPerson(parent, coat, hat, scale = 1) {
   const pipo = mesh(new THREE.SphereGeometry(.29, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2), hatM, body, 0, 2.4, 0); pipo.scale.y = 1.15;
   mesh(cylGeo(.3, .3, .12, 18), white, body, 0, 2.42, 0);
   mesh(sphGeo(.11), white, body, 0, 2.74, 0);
+  fuse(body, [head], .85); legs.forEach(l => fuse(l, [], .88)); arms.forEach(a => fuse(a, [], .85));
   return { g, body, legs, arms, head };
 }
 function buildDog(parent) {
@@ -871,8 +905,9 @@ function buildDog(parent) {
   const legs = [.32, -.32].map(x => {
     const l = new THREE.Group(); l.position.set(x, .45, 0); body.add(l);
     for (const z of [-.13, .13]) mesh(capGeo(.06, .3), fur, l, 0, -.22, z);
-    return l;
+    fuse(l); return l;
   });
+  fuse(body, [], .92);
   return { g, body, legs, arms: null, head: null };
 }
 function buildStatue() {
@@ -898,6 +933,40 @@ function buildStatue() {
 SHOPS.forEach(buildShop); buildSauna(); buildStatue();
 HOUSES.forEach(h => h.tall ? buildBlock(h) : buildHouse(h));
 trees.forEach(buildTree);
+// ponytail: ~2700 static meshes → one per (material, shadow flags, 80-unit map chunk), ~2700 → ~150 draw calls.
+// Chunks keep frustum culling working. Anything that must move later has to be built after this.
+(function bakeStatic() {
+  scene.attach(flagMesh); // the flag waves; the rest of its pole is static
+  scene.updateMatrixWorld(true);
+  const buckets = new Map(), roots = scene.children.slice(staticFrom).filter(o => !o.isLight && o !== flagMesh);
+  const add = (key, m, cast, recv, g) => {
+    for (const k in g.attributes) if (k !== 'position' && k !== 'normal' && k !== 'uv' && !(k === 'color' && m.vertexColors)) g.deleteAttribute(k);
+    if (m.isMeshStandardMaterial && !m.map && !m.transparent && !m.emissive.getHex()) { // plain colour → vertex colour, shared material
+      g.deleteAttribute('uv'); if (!m.vertexColors) paint(g, m.color); // already fused: keep its colours
+      const vk = `${m.roughness}|${m.metalness}`; key = 'vc' + vk + key.slice(m.uuid.length);
+      m = _vc[vk] ??= new THREE.MeshStandardMaterial({ vertexColors: true, roughness: m.roughness, metalness: m.metalness });
+    }
+    const b = buckets.get(key) ?? buckets.set(key, { m, cast, recv, gs: [] }).get(key);
+    if (!g.index) g.setIndex(seqIndex(g.attributes.position.count)); // mergeGeometries wants all indexed
+    b.gs.push(g);
+  };
+  const p = new THREE.Vector3();
+  for (const root of roots) root.traverse(o => {
+    if (!o.isMesh) return;
+    const chunk = Math.floor((o.getWorldPosition(p).x + OX) / 80), f = `${o.castShadow | 0}${o.receiveShadow | 0}|${chunk}`;
+    const g = plainCopy(o.geometry).applyMatrix4(o.matrixWorld);
+    if (!Array.isArray(o.material)) return add(o.material.uuid + f, o.material, o.castShadow, o.receiveShadow, g);
+    for (const gr of o.geometry.groups) { // multi-material box: one sub-geometry per face group
+      const s = g.clone(); s.setIndex(new THREE.BufferAttribute(g.index.array.slice(gr.start, gr.start + gr.count), 1)); s.clearGroups();
+      add(o.material[gr.materialIndex].uuid + f, o.material[gr.materialIndex], o.castShadow, o.receiveShadow, s);
+    }
+  });
+  roots.forEach(r => scene.remove(r));
+  for (const { m, cast, recv, gs } of buckets.values()) {
+    const o = new THREE.Mesh(mergeGeometries(gs), m); o.castShadow = cast; o.receiveShadow = recv;
+    o.matrixAutoUpdate = false; scene.add(o);
+  }
+})();
 // a customer waits at every door; shown when their order is on its way
 for (const h of HOUSES) {
   const south = h.door.y > h.y + h.h / 2;
@@ -983,11 +1052,12 @@ function buildHazards() {
     rbox(g, 3.9, .28, 2.9, .14, snowMat, -.6, 2.98, 0); // snow on the roof
     for (const sx of [-1, 1]) rbox(g, .3, .45, 3.5, .12, mat('#2b2f36', null, .6), sx * 3.98, .85, 0); // bumpers
     for (const sx of [-2.55, 2.55]) for (const sz of [-1.72, 1.72]) {
-      const wg = new THREE.Group(); wg.position.set(sx, .65, sz); wg.rotation.x = Math.PI / 2; g.add(wg);
-      mesh(cylGeo(.62, .62, .45, 20), rubber, wg); mesh(cylGeo(.32, .32, .48, 14), metalGray, wg);
+      mesh(cylGeo(.62, .62, .45, 20), rubber, g, sx, .65, sz).rotation.x = Math.PI / 2;
+      mesh(cylGeo(.32, .32, .48, 14), metalGray, g, sx, .65, sz).rotation.x = Math.PI / 2;
     }
     for (const sz of [-1.2, 1.2]) { rbox(g, .14, .32, .8, .06, mat('#fff6b0', '#fff6b0'), 4.02, 1.38, sz); rbox(g, .14, .3, .7, .06, mat('#c0392b', '#ff2222'), -4.02, 1.38, sz); }
     for (const sx of [-1, 1]) box(g, .05, .3, 1, white, sx * 4.15, .85, 0); // number plates
+    fuse(g);
   }
   for (const p of peds) { // grumpy locals and their dogs
     const m = p.kind === 'dog' ? buildDog(hazardGroup) : buildPerson(hazardGroup, p.color, p.hat);
@@ -1103,11 +1173,12 @@ function buildRobot(r) {
   const flame = mesh(coneGeo(.45, 1.6), mat('#7ef9ff', '#4fd8ff'), body, -2.6, 1.2, 0); flame.rotation.z = Math.PI / 2; flame.castShadow = false;
   const sparkMat = new THREE.MeshBasicMaterial({ color: '#3aa8ff' }), sparks = new THREE.Group(); body.add(sparks); // drift sparks at the back wheels
   for (const sz of [-1.5, 1.5]) mesh(sphGeo(.32), sparkMat, sparks, -1.6, .35, sz).castShadow = false;
-  for (const wx of [-1.2, 0, 1.2]) for (const sz of [-1.38, 1.38]) {
-    const wg = new THREE.Group(); wg.position.set(wx, .45, sz); wg.rotation.x = Math.PI / 2; body.add(wg);
-    mesh(cylGeo(.45, .45, .32, 20), rubber, wg); mesh(cylGeo(.24, .24, .36, 16), metalGray, wg);
+  for (const wx of [-1.2, 0, 1.2]) for (const sz of [-1.38, 1.38]) { // wheels don't spin: plain meshes so fuse() merges them
+    mesh(cylGeo(.45, .45, .32, 20), rubber, body, wx, .45, sz).rotation.x = Math.PI / 2;
+    mesh(cylGeo(.24, .24, .36, 16), metalGray, body, wx, .45, sz).rotation.x = Math.PI / 2;
   }
   mesh(cylGeo(.025, .035, 3.9, 6), mat('#3a3f45', null, .4, .5), body, -1.45, 3.95, .85);
+  fuse(body, [shell, lidM]); // shell and lid swap materials with skins
   const flag = new THREE.Group(); flag.position.set(-1.45, 5.75, .85); body.add(flag);
   const fl = new THREE.Mesh(_g.pennant ??= (() => { const s = new THREE.Shape(); s.moveTo(0, 0); s.lineTo(-1.3, -.3); s.lineTo(0, -.6); s.closePath(); return new THREE.ShapeGeometry(s); })(),
     new THREE.MeshStandardMaterial({ color: '#ff7b00', emissive: '#ff5500', emissiveIntensity: .3, roughness: .7, side: THREE.DoubleSide }));
@@ -1120,7 +1191,7 @@ function buildRobot(r) {
   const scarf = new THREE.Group(); body.add(scarf);
   rbox(scarf, 3.72, .32, 2.74, .15, mat('#d33', null, .95), 0, 1.78, 0); const tl = rbox(scarf, .9, .3, .25, .1, mat('#d33', null, .95), -2.1, 1.6, .9); tl.rotation.z = -.4;
   const spot = new THREE.SpotLight('#fff3d6', darkness * 60, 45, .6, .6, 1);
-  spot.position.set(1.9, 1.4, 0); spot.target.position.set(12, 0, 0); g.add(spot, spot.target);
+  spot.visible = darkness > 0; spot.position.set(1.9, 1.4, 0); spot.target.position.set(12, 0, 0); g.add(spot, spot.target);
   const arrow = new THREE.Mesh(arrowGeo, new THREE.MeshBasicMaterial({ color: r.color, side: THREE.DoubleSide }));
   arrow.scale.setScalar(.6); scene.add(arrow);
   Object.assign(r, { mesh: g, body, lidM, flag, fl, fiFlag, pipo, scarf, shell, flame, sparks, sparkMat, spot, arrow, beam: beam(r.color), cam: new THREE.PerspectiveCamera(60, 1, .5, 700), camYaw: r.a });
@@ -1565,8 +1636,9 @@ function applyLevel(n) {
   const envI = .07 + .48 * d2; // dim the studio reflections at night
   scene.traverse(o => { for (const m of [].concat(o.material || [])) if ('envMapIntensity' in m) m.envMapIntensity = envI; });
   sun.color.set(darkness > .5 ? '#9fb4ff' : '#fff1dc');
-  lampLights.forEach(l => l.intensity = darkness * 40);
-  robots.forEach(r => r.spot.intensity = darkness * 60);
+  // hidden in daylight: a 0-intensity light still costs every pixel its shader loop
+  lampLights.forEach(l => { l.intensity = darkness * 40; l.visible = darkness > 0; });
+  robots.forEach(r => { r.spot.intensity = darkness * 60; r.spot.visible = darkness > 0; });
   snowCount = Math.min(SNOW_N, 2000 + n * 1500); snowGeo.setDrawRange(0, snowCount);
 }
 function startLevel(n) {
@@ -3207,11 +3279,19 @@ function updateDOM() {
 let menuOpen = false, paused = false, hostPaused = false, fps = 60;
 const frozen = () => paused;
 const cfg = { music: 1, sfx: 1, shadows: true, scale: 1 };
+// ponytail: dynamic resolution. Below 45 fps drop pixels (phones), above 57 win them back; floor .6 so a 30 Hz
+// low-power-mode screen doesn't go blurry. cfg.scale stays the user's ceiling.
+let dynRes = 1, dynT = 0;
+function adaptRes(raw) {
+  if ((dynT += raw) < 2 || state !== 'play') return; dynT = 0;
+  const n = fps < 45 ? Math.max(.6, dynRes - .15) : fps > 57 ? Math.min(1, dynRes + .1) : dynRes;
+  if (n !== dynRes) { dynRes = n; applyCfg(); }
+}
 try { Object.assign(cfg, JSON.parse(localStorage.getItem('ruokarobo-cfg') || '{}')); } catch (e) {}
 function applyCfg() {
   try { localStorage.setItem('ruokarobo-cfg', JSON.stringify(cfg)); } catch (e) {}
   sun.castShadow = cfg.shadows;
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 2) * cfg.scale); resize();
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2) * cfg.scale * dynRes); resize();
 }
 $('sMusic').value = cfg.music; $('sSfx').value = cfg.sfx; $('sShadows').checked = cfg.shadows; $('sScale').value = cfg.scale;
 $('sMusic').oninput = e => { cfg.music = +e.target.value; applyCfg(); };
@@ -3317,16 +3397,20 @@ function musicTick() {
 
 // ---------- go ----------
 setupLevel(1);
+{ // compile the lit night variant now, behind the title, so the first dark chapter doesn't stall on shader compiles
+  const sp = new THREE.SpotLight(); scene.add(sp); lampLights.forEach(l => l.visible = true);
+  renderer.compile(scene, camera); scene.remove(sp); lampLights.forEach(l => l.visible = darkness > 0);
+}
 let last = performance.now();
 renderer.setAnimationLoop(now => {
   const raw = (now - last) / 1000, dt = Math.min(.05, raw); last = now;
   if (raw > 0) fps += (1 / raw - fps) * .05;
-  update(dt); sync(frozen() ? 0 : dt);
+  update(dt); sync(frozen() ? 0 : dt); adaptRes(raw);
   const vs = views();
   renderer.shadowMap.needsUpdate = true;
   renderer.setScissorTest(true);
   for (const v of vs) {
-    v.cam.aspect = v.w / v.h; v.cam.updateProjectionMatrix();
+    v.cam.aspect = v.w / v.h; v.cam.far = scene.fog.far + 5; v.cam.updateProjectionMatrix(); // past the fog is just sky colour: don't draw it
     renderer.setViewport(v.x, vh - v.y - v.h, v.w, v.h); renderer.setScissor(v.x, vh - v.y - v.h, v.w, v.h);
     renderer.render(scene, v.cam);
   }
