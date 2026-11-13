@@ -810,6 +810,8 @@ const smoke = Array.from({ length: 16 }, (_, i) => {
 });
 // snowballs, tow ropes, wheel tracks and snow spray
 const ballPool = Array.from({ length: 16 }, () => { const m = mesh(sphGeo(.22), '#ffffff', scene); m.visible = false; return m; });
+const bottleM = mat('#2f7a3a', null, .15, .1);
+const bottlePool = Array.from({ length: 8 }, () => { const m = mesh(cylGeo(.09, .12, .5, 8), bottleM, scene); m.visible = false; return m; });
 const bolts = [], BOLT_SEG = 7, boltPos = new Float32Array(8 * BOLT_SEG * 6), boltGeo = new THREE.BufferGeometry();
 boltGeo.setAttribute('position', new THREE.BufferAttribute(boltPos, 3));
 const boltLines = new THREE.LineSegments(boltGeo, new THREE.LineBasicMaterial({ color: '#8ff4ff' })); boltLines.frustumCulled = false; scene.add(boltLines);
@@ -870,9 +872,15 @@ function buildHazards() {
     const m = p.kind === 'dog' ? buildDog(hazardGroup) : buildPerson(hazardGroup, p.color, p.hat);
     Object.assign(p, { mesh: m.g, body: m.body, legs: m.legs, head: m.head });
   }
-  for (const k of kids) { // kid behind a snowdrift
-    const m = buildPerson(hazardGroup, k.coat, k.hat, .62);
+  for (const k of kids) { // kid behind a snowdrift, or a bum lounging on cardboard with his bottles
+    const m = buildPerson(hazardGroup, k.coat, k.hat, k.bum ? 1 : .62);
     Object.assign(k, { mesh: m.g, arms: m.arms });
+    if (k.bum) {
+      m.body.rotation.z = 1.15; m.body.position.set(.9, .35, 0); // reclined, feet towards the path
+      box(m.g, 3, .06, 1.4, '#a07a4a', -.2, .03, 0);
+      for (const z of [-.9, .9]) { const b = mesh(cylGeo(.09, .12, .5, 8), bottleM, m.g, 1.4, .25, z); if (z > 0) b.rotation.z = 1.5; }
+      continue;
+    }
     const d = mesh(sphGeo(1), '#f7fafc', hazardGroup); place(d, k.x + k.dx * 12, k.y + k.dy * 12);
     d.scale.set(1.4, .9, 1.4);
   }
@@ -1172,13 +1180,16 @@ function setupLevel(n) {
     peds.push({ ...pos, ...waypoint(side), side, kind: 'dog', a: 0, vx: 0, vy: 0, mode: 'walk', t: 0, cool: 3, kickT: 0, say: '', sayT: 0 });
   }
   kids = []; balls = [];
-  for (let i = 0, tries = 0; i < Math.min(4, n) * BLOCKS && tries < 400 * BLOCKS; tries++) { // kids hide in the snow next to sidewalks
+  const nKids = Math.min(4, n) * BLOCKS;
+  for (let i = 0, tries = 0; i < nKids + BLOCKS && tries < 400 * BLOCKS; tries++) { // kids hide in the snow next to sidewalks; one bum per block
     const q = pathPoint(Math.random() < .7 ? 0 : 1), [dx, dy] = pick([[0, 1], [0, -1], [1, 0], [-1, 0]]), off = rnd(45, 70);
     const x = q.x + dx * off, y = q.y + dy * off;
     if (x < 20 || x > W - 20 || y < 20 || y > H - 20 || [...PATHS, ROAD].some(p => inR(x, y, p)) || inLake(x, y, 10) || insideSolid(x, y)
         || DOORS.some(d => Math.hypot(d.x - x, d.y - y) < 90)) continue;
-    kids.push({ x, y, dx: -dx, dy: -dy, a: Math.atan2(-dy, -dx), cool: rnd(1, 3), throwT: 0, say: '', sayT: 0,
-                coat: pick(['#ff7b00', '#2d9cff', '#e84393', '#2fbf6a']), hat: pick(['#d33', '#f5c400', '#1f4e9c']) });
+    const bum = i >= nKids;
+    kids.push({ x, y, dx: -dx, dy: -dy, a: Math.atan2(-dy, -dx), cool: rnd(1, 3), throwT: 0, say: '', sayT: 0, bum,
+                coat: bum ? pick(['#5a4d3a', '#4a4f3a', '#3d3a36']) : pick(['#ff7b00', '#2d9cff', '#e84393', '#2fbf6a']),
+                hat: bum ? pick(['#6b6b6b', '#7a3b2e']) : pick(['#d33', '#f5c400', '#1f4e9c']) });
     i++;
   }
   plow = n >= 2 ? { x: 20, y: 580, a: 0, wi: 1, dir: 1 } : null;
@@ -1206,7 +1217,7 @@ function startLevel(n) {
   level = n; setupLevel(n);
   time = 75 + n * 5 + up.battery * 12; delivered = 0;
   quota = 2 + n + (robots.length - 1) * 2;
-  robots.forEach(r => Object.assign(r, spawn(r.i), { vx: 0, vy: 0, a: 0, camYaw: 0, boost: 1, zaps: 3 + up.tesla, cargo: null, hole: null, stun: 0, immune: 1, hp: 1, earn: 0, towT: 0, hookCd: 0, dDir: 0, dCh: 0, dTier: 0, mt: 0 }));
+  robots.forEach(r => Object.assign(r, spawn(r.i), { vx: 0, vy: 0, a: 0, camYaw: 0, boost: 1, zaps: 3 + up.tesla, cargo: null, hole: null, stun: 0, immune: 1, hp: 1, earn: 0, towT: 0, hookCd: 0, dDir: 0, dCh: 0, dTier: 0, mt: 0, drunk: 0 }));
   weather = { k: null, t: 0 }; weatherIn = n >= 2 ? rnd(15, 35) : Infinity;
   santa = null; santaIn = rnd(20, 45);
   mark = { ...stats }; // "clear a shift without X" is measured against this snapshot
@@ -1232,6 +1243,7 @@ const SFX = {
   deliver: () => { beep(660, .08); beep(880, .08, .09); beep(1320, .15, .18); },
   alarm: () => [880, 660, 880, 660].forEach((f, i) => beep(f, .12, i * .14, 'square', .04)),
   splat: () => beep(300, .08, 0, 'triangle', .07),
+  clink: () => { beep(2400, .05, 0, 'triangle', .05); beep(1800, .07, .04, 'triangle', .04); beep(520, .12, .25, 'sine', .06); beep(380, .1, .35, 'sine', .05); },
   zap: () => { beep(1400, .07, 0, 'sawtooth', .05); beep(700, .14, .05, 'square', .04); beep(1800, .05, .1, 'sawtooth', .03); },
   hook: () => { beep(900, .05, 0, 'triangle', .06); beep(300, .12, .05, 'sawtooth', .05); },
   jingle: () => [1568, 1568, 1568, 0, 1568, 1568, 1568, 0, 1568, 1865, 1245, 1397, 1568].forEach((f, i) => f && beep(f, .1, i * .11, 'triangle', .05)),
@@ -1326,6 +1338,7 @@ const ACH = [
   { k: 'ball25',   i: '⛄', n: 'Lumisodan uhri',   d: 'Take 25 snowballs in one run',          w: s => s.balls >= 25 },
   { k: 'car',      i: '🚗', n: 'Auts',             d: 'Get hit by a car',                      w: (s, t) => t.carHit >= 1 },
   { k: 'car10',    i: '🚑', n: 'Liikenneturva',    d: 'Get hit by cars 10 times in one run',   w: s => s.carHit >= 10 },
+  { k: 'bottle',   i: '🍾', n: 'Kännissä',         d: 'Get hit by a bottle from a bum',        w: (s, t) => t.bottle >= 1 },
   { k: 'santa',    i: '🎅', n: 'Hohoho',           d: 'Get bowled over by Santa',              w: (s, t) => t.santaHit >= 1 },
   { k: 'plow',     i: '🚜', n: 'Aurauskone',       d: 'Get shoved by the snowplow',            w: (s, t) => t.plowHit >= 1 },
   { k: 'kick',     i: '👢', n: 'Potkittu',         d: 'Get kicked by a local',                 w: (s, t) => t.kick >= 1 },
@@ -1515,7 +1528,8 @@ function pushOut(r, cx, cy, minD) {
 function updRobot(r, dt) {
   r.hitCd -= dt; r.immune -= dt; r.sayT -= dt; r.stun -= dt;
   if (r.stun <= 0 && r.hitCd <= 0) r.hp = Math.min(1, r.hp + dt * .012); // ponytail: flat self-repair, no repair stations
-  const inp = input(r);
+  r.drunk = Math.max(0, (r.drunk || 0) - dt);
+  const in0 = input(r), inp = r.drunk ? { ...in0, s: clamp(-in0.s + Math.sin(T * 2.3 + r.i) * .7, -1, 1) } : in0; // drunk: steering flips and sways
   if (r.hole) {
     if (inp.t || inp.s) r.esc += dt * .35 * (1 + .5 * up.susp);
     if (r.esc >= 1) { escape(r, 'Ylös! 💪'); bump('holes'); }
@@ -1824,9 +1838,10 @@ function updKids(dt) {
     k.a = Math.atan2(r.y - k.y, r.x - k.x);
     if (k.cool > 0) continue;
     const ft = dist(k, r) / 300 + .15, tx = r.x + r.vx * ft, ty = r.y + r.vy * ft; // lead the target
-    balls.push({ x: k.x, y: k.y, vx: (tx - k.x) / ft, vy: (ty - k.y) / ft, h0: 1.4, vh: (.5 * G * ft * ft - 1.1) / ft, age: 0, ft });
-    k.cool = rnd(2.2, 3.5); k.throwT = .3;
-    if (Math.random() < .4) say(k, pick(['Hihi!', 'Ota tästä!', 'Lumisota!']), 1.2);
+    const h0 = k.bum ? .9 : 1.4;
+    balls.push({ x: k.x, y: k.y, vx: (tx - k.x) / ft, vy: (ty - k.y) / ft, h0, vh: (.5 * G * ft * ft - (h0 - .3)) / ft, age: 0, ft, bot: k.bum });
+    k.cool = k.bum ? rnd(4, 6) : rnd(2.2, 3.5); k.throwT = .3;
+    if (Math.random() < .4) say(k, pick(k.bum ? ['Ota huikka!', 'Skool!', 'Hei kaveri!', 'Mitä sä tuijotat?'] : ['Hihi!', 'Ota tästä!', 'Lumisota!']), 1.2);
   }
   for (const b of balls) {
     b.age += dt; b.x += b.vx * dt; b.y += b.vy * dt;
@@ -1835,7 +1850,8 @@ function updKids(dt) {
     for (const r of robots) if (!r.hole && Math.hypot(r.x - b.x, r.y - b.y) < R + 9) {
       const s = Math.hypot(b.vx, b.vy) || 1;
       r.vx += b.vx / s * 170; r.vy += b.vy / s * 170; r.stun = Math.max(r.stun, .3);
-      damage(r, .06, 'Läts! ❄️'); sfx('splat'); bump('balls');
+      if (b.bot) { r.drunk = 5; damage(r, .04, 'Hik! 🍾'); sfx('clink'); bump('bottle'); }
+      else { damage(r, .06, 'Läts! ❄️'); sfx('splat'); bump('balls'); }
     }
   }
   balls = balls.filter(b => !b.done);
@@ -1932,7 +1948,8 @@ function updCameras(dt) {
     while (back > 25 && insideSolid(r.x - cx * back, r.y - sy * back)) back -= 10;
     r.cam.position.set((r.x - cx * back) * S - OX, 1.2 + back * .025, (r.y - sy * back) * S - OZ);
     r.cam.lookAt((r.x + cx * 45) * S - OX, .6, (r.y + sy * 45) * S - OZ);
-    r.cam.fov += ((r.boosting ? 74 : 60) - r.cam.fov) * Math.min(1, dt * 5);
+    if (r.drunk > 0) r.cam.rotateZ(Math.sin(T * 1.7) * .22 * Math.min(1, r.drunk));
+    r.cam.fov += ((r.boosting ? 74 : 60) + (r.drunk > 0 ? Math.sin(T * 2.9) * 12 : 0) - r.cam.fov) * Math.min(1, dt * 5);
     const sh = Math.max(0, r.stun) * .5 + (r.boosting ? .03 : 0); // screen shake on hits
     if (sh) r.cam.position.add(_v.set(rnd(-sh, sh), rnd(-sh, sh), rnd(-sh, sh)));
   }
@@ -2042,7 +2059,7 @@ function levelMsg() {
   return { type: 'lvl', n: level, ice: ice.map(({ x, y, rx, ry, gone }) => ({ x, y, rx, ry, gone })), holes,
            cars: cars.map(({ x, y, dir, base, v, color }) => ({ x, y, dir, base, v, color })),
            peds: peds.map(({ x, y, side, kind, color, hat }) => ({ x, y, side, kind, color, hat })),
-           kids: kids.map(({ x, y, a, dx, dy, coat, hat }) => ({ x, y, a, dx, dy, coat, hat })), plow: !!plow };
+           kids: kids.map(({ x, y, a, dx, dy, coat, hat, bum }) => ({ x, y, a, dx, dy, coat, hat, bum })), plow: !!plow };
 }
 function applyLevelMsg(m) {
   level = m.n; ice = m.ice; holes = m.holes; cars = m.cars;
@@ -2056,7 +2073,7 @@ function broadcast(dt) {
   netT = 0;
   const m = { type: 's', st: state, pvp, pz: paused, level, time, quota, delivered, score, bonus, money, up, banner, bannerT, best,
     r: robots.map(r => ({ id: r.id, i: r.i, n: nameOf(r), owner: r.owner, x: r.x, y: r.y, a: r.a, vx: r.vx, vy: r.vy, cargo: r.cargo,
-                          hole: typeof r.hole === 'string' ? r.hole : !!r.hole, esc: r.esc, stun: r.stun, say: r.say, sayT: r.sayT, bo: r.boost, bl: r.boostLock, bz: r.boosting, dk: r.dTier, zp: r.zaps, hp: r.hp, e: r.earn, tw: r.towT > 0 ? r.tow : -1 })),
+                          hole: typeof r.hole === 'string' ? r.hole : !!r.hole, esc: r.esc, stun: r.stun, say: r.say, sayT: r.sayT, bo: r.boost, bl: r.boostLock, bz: r.boosting, dk: r.dTier, zp: r.zaps, hp: r.hp, e: r.earn, dr: r.drunk, tw: r.towT > 0 ? r.tow : -1 })),
     c: cars.map(c => c.x), fx: outbox.splice(0),
     p: peds.map(p => ({ x: p.x, y: p.y, a: p.a, m: p.mode, k: p.kickT > 0, mv: p.moving, s: p.say, st: p.sayT })),
     kd: kids.map(k => ({ a: k.a, th: k.throwT, s: k.say, st: k.sayT, z: k.zapT > 0 })), b: balls, wx: weather,
@@ -2072,7 +2089,7 @@ function applySnap(m) {
     let r = robots.find(q => q.id === s.id);
     if (!r) r = Object.assign(addRobot({ id: s.id, owner: s.owner, i: s.i, n: s.n }), { x: s.x, y: s.y, a: s.a });
     Object.assign(r, { owner: s.owner, n: s.n, tx: s.x, ty: s.y, ta: s.a, vx: s.vx, vy: s.vy, cargo: s.cargo, hole: s.hole || null,
-                       esc: s.esc, stun: s.stun, say: s.say, sayT: s.sayT, boost: s.bo, boostLock: s.bl, boosting: s.bz, dTier: s.dk || 0, zaps: s.zp, hp: s.hp ?? 1, earn: s.e ?? 0, tow: s.tw, towT: s.tw >= 0 ? 1 : 0 });
+                       esc: s.esc, stun: s.stun, say: s.say, sayT: s.sayT, boost: s.bo, boostLock: s.bl, boosting: s.bz, dTier: s.dk || 0, zaps: s.zp, hp: s.hp ?? 1, earn: s.e ?? 0, drunk: s.dr || 0, tow: s.tw, towT: s.tw >= 0 ? 1 : 0 });
   }
   m.c.forEach((x, i) => cars[i] && (cars[i].tx = x));
   m.p?.forEach((q, i) => peds[i] && Object.assign(peds[i], { tx: q.x, ty: q.y, a: q.a, mode: q.m, kickT: q.k ? .3 : 0, moving: q.mv, say: q.s, sayT: q.st }));
@@ -2168,7 +2185,9 @@ function sync(dt) {
   }
   while (bolts.length && bolts[0].t <= 0) bolts.shift();
   boltGeo.setDrawRange(0, nb * BOLT_SEG * 2); boltGeo.attributes.position.needsUpdate = true;
-  ballPool.forEach((m, i) => { const b = balls[i]; m.visible = !!b && b.age < b.ft; if (m.visible) place(m, b.x, b.y, Math.max(.2, ballH(b))); });
+  const fly = balls.filter(b => b.age < b.ft), sb = fly.filter(b => !b.bot), bt = fly.filter(b => b.bot);
+  ballPool.forEach((m, i) => { const b = sb[i]; m.visible = !!b; if (b) place(m, b.x, b.y, Math.max(.2, ballH(b))); });
+  bottlePool.forEach((m, i) => { const b = bt[i]; m.visible = !!b; if (b) { place(m, b.x, b.y, Math.max(.2, ballH(b))); m.rotation.z = b.age * 14; } });
   if (plow?.mesh) { place(plow.mesh, plow.x, plow.y); plow.mesh.rotation.y = -plow.a; plow.beacon.visible = (T * 4 | 0) % 2 === 0; }
   let ropes = 0; // tow ropes, and straps between a sofa and its helper
   for (const r of robots) {
