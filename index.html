@@ -396,6 +396,7 @@ const SHOPS = [['SALEPA', '#e8501f', 'A'], ['PUOTI', '#2d6fd6', 'B'], ['KIOSKI',
   .map(([name, color, tag], k) => ({ x: BX[k] + 30, y: 330, w: 190, h: 200, door: { x: BX[k] + 125, y: 552 }, name, color, tag }));
 const nearShop = p => SHOPS.reduce((a, b) => dist(p, a.door) <= dist(p, b.door) ? a : b);
 const SAUNA = { x: 1205, y: 420, w: 70, h: 50 };
+const STATUE = { x: BW + 960, y: 380, w: 40, h: 40 }; // Olli Lindholm in bronze, block 2 where block 1 has its lake
 const WALLS = ['#b3261e', '#e2b13c', '#3d6e9e', '#2e6b4f'];
 const HOUSES = BX.flatMap((bx, k) => [
   { x: 420, y: 90, w: 150, h: 110, door: { x: 495, y: 222 }, wall: 0 },
@@ -408,7 +409,7 @@ const HOUSES = BX.flatMap((bx, k) => [
 ].map(h => ({ ...h, x: h.x + bx, door: { x: h.door.x + bx, y: h.door.y }, wall: WALLS[(h.wall + k) % WALLS.length] })));
 HOUSES.forEach((h, i) => h.n = i + 1);
 const KIDS_HOME = 2; // campaign: the kids' house by the lake, paper star in the window
-const SOLIDS = [...SHOPS, SAUNA, ...HOUSES];
+const SOLIDS = [...SHOPS, SAUNA, STATUE, ...HOUSES];
 const DOORS = [...SHOPS.map(b => b.door), ...HOUSES.map(h => h.door)];
 const LAMPS = [];
 for (const bx of BX) {
@@ -847,7 +848,25 @@ function buildDog(parent) {
   });
   return { g, body, legs, arms: null, head: null };
 }
-SHOPS.forEach(buildShop); buildSauna();
+function buildStatue() {
+  const b = STATUE, g = group(b.x + b.w / 2, b.y + b.h / 2), granite = mat('#6f747c', null, .6, .1);
+  rbox(g, 4.6, .5, 4.6, .08, granite, 0, .25, 0);
+  rbox(g, 3.6, 2.2, 3.6, .1, granite, 0, 1.6, 0);
+  rbox(g, 3.4, .2, 3.4, .08, snowMat, 0, 2.75, 0);
+  const t = tex(256, 96, (c) => {
+    c.fillStyle = '#7a5a2a'; c.fillRect(0, 0, 256, 96); c.strokeStyle = '#e0b860'; c.lineWidth = 6; c.strokeRect(6, 6, 244, 84);
+    c.fillStyle = '#f3d68a'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.font = '900 28px Overpass, system-ui'; c.fillText('OLLI LINDHOLM', 128, 38); c.font = '700 22px Overpass, system-ui'; c.fillText('1964–2019', 128, 70);
+  });
+  const plaque = new THREE.Mesh(new THREE.PlaneGeometry(2.8, 1.05), new THREE.MeshStandardMaterial({ map: t, roughness: .35, metalness: .7 }));
+  plaque.position.set(0, 1.6, 1.82); g.add(plaque);
+  const p = buildPerson(g, '#000', '#000', 1.7); p.g.position.y = 2.7; p.g.rotation.y = -Math.PI / 2; // faces the road
+  p.arms[1].rotation.z = 2.4; // singing into a mic, arm up
+  mesh(cylGeo(.05, .08, .45, 8), '#000', p.arms[1], .05, -.95, 0); mesh(sphGeo(.11), '#000', p.arms[1], .05, -1.2, 0);
+  const bronze = mat('#8c6a3a', null, .35, .85);
+  p.g.traverse(o => { if (o.isMesh) o.material = bronze; });
+}
+SHOPS.forEach(buildShop); buildSauna(); buildStatue();
 HOUSES.forEach(h => h.tall ? buildBlock(h) : buildHouse(h));
 trees.forEach(buildTree);
 // a customer waits at every door; shown when their order is on its way
@@ -2715,6 +2734,7 @@ const MINI = .3, miniBg = document.createElement('canvas'); miniBg.width = W * M
   g.fillStyle = '#b3bac4'; PATHS.forEach(p => g.fillRect(...p));
   for (const b of SHOPS) { g.fillStyle = b.color; g.fillRect(b.x, b.y, b.w, b.h); }
   g.fillStyle = '#6b4226'; g.fillRect(SAUNA.x, SAUNA.y, SAUNA.w, SAUNA.h);
+  g.fillStyle = '#8c6a3a'; g.fillRect(STATUE.x, STATUE.y, STATUE.w, STATUE.h);
   g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = '900 72px Overpass, system-ui, sans-serif';
   for (const h of HOUSES) { g.fillStyle = BLUE; g.fillRect(h.x, h.y, h.w, h.h); g.fillStyle = '#fff'; g.fillText(h.n, h.x + h.w / 2, h.y + h.h / 2 + 6); }
   g.fillStyle = '#fff'; for (const b of SHOPS) g.fillText(b.tag, b.x + b.w / 2, b.y + b.h / 2 + 6);
