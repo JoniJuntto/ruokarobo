@@ -968,6 +968,11 @@ function buildHazards() {
   }
   for (const p of peds) { // grumpy locals and their dogs
     const m = p.kind === 'dog' ? buildDog(hazardGroup) : buildPerson(hazardGroup, p.color, p.hat);
+    if (p.kind === 'wolt') { // e-moped under the rider, delivery box on the back; all in body so it tips over with them
+      for (const x of [-.75, .75]) mesh(cylGeo(.28, .28, .14, 14), rubber, m.body, x, .28, 0).rotation.x = Math.PI / 2;
+      box(m.body, 1.5, .1, .42, rubber, 0, .3, 0); box(m.body, .07, 1.4, .07, metalGray, .72, 1, 0); box(m.body, .07, .07, .8, rubber, .72, 1.7, 0);
+      box(m.body, .6, .7, .7, mat(WOLT, null, .6), -.6, 1.6, 0);
+    }
     Object.assign(p, { mesh: m.g, body: m.body, legs: m.legs, head: m.head });
   }
   for (const b of BOXES) { // translucent rainbow cube with a ? on every face
@@ -1429,6 +1434,7 @@ function storySave(ch) { try { localStorage.setItem('ruokarobo-story', JSON.stri
 function startStory(ch, save) {
   campaign = true; pvp = false; roam = false; score = 0; money = save?.money || 0; up = { ...freshUp(), ...save?.up };
   for (const k in stats) delete stats[k];
+const WOLT = '#00c2e8', woltN = n => campaign || pvp || roam || n < 9 ? 0 : 1 + ((n - 9) / 3 | 0); // endless only: one courier from shift 9, one more every 3 shifts
   chapter = ch; state = 'story'; stateT = 0;
 }
 // a chapter starts from its card; a retry restarts it with the money and upgrades it began with
@@ -1486,6 +1492,10 @@ function setupLevel(n) {
     if (x < 20 || x > W - 20 || y < 20 || y > H - 20 || [...PATHS, ROAD].some(p => inR(x, y, p)) || inLake(x, y, 10) || insideSolid(x, y)
         || DOORS.some(d => Math.hypot(d.x - x, d.y - y) < 90) || home && i < nKids && Math.hypot(home.x - x, home.y - y) > 250) continue;
     const bum = i >= nKids;
+  for (let i = 0; i < hz(woltN(n)); i++) { // Woltti couriers on e-mopeds: they hunt a robot down from anywhere and only a zap shakes them off
+    const side = i % 2, pos = pathPoint(side);
+    peds.push({ ...pos, ...waypoint(side), side, kind: 'wolt', a: 0, vx: 0, vy: 0, mode: 'walk', t: 0, cool: 4, kickT: 0, say: '', sayT: 0, color: WOLT, hat: WOLT });
+  }
     kids.push({ x, y, dx: -dx, dy: -dy, a: Math.atan2(-dy, -dx), cool: rnd(1, 3), throwT: 0, say: '', sayT: 0, bum,
                 coat: bum ? pick(['#5a4d3a', '#4a4f3a', '#3d3a36']) : pick(['#ff7b00', '#2d9cff', '#e84393', '#2fbf6a']),
                 hat: bum ? pick(['#6b6b6b', '#7a3b2e']) : pick(['#d33', '#f5c400', '#1f4e9c']) });
@@ -2156,29 +2166,31 @@ function kick(p, r) { // people kick, dogs jump on you
   const dog = p.kind === 'dog', a = Math.atan2(r.y - p.y, r.x - p.x), f = dog ? 220 : 340;
   r.vx += Math.cos(a) * f; r.vy += Math.sin(a) * f; r.stun = dog ? .4 : .6;
   damage(r, dog ? .08 : .15, pick(['Auts!', 'Apua!', 'Hei!'])); bump(dog ? 'bite' : 'kick');
-  p.kickT = .35; say(p, dog ? pick(['Hau hau!', 'Murr!', 'Vuh vuh!']) : pick(PED_SHOUTS), 1.8); sfx(dog ? 'bark' : 'kick');
+  p.kickT = .35; say(p, dog ? pick(['Hau hau!', 'Murr!', 'Vuh vuh!']) : pick(p.kind === 'wolt' ? WOLT_SHOUTS : PED_SHOUTS), 1.8); sfx(dog ? 'bark' : 'kick');
   fx({ k: 'burst', x: r.x, y: r.y, n: 8 });
-  Object.assign(p, { mode: 'walk', cool: dog ? 3 : 4 }, waypoint(p.side)); // satisfied, walks off
+  Object.assign(p, { mode: 'walk', cool: p.kind === 'wolt' ? 1.5 : dog ? 3 : 4 }, waypoint(p.side)); // satisfied, walks off (a courier just circles back)
+const WOLT_SHOUTS = ['Tää on mun keikka!', 'Robotit vie meidän keikat!', 'Pois mun reitiltä!', 'Viis tähteä, kiitos!'];
 }
 function updPeds(dt) {
   for (const p of peds) {
     p.t -= dt; p.cool -= dt; p.kickT -= dt; p.sayT -= dt;
     if (p.mode === 'fall') { if (p.t <= 0) { p.mode = 'walk'; p.cool = 2; } continue; }
-    if (p.mode === 'zapped') { if ((p.zapT -= dt) <= 0) { p.mode = 'walk'; p.cool = 3; } continue; }
+    if (p.mode === 'zapped') { if ((p.zapT -= dt) <= 0) { p.mode = 'walk'; p.cool = wolt ? 20 : 3; } continue; } // a zapped courier leaves you alone for 20 s
     const dog = p.kind === 'dog';
     if (p.mode === 'walk' && state === 'play' && p.cool <= 0) {
       const r = robots.filter(r => !r.hole && !r.kid).sort((a, b) => dist(p, a) - dist(p, b))[0];
-      if (r && dist(p, r) < (dog ? 150 : 110)) {
+      if (r && dist(p, r) < (wolt ? Infinity : dog ? 150 : 110)) {
         p.mode = 'chase'; p.target = r;
-        if (dog) { say(p, 'Hau hau! 🐕', 1.5); sfx('bark'); } else say(p, pick(['Hei sinä!', 'Taas noi robotit!', 'Nyt riitti!']), 1.5);
+        if (wolt) say(p, '🛵 ' + pick(WOLT_SHOUTS), 1.5); else if (dog) { say(p, 'Hau hau! 🐕', 1.5); sfx('bark'); } else say(p, pick(['Hei sinä!', 'Taas noi robotit!', 'Nyt riitti!']), 1.5);
       }
     }
-    let gx = p.tx, gy = p.ty, sp = dog ? 60 : 45;
+    let gx = p.tx, gy = p.ty, sp = wolt ? 70 : dog ? 60 : 45;
     if (p.mode === 'chase') {
       const r = p.target;
-      if (!robots.includes(r) || r.hole || dist(p, r) > 260 || state !== 'play') { p.mode = 'walk'; p.cool = 2; }
+      if (!robots.includes(r) || r.hole || !wolt && dist(p, r) > 260 || state !== 'play') { p.mode = 'walk'; p.cool = 2; }
       else {
-        gx = r.x; gy = r.y; sp = dog ? 150 : 100;
+        gx = r.x; gy = r.y; sp = wolt ? 160 : dog ? 150 : 100; // moped: outruns a robot in snow, loses it on a clear path
+    const wolt = p.kind === 'wolt';
         if (dist(p, r) < R + (dog ? 10 : 16) && p.kickT < -.5) kick(p, r);
         if (surface(p.x, p.y) === 'ice' && Math.random() < dt * (dog ? 1.2 : .8)) { fall(p, 'Hups!'); continue; }
       }
@@ -2186,7 +2198,7 @@ function updPeds(dt) {
     const d = Math.hypot(gx - p.x, gy - p.y);
     p.moving = d > 2 && p.kickT < 0;
     if (p.moving) { p.a = Math.atan2(gy - p.y, gx - p.x); const m = Math.min(d, sp * dt); p.x += Math.cos(p.a) * m; p.y += Math.sin(p.a) * m; }
-    p.y = p.side === 0 ? Math.min(p.y, 594) : Math.max(p.y, 726); // never step into traffic
+    if (!wolt) p.y = p.side === 0 ? Math.min(p.y, 594) : Math.max(p.y, 726); // never step into traffic (mopeds ride straight across)
     for (const b of SOLIDS) pushOut(p, clamp(p.x, b.x, b.x + b.w), clamp(p.y, b.y, b.y + b.h), 8);
     for (const t of trees) pushOut(p, t.x, t.y, 8 + t.r);
     p.x = clamp(p.x, 8, W - 8); p.vx = p.vy = 0;
@@ -2608,7 +2620,7 @@ function sync(dt) {
     place(p.mesh, p.x, p.y); p.mesh.rotation.y = -p.a;
     const dog = p.kind === 'dog', down = p.mode === 'fall';
     p.body.rotation.z = down && !dog ? Math.PI / 2 : 0; p.body.rotation.x = down && dog ? Math.PI / 2 : 0;
-    const sw = p.moving ? Math.sin(T * (p.mode === 'chase' ? 16 : 9)) * .5 : 0;
+    const sw = p.moving && p.kind !== 'wolt' ? Math.sin(T * (p.mode === 'chase' ? 16 : 9)) * .5 : 0;
     p.legs[0].rotation.z = sw; p.legs[1].rotation.z = p.kickT > 0 && !dog ? 1.4 : -sw;
     p.body.position.y = dog && p.kickT > 0 ? .6 : 0; // dogs jump at you
     if (p.head) p.head.material.color.set(p.mode === 'chase' ? '#e0675a' : p.mode === 'zapped' ? '#bfe8ff' : '#f1c7a5');
@@ -2857,7 +2869,7 @@ function drawMinimap(v) {
   for (const c of cars) { ctx.fillStyle = '#26303b'; ctx.fillRect(x + (c.x - 40) * k, y + (c.y - 18) * k, 80 * k, 36 * k); }
   const tgt = v.r.cargo ? HOUSES[v.r.cargo.dest].door : nearShop(v.r).door, tx = clamp(tgt.x, ox + 30, ox + BW - 30); // off-window targets pin to the edge
   ctx.strokeStyle = v.r.color; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x + tx * k, y + tgt.y * k, 7 + Math.sin(T * 6) * 2, 0, 7); ctx.stroke();
-  for (const p of peds) dot(p.x, p.y, 2.6, p.mode === 'chase' ? RED : p.kind === 'dog' ? '#8b5a2b' : '#6b7480');
+  for (const p of peds) dot(p.x, p.y, 2.6, p.mode === 'chase' ? RED : p.kind === 'dog' ? '#8b5a2b' : p.kind === 'wolt' ? WOLT : '#6b7480');
   for (const q of kids) dot(q.x, q.y, 2.2, '#ff9d00');
   if (plow) { ctx.fillStyle = '#f5a200'; ctx.fillRect(x + plow.x * k - 4, y + plow.y * k - 4, 8, 8); }
   if (santa) { ctx.fillStyle = '#e8262d'; ctx.fillRect(x + santa.x * k - 7, y + santa.y * k - 4, 14, 8); }
@@ -3267,3 +3279,4 @@ storyCheck();
 </script>
 </body>
 </html>
+  console.assert(woltN(8) === 0 && woltN(9) === 1 && woltN(12) === 2, 'Woltti couriers start on shift 9');
