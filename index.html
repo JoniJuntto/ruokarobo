@@ -1514,7 +1514,7 @@ function updRobot(r, dt) {
   if (weather.k === 'blizzard') r.vx += Math.sign(wind || 1) * 30 * dt;
   // boost: ~2 s of turbo, recharges in ~7 s; drain it empty and it stays locked until full again. handbrake: wheels lock, back end swings out
   if (r.boost >= 1) r.boostLock = false;
-  const boosting = !!(inp.b && inp.t > 0 && r.boost > .02 && !r.boostLock && control);
+  const boosting = !!(inp.b && inp.t > 0 && !r.boostLock && control); // drains to exactly 0 (clamp) so the lock below engages
   if (boosting && !r.boosting) sfx('boost');
   r.boosting = boosting; r.boost = clamp(r.boost + (boosting ? -dt / (2 + .7 * up.turbo) : dt / (7 - 1.5 * up.turbo)), 0, 1);
   if (r.boost <= 0) r.boostLock = true;
