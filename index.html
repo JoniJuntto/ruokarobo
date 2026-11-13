@@ -130,14 +130,28 @@
   #over .stats span{font-size:13px;font-weight:600;color:#5a6470}
 
   /* achievements */
-  #achBox{padding:12px 14px 10px}
-  .achHead{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
-  .achHead b{font-size:15px;font-weight:800}
-  .achHead span{font-weight:700;color:#5a6470;font-size:13px;font-variant-numeric:tabular-nums}
-  .achGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(152px,1fr));gap:5px}
+  .fold{padding:9px 14px 8px}
+  .fold summary{display:flex;justify-content:space-between;align-items:baseline;gap:12px;cursor:pointer;font-size:15px;font-weight:800;list-style:none;padding:2px 0}
+  .fold summary::-webkit-details-marker{display:none}
+  .fold summary::before{content:'▸';font-size:12px;margin-right:7px;color:#5a6470}
+  .fold[open] summary::before{content:'▾'}
+  .fold summary span{margin-left:auto;font-weight:700;color:#5a6470;font-size:13px;font-variant-numeric:tabular-nums}
+  .fold > :not(summary){margin-top:9px}
+  .achGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(152px,1fr));gap:5px;max-height:196px;overflow:auto}
   .achIt{display:flex;align-items:center;gap:7px;padding:5px 8px 3px;border-radius:5px;background:#eef2f7;font-weight:700;font-size:12.5px;opacity:.45;filter:grayscale(1)}
   .achIt.on{opacity:1;filter:none;background:var(--yellow)}
   .achIt i{font-style:normal;font-size:15px}
+  #boardList{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px}
+  #boardList li{display:grid;grid-template-columns:22px 1fr auto auto;gap:9px;align-items:baseline;padding:4px 8px 2px;border-radius:5px;background:#eef2f7;font-size:13px;font-weight:700}
+  #boardList li.you{background:var(--yellow)}
+  #boardList .rk{font-weight:900;color:#5a6470;text-align:right}
+  #boardList .sc{font-weight:900;font-variant-numeric:tabular-nums}
+  #boardList .mt{font-size:11px;font-weight:600;color:#5a6470}
+  #boardList li.you .rk,#boardList li.you .mt{color:#6b5500}
+  #boardEmpty{font-size:13px;font-weight:600;color:#5a6470}
+  #pname{width:7em;font:800 15px var(--font);border:0;border-radius:8px;padding:12px 10px 9px;box-shadow:inset 0 0 0 2px var(--ink),0 4px 0 rgba(0,0,0,.25)}
+  #overRank{margin:-8px 0 16px;font-size:17px;font-weight:800}
+  #overRank:empty{display:none}
   #achs{position:fixed;left:14px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:8px;align-items:flex-start;pointer-events:none;z-index:5}
   .ach{display:flex;align-items:center;gap:10px;padding:10px 14px 8px;animation:achIn .35s both,achOut .45s 3.5s both}
   .ach .ic{font-size:26px;line-height:1}
@@ -212,12 +226,18 @@
     </table>
   </div>
   <div class="plate white" id="touchNote" hidden>Steer with the stick on the left. Boost, brake and zap are on the right.</div>
-  <div class="plate white" id="achBox">
-    <div class="achHead"><b>Achievements</b><span id="achCount"></span></div>
+  <details class="plate white fold" id="achBox">
+    <summary>Achievements<span id="achCount"></span></summary>
     <div class="achGrid" id="achGrid"></div>
-  </div>
+  </details>
+  <details class="plate white fold" id="boardBox">
+    <summary>Leaderboard<span>best runs on this machine</span></summary>
+    <ol id="boardList"></ol>
+    <p id="boardEmpty">No runs yet. Finish a shift and the board fills up.</p>
+  </details>
   <div id="players" class="note"></div>
   <div class="actions" id="menu">
+    <input id="pname" placeholder="Name" maxlength="12" autocomplete="off" aria-label="Name for the leaderboard">
     <button class="go" id="bStart">Start shift</button>
     <button class="ghost" id="bHost">Host online game</button>
     <span id="joinBox"><input id="code" placeholder="Code" maxlength="5" autocomplete="off" aria-label="Room code"><button class="ghost" id="bJoin">Join</button></span>
@@ -244,6 +264,7 @@
   <svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="27" fill="#fff" stroke="#d7261e" stroke-width="8"/><rect x="18" y="25" width="24" height="14" rx="2" fill="none" stroke="#1d232b" stroke-width="3.5"/><rect x="42" y="29" width="4" height="6" fill="#1d232b"/></svg>
   <h2>Battery dead</h2>
   <p id="overSub"></p>
+  <p id="overRank"></p>
   <div class="stats"><div><b id="overEarned">0 €</b><span>earned this run</span></div><div><b id="overBest">0 €</b><span>best run</span></div></div>
   <button class="go" id="bRetry">Try again</button>
 </div>
@@ -887,7 +908,7 @@ function join(ctrl) {
     return;
   }
   if (robots.length >= MAX_PLAYERS) return;
-  const r = addRobot({ ctrl }); say(r, 'Moi!'); sfx('join');
+  const r = addRobot({ ctrl }); say(r, 'Moi!'); sfx('join'); most('players', robots.length);
 }
 const ZERO = { t: 0, s: 0 };
 const input = r => r.owner === 'H' ? ctrlInput(r.ctrl) : remoteIn[r.id] || ZERO;
@@ -914,7 +935,7 @@ addEventListener('keydown', e => {
   if (e.code === 'Enter') pressStart(); // Space is a handbrake
   const u = SHOP.find(u => e.code === 'Digit' + u.key);
   if (u) buy(u.k);
-  if (e.code === 'KeyM') musicOn = !musicOn;
+  if (e.code === 'KeyM') { musicOn = !musicOn; if (!musicOn) bump('music'); }
 });
 addEventListener('keyup', e => keys.delete(e.code));
 addEventListener('blur', () => keys.clear());
@@ -973,9 +994,14 @@ function buy(k) {
   const lv = up[k], price = PRICES[lv];
   if (lv >= 3 || money < price) return;
   money -= price; up[k]++; sfx('pickup');
-  if (up[k] >= 3) unlock('maxed');
+  bump('spent', price); bump('buys');
 }
-function newRun() { score = 0; money = 0; up = freshUp(); for (const k in stats) delete stats[k]; startLevel(1); }
+function newRun() {
+  score = 0; money = 0; up = freshUp();
+  for (const k in stats) delete stats[k];
+  bump('runs'); lastRank = 0;
+  startLevel(1);
+}
 // order types: dmg = damage multiplier, time = deadline multiplier, tipX = speed-tip multiplier
 const ORDERS = [
   { icon: '🛍️', name: 'Groceries', w: 4 },
@@ -1064,9 +1090,8 @@ function startLevel(n) {
   quota = 2 + n + (robots.length - 1) * 2;
   robots.forEach(r => Object.assign(r, spawn(r.i), { vx: 0, vy: 0, a: 0, camYaw: 0, boost: 1, zaps: 3, cargo: null, hole: null, stun: 0, immune: 1, hp: 1 }));
   weather = { k: null, t: 0 }; weatherIn = n >= 2 ? rnd(15, 35) : Infinity;
-  stats.dmg = 0;
-  if (n >= 3) unlock('kaamos');
-  if (n >= 5) unlock('shift5');
+  mark = { ...stats }; // "clear a shift without X" is measured against this snapshot
+  most('players', robots.length);
   state = 'play'; stateT = 0;
   banner = `Shift ${n} – ${LEVEL_NAMES[Math.min(n, 4) - 1]}`; bannerT = 3;
 }
@@ -1107,55 +1132,171 @@ function fx(e) { // play locally; the host also forwards it to guests
   if (role === 'host') outbox.push(e);
 }
 // ---------- achievements ----------
-// ponytail: unlocks live in localStorage per machine, counters per run. Online guests only
-// see what their own client computes; the host tracks the rest.
+// Events only ever bump a counter; one predicate loop decides what unlocks. 80 achievements
+// are then 80 data rows instead of 80 call sites scattered through the simulation.
+// ponytail: counters are per machine. An online guest only counts what its own client
+// simulates — the host counts the rest.
+const stats = {};          // this run, cleared by newRun()
+let tot = {};              // lifetime, persisted
+try { tot = JSON.parse(localStorage.getItem('ruokarobo-tot') || '{}'); } catch (e) {}
+const bump = (k, n = 1) => { tot[k] = (tot[k] || 0) + n; return (stats[k] = (stats[k] || 0) + n); };
+const most = (k, v) => { if (v > (stats[k] || 0)) stats[k] = v; if (v > (tot[k] || 0)) tot[k] = v; }; // high-water mark
+const saveTot = () => { try { localStorage.setItem('ruokarobo-tot', JSON.stringify(tot)); } catch (e) {} };
+let mark = {}; // counter snapshot taken at the start of the shift, for "clear a shift without X"
+const since = k => (stats[k] || 0) - (mark[k] || 0);
+const everyHouse = s => HOUSES.every((_, i) => s['h' + i]);
+const everyOrder = s => ORDERS.every((_, i) => s['d' + i]);
+// w(s, t) reads this run's counters and the lifetime ones; globals like level and up are fair game too
 const ACH = [
-  { k: 'first',    i: '📦', n: 'Ensimmäinen',       d: 'Deliver your first order' },
-  { k: 'ten',      i: '🛍️', n: 'Kymppi',            d: 'Deliver 10 orders in one run' },
-  { k: 'speedy',   i: '⚡', n: 'Pikatoimitus',      d: 'Deliver within 3 s of pickup' },
-  { k: 'pristine', i: '🥚', n: 'Ei kolhuja',        d: 'Deliver eggs in perfect condition' },
-  { k: 'perfect',  i: '✨', n: 'Täydellinen vuoro', d: 'Clear a shift without taking damage' },
-  { k: 'dogs',     i: '🐕', n: 'Koiranulkoiluttaja', d: 'Zap 5 dogs in one run' },
-  { k: 'zap25',    i: '🔌', n: 'Sähköshokki',       d: 'Zap 25 locals in one run' },
-  { k: 'pothole',  i: '🕳️', n: 'Kuoppaekspertti',   d: 'Climb out of 5 potholes yourself' },
-  { k: 'rescue',   i: '💛', n: 'Hyvä kaveri',       d: 'Tow a teammate out of a pothole' },
-  { k: 'handoff',  i: '🤝', n: 'Saumaton vaihto',   d: 'Hand a package to a teammate' },
-  { k: 'sofa',     i: '🛋️', n: 'Muuttomiehet',      d: 'Deliver a sofa together' },
-  { k: 'blizzard', i: '🌨️', n: 'Myrskyn läpi',      d: 'Deliver during a blizzard' },
-  { k: 'pulla',    i: '🥐', n: 'Mummon pulla',      d: 'Get pulla from a grandma' },
-  { k: 'kaamos',   i: '🌃', n: 'Kaamos',            d: 'Reach shift 3' },
-  { k: 'shift5',   i: '🏁', n: 'Yötyöläinen',       d: 'Reach shift 5' },
-  { k: 'rich',     i: '💰', n: 'Rahakas',           d: 'Earn 500 € in one run' },
-  { k: 'maxed',    i: '🔧', n: 'Täysin viritetty',  d: 'Max out any upgrade' },
-  { k: 'gold',     i: '👑', n: 'Bling',             d: 'Paint the team gold' },
-  { k: 'snowball', i: '❄️', n: 'Lumisota',          d: 'Take 5 snowballs in one run' },
+  { k: 'first',    i: '📦', n: 'Ensimmäinen',      d: 'Deliver your first order',              w: (s, t) => t.del >= 1 },
+  { k: 'del10',    i: '🛍️', n: 'Kymppi',           d: 'Deliver 10 orders in one run',          w: s => s.del >= 10 },
+  { k: 'del25',    i: '🚚', n: 'Ruuhka',           d: 'Deliver 25 orders in one run',          w: s => s.del >= 25 },
+  { k: 'del50',    i: '🏭', n: 'Liukuhihna',       d: 'Deliver 50 orders in one run',          w: s => s.del >= 50 },
+  { k: 'tot100',   i: '💯', n: 'Satanen',          d: 'Deliver 100 orders all time',           w: (s, t) => t.del >= 100 },
+  { k: 'tot500',   i: '🎖️', n: 'Veteraani',        d: 'Deliver 500 orders all time',           w: (s, t) => t.del >= 500 },
+  { k: 'tot1000',  i: '🏅', n: 'Tuhat ja yksi',    d: 'Deliver 1000 orders all time',          w: (s, t) => t.del >= 1000 },
+  { k: 'houses',   i: '🏘️', n: 'Koko katu',        d: 'Deliver to every door in one run',      w: s => everyHouse(s) },
+  { k: 'types',    i: '🧺', n: 'Koko valikoima',   d: 'Deliver every kind of order in one run', w: s => everyOrder(s) },
+  { k: 'streak10', i: '🎯', n: 'Putki',            d: '10 deliveries in a row without a scratch', w: s => s.streakMax >= 10 },
+  { k: 'mint1',    i: '✨', n: 'Naarmuton',        d: 'Deliver one order in perfect condition', w: (s, t) => t.mint >= 1 },
+  { k: 'mint10',   i: '💎', n: 'Käsittelee varoen', d: '10 perfect-condition orders in one run', w: s => s.mint >= 10 },
+  { k: 'mint30',   i: '🔬', n: 'Laatupäällikkö',   d: '30 perfect-condition orders in one run', w: s => s.mint >= 30 },
+  { k: 'late1',    i: '🐌', n: 'Anteeksi…',        d: 'Deliver one order late',                w: (s, t) => t.late >= 1 },
+  { k: 'wreck',    i: '🗑️', n: 'Sisältö siirtynyt', d: 'Deliver an order at 20% condition or worse', w: (s, t) => t.wreck >= 1 },
+  { k: 'fast3',    i: '⚡', n: 'Pikatoimitus',     d: 'Deliver within 3 s of pickup',          w: (s, t) => t.fast3 >= 1 },
+  { k: 'fast3x5',  i: '🚀', n: 'Raketti',          d: 'Five sub-3-second deliveries in one run', w: s => s.fast3 >= 5 },
+  { k: 'egg10',    i: '🥚', n: 'Munankuljettaja',  d: 'Deliver 10 egg orders in one run',      w: s => s.d1 >= 10 },
+  { k: 'pristine', i: '🧪', n: 'Ei kolhuja',       d: 'Deliver eggs in perfect condition',     w: (s, t) => t.eggMint >= 1 },
+  { k: 'ice10',    i: '🍦', n: 'Kylmäketju',       d: 'Deliver 10 ice creams in one run',      w: s => s.d2 >= 10 },
+  { k: 'iceFast',  i: '🧊', n: 'Ei sulanut',       d: 'Deliver ice cream with time to spare',  w: (s, t) => t.iceFast >= 1 },
+  { k: 'heavy10',  i: '🍉', n: 'Raskas sarja',     d: 'Deliver 10 heavy orders in one run',    w: s => s.d3 >= 10 },
+  { k: 'pizza10',  i: '🍕', n: 'Pizzalähetti',     d: 'Deliver 10 pizzas in one run',          w: s => s.d4 >= 10 },
+  { k: 'pizzaOn',  i: '🔥', n: 'Vielä lämmin',     d: 'Deliver a pizza on time',               w: (s, t) => t.pizzaOn >= 1 },
+  { k: 'sofa',     i: '🛋️', n: 'Muuttomiehet',     d: 'Deliver a sofa together',               w: (s, t) => t.d5 >= 1 },
+  { k: 'sofa5',    i: '🛏️', n: 'Muuttofirma',      d: 'Deliver 5 sofas in one run',            w: s => s.d5 >= 5 },
+  { k: 'pay60',    i: '💶', n: 'Iso tippi',        d: 'Earn 60 € from a single delivery',      w: (s, t) => t.payMax >= 60 },
+  { k: 'rich500',  i: '💰', n: 'Rahakas',          d: 'Earn 500 € in one run',                 w: () => score >= 500 },
+  { k: 'rich1500', i: '🤑', n: 'Kassamagneetti',   d: 'Earn 1500 € in one run',                w: () => score >= 1500 },
+  { k: 'rich3000', i: '🏦', n: 'Pörssirobotti',    d: 'Earn 3000 € in one run',                w: () => score >= 3000 },
+  { k: 'earned',   i: '📈', n: 'Vuosikertymä',     d: 'Earn 20 000 € all time',                w: (s, t) => t.earn >= 20000 },
+  { k: 'spend500', i: '🛒', n: 'Tuhlari',          d: 'Spend 500 € in one run',                w: s => s.spent >= 500 },
+  { k: 'maxed',    i: '🔧', n: 'Täysin viritetty', d: 'Max out any upgrade',                   w: () => UPGRADES.some(u => up[u.k] >= 3) },
+  { k: 'allMax',   i: '⚙️', n: 'Tehdasasetukset ylitetty', d: 'Max out all four upgrades',     w: () => UPGRADES.every(u => up[u.k] >= 3) },
+  { k: 'gold',     i: '👑', n: 'Bling',            d: 'Paint the team gold',                   w: () => up.gold >= 1 },
+  { k: 'allStyle', i: '🧶', n: 'Tyylitietoinen',   d: 'Own every cosmetic at once',            w: () => COSMETICS.every(c => up[c.k] >= 1) },
+  { k: 'poorShop', i: '🪙', n: 'Lama',             d: 'Reach the workshop with under 10 €',    w: (s, t) => t.poorShop >= 1 },
+  { k: 'kaamos',   i: '🌃', n: 'Kaamos',           d: 'Reach shift 3',                         w: () => level >= 3 },
+  { k: 'shift5',   i: '🏁', n: 'Yötyöläinen',      d: 'Reach shift 5',                         w: () => level >= 5 },
+  { k: 'shift8',   i: '🌌', n: 'Ikuinen yö',       d: 'Reach shift 8',                         w: () => level >= 8 },
+  { k: 'shift12',  i: '⛄', n: 'Talvi ei lopu',    d: 'Reach shift 12',                        w: () => level >= 12 },
+  { k: 'perfect',  i: '🛡️', n: 'Täydellinen vuoro', d: 'Clear a shift without taking damage',  w: (s, t) => t.perfShift >= 1 },
+  { k: 'perfect3', i: '🏆', n: 'Kolme putkeen',    d: 'Clear three spotless shifts in one run', w: s => s.perfShift >= 3 },
+  { k: 'clean',    i: '⏰', n: 'Ei myöhästymisiä', d: 'Clear a shift with nothing delivered late', w: (s, t) => t.cleanShift >= 1 },
+  { k: 'bonus40',  i: '🔋', n: 'Akkua jäljellä',   d: 'Clear a shift with 40 s still on the battery', w: (s, t) => t.bigBonus >= 1 },
+  { k: 'shifts50', i: '📅', n: 'Viisikymmentä vuoroa', d: 'Clear 50 shifts all time',          w: (s, t) => t.shifts >= 50 },
+  { k: 'runs25',   i: '🔁', n: 'Sinnikäs',         d: 'Start 25 runs all time',                w: (s, t) => t.runs >= 25 },
+  { k: 'holeIn',   i: '🕳️', n: 'Kuoppaan',         d: 'Fall into a pothole',                   w: (s, t) => t.holeIn >= 1 },
+  { k: 'pothole',  i: '💪', n: 'Kuoppaekspertti',  d: 'Climb out of 5 potholes yourself',      w: s => s.holes >= 5 },
+  { k: 'pothole20',i: '🧗', n: 'Kuoppakuningas',   d: 'Climb out of 20 potholes in one run',   w: s => s.holes >= 20 },
+  { k: 'noHole',   i: '🛣️', n: 'Siististi ohi',    d: 'Clear a shift without falling in a hole', w: (s, t) => t.noHoleShift >= 1 },
+  { k: 'ball5',    i: '❄️', n: 'Lumisota',         d: 'Take 5 snowballs in one run',           w: s => s.balls >= 5 },
+  { k: 'ball25',   i: '⛄', n: 'Lumisodan uhri',   d: 'Take 25 snowballs in one run',          w: s => s.balls >= 25 },
+  { k: 'car',      i: '🚗', n: 'Auts',             d: 'Get hit by a car',                      w: (s, t) => t.carHit >= 1 },
+  { k: 'car10',    i: '🚑', n: 'Liikenneturva',    d: 'Get hit by cars 10 times in one run',   w: s => s.carHit >= 10 },
+  { k: 'plow',     i: '🚜', n: 'Aurauskone',       d: 'Get shoved by the snowplow',            w: (s, t) => t.plowHit >= 1 },
+  { k: 'kick',     i: '👢', n: 'Potkittu',         d: 'Get kicked by a local',                 w: (s, t) => t.kick >= 1 },
+  { k: 'bite',     i: '🐶', n: 'Purtu',            d: 'Get jumped on by a dog',                w: (s, t) => t.bite >= 1 },
+  { k: 'bumps50',  i: '🧱', n: 'Seinäkosketus',    d: 'Bump into walls 50 times in one run',   w: s => s.bumps >= 50 },
+  { k: 'broke1',   i: '🔩', n: 'Rikki',            d: 'Break down once',                       w: (s, t) => t.broke >= 1 },
+  { k: 'broke10',  i: '🪛', n: 'Kierrätykseen',    d: 'Break down 10 times all time',          w: (s, t) => t.broke >= 10 },
+  { k: 'lostOrd',  i: '📭', n: 'Tilaus meni',      d: 'Lose an order to a breakdown',          w: (s, t) => t.lostOrder >= 1 },
+  { k: 'fullHp',   i: '💚', n: 'Ehjänä maaliin',   d: 'Clear a shift with the team at full health', w: (s, t) => t.fullHpShift >= 1 },
+  { k: 'blizzard', i: '🌨️', n: 'Myrskyn läpi',     d: 'Deliver during a blizzard',             w: (s, t) => t.blizzDel >= 1 },
+  { k: 'freeze',   i: '🌧️', n: 'Jäätävä tihku',    d: 'Deliver during freezing rain',          w: (s, t) => t.freezeDel >= 1 },
+  { k: 'bothWx',   i: '🌪️', n: 'Säät sekaisin',    d: 'Deliver in both kinds of weather in one run', w: s => s.blizzDel && s.freezeDel },
+  { k: 'zap1',     i: '🔌', n: 'Ensimmäinen isku', d: 'Zap someone',                           w: (s, t) => t.zaps >= 1 },
+  { k: 'zap25',    i: '⚡', n: 'Sähköshokki',      d: 'Land 25 zaps in one run',               w: s => s.zaps >= 25 },
+  { k: 'zap100',   i: '🪫', n: 'Tyhjä akku',       d: 'Land 100 zaps in one run',              w: s => s.zaps >= 100 },
+  { k: 'dogs5',    i: '🐕', n: 'Koiranulkoiluttaja', d: 'Zap 5 dogs in one run',               w: s => s.dogs >= 5 },
+  { k: 'kids10',   i: '🧒', n: 'Lumisota loppui',  d: 'Zap 10 kids in one run',                w: s => s.kids >= 10 },
+  { k: 'spree',    i: '💥', n: 'Sarjatuli',        d: 'Land three zaps within five seconds',   w: (s, t) => t.spree >= 3 },
+  { k: 'handoff',  i: '🤝', n: 'Saumaton vaihto',  d: 'Hand a package to a teammate',          w: (s, t) => t.handoffs >= 1 },
+  { k: 'handoff10',i: '🔄', n: 'Vaihtokaveri',     d: 'Make 10 handoffs in one run',           w: s => s.handoffs >= 10 },
+  { k: 'rescue',   i: '💛', n: 'Hyvä kaveri',      d: 'Tow a teammate out of a pothole',       w: (s, t) => t.rescues >= 1 },
+  { k: 'rescue10', i: '🪢', n: 'Hinausauto',       d: 'Tow teammates out 10 times in one run', w: s => s.rescues >= 10 },
+  { k: 'saved',    i: '🦸', n: 'Pelastit kaverin', d: 'Flatten a local who was chasing a teammate', w: (s, t) => t.saved >= 1 },
+  { k: 'four',     i: '👥', n: 'Nelinpeli',        d: 'Drive a shift with four robots',        w: (s, t) => t.players >= 4 },
+  { k: 'eight',    i: '🎉', n: 'Täysi tiimi',      d: 'Drive a shift with eight robots',       w: (s, t) => t.players >= 8 },
+  { k: 'online',   i: '🌐', n: 'Etävuoro',         d: 'Play an online room',                   w: (s, t) => t.online >= 1 },
+  { k: 'drift',    i: '🏎️', n: 'Talvidriftaaja',   d: 'Spend 10 s sideways on the handbrake in one run', w: s => s.driftT >= 10 },
+  { k: 'ice60',    i: '⛸️', n: 'Taitoluistelija',  d: 'Spend 60 s on ice in one run',          w: s => s.iceT >= 60 },
+  { k: 'boost30',  i: '💨', n: 'Turbo päällä',     d: 'Spend 30 s on boost in one run',        w: s => s.boostT >= 30 },
+  { k: 'topSpeed', i: '📏', n: 'Huippunopeus',     d: 'Hit 280 px/s',                          w: (s, t) => t.topSp >= 280 },
+  { k: 'pulla',    i: '🥐', n: 'Mummon pulla',     d: 'Get pulla from a grandma',              w: (s, t) => t.pulla >= 1 },
+  { k: 'pulla10',  i: '🧁', n: 'Pullakuski',       d: 'Collect 10 pullas all time',            w: (s, t) => t.pulla >= 10 },
+  { k: 'music',    i: '🎵', n: 'Hiljaisuus',       d: 'Turn the music off',                    w: (s, t) => t.music >= 1 },
+  { k: 'half',     i: '🌟', n: 'Puolimatka',       d: 'Unlock 40 achievements',                w: () => achDone.size >= 40 },
+  { k: 'all',      i: '🎖️', n: 'Kaikki kasassa',   d: 'Unlock everything else',                w: () => achDone.size >= ACH.length - 1 },
 ];
 let achDone = new Set();
 try { achDone = new Set(JSON.parse(localStorage.getItem('ruokarobo-ach') || '[]')); } catch (e) {}
-const stats = {}; // per-run counters, reset by newRun()
-const bump = (k, n = 1) => (stats[k] = (stats[k] || 0) + n);
-function unlock(k) {
-  if (achDone.has(k)) return;
-  achDone.add(k);
+achDone = new Set(ACH.filter(a => achDone.has(a.k)).map(a => a.k)); // drop keys from older builds, so the count is honest
+let achLeft = ACH.filter(a => !achDone.has(a.k));
+// self-check: keys must be unique, and every predicate must survive empty counter bags
+console.assert(new Set(ACH.map(a => a.k)).size === ACH.length, 'duplicate achievement key');
+for (const a of ACH) try { a.w({}, {}); } catch (e) { console.error('achievement predicate throws:', a.k, e); }
+const achQ = []; // toasts are queued so a burst of unlocks does not bury the screen
+let achT = 0, achCheckT = 0;
+function checkAch() {
+  for (let i = achLeft.length - 1; i >= 0; i--) {
+    let hit = false;
+    try { hit = !!achLeft[i].w(stats, tot); } catch (e) {} // a counter that does not exist yet is just false
+    if (hit) unlock(achLeft[i]);
+  }
+}
+function unlock(a) {
+  if (typeof a === 'string') a = ACH.find(x => x.k === a);
+  if (!a || achDone.has(a.k)) return;
+  achDone.add(a.k);
+  achLeft = achLeft.filter(x => x.k !== a.k);
+  achQ.push(a);
   try { localStorage.setItem('ruokarobo-ach', JSON.stringify([...achDone])); } catch (e) {}
-  const a = ACH.find(a => a.k === k), el = document.createElement('div');
+  saveTot();
+}
+function achToast(a) {
+  const el = document.createElement('div');
   el.className = 'plate yellow ach';
   el.innerHTML = `<span class="ic">${a.i}</span><span><b>${a.n}</b><small>${a.d}</small></span>`;
   document.getElementById('achs').append(el);
   setTimeout(() => el.remove(), 4200);
   SFX.ach(); // local only: an achievement is this machine's, not the whole room's
 }
+
+// ---------- leaderboard: the ten best local runs ----------
+let board = [];
+try { board = JSON.parse(localStorage.getItem('ruokarobo-board') || '[]'); } catch (e) {}
+let pname = '';
+try { pname = localStorage.getItem('ruokarobo-name') || ''; } catch (e) {}
+let lastRank = 0;
+function recordRun() {
+  const row = { s: score, lv: level, p: robots.length, n: (pname || 'Robo').slice(0, 12), d: Date.now() };
+  board.push(row);
+  board.sort((a, b) => b.s - a.s || a.d - b.d);
+  board = board.slice(0, 10);
+  lastRank = board.indexOf(row) + 1; // 0 when the run did not place
+  try { localStorage.setItem('ruokarobo-board', JSON.stringify(board)); } catch (e) {}
+}
 function damage(r, amt, msg) {
   if (r.hitCd > 0) return;
-  r.hitCd = .7; say(r, msg, 1); bump('dmg');
+  r.hitCd = .7; say(r, msg, 1); bump('dmg'); stats.streak = 0;
   if (r.cargo) r.cargo.cond = Math.max(0, r.cargo.cond - amt * (1 - .22 * up.susp) * (ORDERS[r.cargo.o].dmg || 1));
   sfx('crash');
   if (r.immune > 0) return;
   r.hp = Math.max(0, r.hp - amt * (1 - .22 * up.susp));
   if (r.hp <= 0) { // out cold: a few seconds of sparks, then back up on half a battery
     r.hp = .5; r.stun = Math.max(r.stun, 2.5); r.immune = 3; r.vx = r.vy = 0;
-    say(r, 'Rikki! 🔧', 2.5); fx({ k: 'burst', x: r.x, y: r.y, n: 26 });
-    if (r.cargo) { r.cargo = null; pop(r, '📦 Tilaus meni!', '#ff9b9b'); } // order is lost: back to Salepa
+    say(r, 'Rikki! 🔧', 2.5); fx({ k: 'burst', x: r.x, y: r.y, n: 26 }); bump('broke');
+    if (r.cargo) { r.cargo = null; pop(r, '📦 Tilaus meni!', '#ff9b9b'); bump('lostOrder'); } // order is lost: back to Salepa
   }
 }
 function zap(r) {
@@ -1170,8 +1311,10 @@ function zap(r) {
   fx({ k: 'zap', x1: r.x, y1: r.y, x2: best ? best.x : r.x + fx_ * 70, y2: best ? best.y : r.y + fy * 70 });
   if (!best) return;
   best.zapT = 3; say(best, best.kind === 'dog' ? 'Vuh?' : pick(['Bzzzt!', 'Aijai!', 'Auh!']), 1.4);
-  if (bump('zaps') >= 25) unlock('zap25');
-  if (best.kind === 'dog' && bump('dogs') >= 5) unlock('dogs');
+  bump('zaps');
+  bump(best.kind === 'dog' ? 'dogs' : best.mode ? 'peds' : 'kids'); // only pedestrians carry a mode
+  stats.spreeN = T - (stats.zapT ?? -99) < 5 ? (stats.spreeN || 1) + 1 : 1;
+  stats.zapT = T; most('spree', stats.spreeN);
   if (best.mode) { best.mode = 'zapped'; best.moving = false; }
 }
 function escape(r, msg, nx = Math.cos(r.a), ny = Math.sin(r.a)) {
@@ -1196,7 +1339,7 @@ function updRobot(r, dt) {
   const inp = input(r);
   if (r.hole) {
     if (inp.t || inp.s) r.esc += dt * .35 * (1 + .5 * up.susp);
-    if (r.esc >= 1) { escape(r, 'Ylös! 💪'); if (bump('holes') >= 5) unlock('pothole'); }
+    if (r.esc >= 1) { escape(r, 'Ylös! 💪'); bump('holes'); }
     return;
   }
   if (r.towT > 0) { // being towed out by a friend: follow on a rope
@@ -1234,16 +1377,22 @@ function updRobot(r, dt) {
   const sp = Math.hypot(r.vx, r.vy);
   if (sp > max) { const k = Math.max(max / sp, Math.exp(-3 * dt)); r.vx *= k; r.vy *= k; }
   r.x += r.vx * dt; r.y += r.vy * dt;
+  if (state === 'play') { // driving counters
+    most('topSp', sp);
+    if (Sf.ice) bump('iceT', dt);
+    if (boosting) bump('boostT', dt);
+    if (hb && sp > 80) bump('driftT', dt);
+  }
 
   if (r.immune <= 0) for (const h of holes) if (Math.hypot(r.x - h.x, r.y - h.y) < h.r) {
-    r.hole = h; r.esc = 0; r.x = h.x; r.y = h.y; r.vx = r.vy = 0;
+    r.hole = h; r.esc = 0; r.x = h.x; r.y = h.y; r.vx = r.vy = 0; bump('holeIn');
     if (r.cargo) r.cargo.cond = Math.max(0, r.cargo.cond - .15 * (1 - .22 * up.susp) * (ORDERS[r.cargo.o].dmg || 1));
     say(r, 'Apua! 🆘', 3); sfx('hole');
     return;
   }
   for (const b of SOLIDS) {
     const hit = pushOut(r, clamp(r.x, b.x, b.x + b.w), clamp(r.y, b.y, b.y + b.h), R);
-    if (hit > 150) damage(r, .08, surface(r.x, r.y) === 'ice' ? 'Hups!' : 'Auts!');
+    if (hit > 150) { damage(r, .08, surface(r.x, r.y) === 'ice' ? 'Hups!' : 'Auts!'); bump('bumps'); }
   }
   for (const t of trees) if (pushOut(r, t.x, t.y, R + t.r) > 150) damage(r, .08, 'Auts!');
   r.x = clamp(r.x, R, W - R); r.y = clamp(r.y, R, H - R);
@@ -1259,21 +1408,26 @@ function updRobot(r, dt) {
     const c = r.cargo, O = ORDERS[c.o], late = c.t <= 0, tipX = O.tipX || 1;
     const pay = (late ? 10 : 20) + (O.bonus || 0) + Math.round(15 * c.cond) + (late ? 0 : Math.min(20 * tipX, Math.round(c.t * tipX)));
     money += pay; score += pay; delivered += O.duo ? 2 : 1;
-    if (O.duo) { const h = helper(r); say(h, 'Hyvä tiimi! 🛋️'); pop(h, '🛋️ Teamwork', '#9fd3ff'); unlock('sofa'); }
+    if (O.duo) { const h = helper(r); say(h, 'Hyvä tiimi! 🛋️'); pop(h, '🛋️ Teamwork', '#9fd3ff'); }
     pop(r, `+${pay} €${late ? ' (late)' : ''}`, late ? '#ff9b9b' : r.color);
     say(r, late ? 'Anteeksi, myöhässä…' : c.cond > .8 ? pick(['Kiitos!', 'Ole hyvä!', 'Hyvää ruokahalua!']) : 'Vähän kolhuja…');
     fx({ k: 'cust', i: c.dest });
     if (!late && Math.random() < .25) { // mummo at the door hands over a pulla: full boost
       r.boost = 1; fx({ k: 'pop', x: r.x, y: r.y - 20, text: '🥐 Mummo gave you pulla! Boost full', color: '#ffd84a' });
-      unlock('pulla');
+      bump('pulla');
     }
     sfx('deliver');
-    unlock('first');
-    if (bump('del') >= 10) unlock('ten');
-    if (T - c.t0 < 3) unlock('speedy');
-    if (c.cond >= 1 && O.icon === '🥚') unlock('pristine');
-    if (weather.k === 'blizzard') unlock('blizzard');
-    if (score >= 500) unlock('rich');
+    bump('del'); bump('d' + c.o); bump('h' + c.dest); bump('earn', pay);
+    bump(late ? 'late' : 'ontime');
+    most('payMax', pay);
+    if (c.cond >= 1) bump('mint');
+    if (c.cond <= .2) bump('wreck');
+    if (T - c.t0 < 3) bump('fast3');
+    if (O.icon === '🥚' && c.cond >= 1) bump('eggMint');
+    if (O.icon === '🍕' && !late) bump('pizzaOn');
+    if (O.icon === '🍦' && c.t >= 4) bump('iceFast');
+    if (weather.k) bump(weather.k === 'blizzard' ? 'blizzDel' : 'freezeDel');
+    stats.streak = (stats.streak || 0) + 1; most('streakMax', stats.streak);
     r.cargo = null;
   }
 }
@@ -1290,14 +1444,14 @@ function robotPairs(dt) {
       if (handT[key] > .8) {
         const [from, to] = a.cargo ? [a, b] : [b, a];
         to.cargo = from.cargo; from.cargo = null; handT[key] = -3;
-        say(from, 'Ota tästä! 📦'); say(to, 'Selvä!'); pop(to, '🤝 Handoff', '#9fd3ff'); sfx('pickup'); unlock('handoff');
+        say(from, 'Ota tästä! 📦'); say(to, 'Selvä!'); pop(to, '🤝 Handoff', '#9fd3ff'); sfx('pickup'); bump('handoffs');
       }
     } else handT[key] = Math.min(0, (handT[key] || 0) + dt);
     if (d >= 2 * R || d < .001) continue;
     const nx = dx / d, ny = dy / d;
     // friend to the rescue: bumping a stuck robot hooks a tow rope and pulls it out
-    if (a.hole && !b.hole) { escape(a, 'Kiitos kaveri! 💛', -nx, -ny); Object.assign(a, { tow: b.id, towT: 1.5 }); money += 5; score += 5; pop(a, 'Rescue +5 €', '#ffd84a'); unlock('rescue'); continue; }
-    if (b.hole && !a.hole) { escape(b, 'Kiitos kaveri! 💛', nx, ny); Object.assign(b, { tow: a.id, towT: 1.5 }); money += 5; score += 5; pop(b, 'Rescue +5 €', '#ffd84a'); unlock('rescue'); continue; }
+    if (a.hole && !b.hole) { escape(a, 'Kiitos kaveri! 💛', -nx, -ny); Object.assign(a, { tow: b.id, towT: 1.5 }); money += 5; score += 5; pop(a, 'Rescue +5 €', '#ffd84a'); bump('rescues'); continue; }
+    if (b.hole && !a.hole) { escape(b, 'Kiitos kaveri! 💛', nx, ny); Object.assign(b, { tow: a.id, towT: 1.5 }); money += 5; score += 5; pop(b, 'Rescue +5 €', '#ffd84a'); bump('rescues'); continue; }
     if (a.hole || b.hole) continue;
     const o = (2 * R - d) / 2;
     a.x -= nx * o; a.y -= ny * o; b.x += nx * o; b.y += ny * o;
@@ -1326,7 +1480,7 @@ function updCars(dt) {
       pushOut(r, clamp(r.x, c.x - 40, c.x + 40), clamp(r.y, c.y - 18, c.y + 18), R);
       if (c.v > 30 && r.hitCd <= 0 && Math.abs(r.x - c.x) < 40 + R + 1 && Math.abs(r.y - c.y) < 18 + R + 1) {
         r.vx += c.dir * c.v * 1.2; r.vy += Math.sign(r.y - c.y || 1) * 220; r.stun = .7;
-        damage(r, .25, 'Auts! 🚗');
+        damage(r, .25, 'Auts! 🚗'); bump('carHit');
       }
     }
   }
@@ -1344,7 +1498,7 @@ function fall(p, msg) { p.mode = 'fall'; p.t = 2.5; p.moving = false; say(p, p.k
 function kick(p, r) { // people kick, dogs jump on you
   const dog = p.kind === 'dog', a = Math.atan2(r.y - p.y, r.x - p.x), f = dog ? 220 : 340;
   r.vx += Math.cos(a) * f; r.vy += Math.sin(a) * f; r.stun = dog ? .4 : .6;
-  damage(r, dog ? .08 : .15, pick(['Auts!', 'Apua!', 'Hei!']));
+  damage(r, dog ? .08 : .15, pick(['Auts!', 'Apua!', 'Hei!'])); bump(dog ? 'bite' : 'kick');
   p.kickT = .35; say(p, dog ? pick(['Hau hau!', 'Murr!', 'Vuh vuh!']) : pick(PED_SHOUTS), 1.8); sfx(dog ? 'bark' : 'kick');
   fx({ k: 'burst', x: r.x, y: r.y, n: 8 });
   Object.assign(p, { mode: 'walk', cool: dog ? 3 : 4 }, waypoint(p.side)); // satisfied, walks off
@@ -1385,7 +1539,7 @@ function updPeds(dt) {
       const chasingSomeoneElse = p.mode === 'chase' && p.target !== r;
       if (pushOut(r, p.x, p.y, R + 8) > 130) {
         fall(p, 'Auts!');
-        if (chasingSomeoneElse) { money += 5; score += 5; pop(r, 'Saved a friend +5 €', '#ffd84a'); }
+        if (chasingSomeoneElse) { money += 5; score += 5; pop(r, 'Saved a friend +5 €', '#ffd84a'); bump('saved'); }
       }
     }
   }
@@ -1407,7 +1561,7 @@ function updPlow(dt) {
     r.x = plow.x + nx * (R + 22); r.y = plow.y + ny * (R + 22);
     if (r.hitCd <= 0) {
       r.vx = nx * 260 + Math.cos(plow.a) * 90; r.vy = ny * 260 + Math.sin(plow.a) * 90; r.stun = .6;
-      damage(r, .1, 'Aurauskone! 😵'); fx({ k: 'burst', x: r.x, y: r.y, n: 20 });
+      damage(r, .1, 'Aurauskone! 😵'); fx({ k: 'burst', x: r.x, y: r.y, n: 20 }); bump('plowHit');
     }
   }
 }
@@ -1433,8 +1587,7 @@ function updKids(dt) {
     for (const r of robots) if (!r.hole && Math.hypot(r.x - b.x, r.y - b.y) < R + 9) {
       const s = Math.hypot(b.vx, b.vy) || 1;
       r.vx += b.vx / s * 170; r.vy += b.vy / s * 170; r.stun = Math.max(r.stun, .3);
-      damage(r, .06, 'Läts! ❄️'); sfx('splat');
-      if (bump('balls') >= 5) unlock('snowball');
+      damage(r, .06, 'Läts! ❄️'); sfx('splat'); bump('balls');
     }
   }
   balls = balls.filter(b => !b.done);
@@ -1449,6 +1602,8 @@ function updWeather(dt) {
 }
 function update(dt) {
   T += dt; stateT += dt; bannerT -= dt; wxMsgT -= dt;
+  if (achQ.length && (achT -= dt) <= 0) { achT = 1.1; achToast(achQ.shift()); }
+  if ((achCheckT -= dt) <= 0) { achCheckT = .4; if (state !== 'title') checkAch(); }
   pollPads();
   wind = Math.sin(T * .3) * 2.5 * level * (weather.k === 'blizzard' ? 4 : 1);
   for (const f of floats) { f.t -= dt; f.h += 3 * dt; }
@@ -1467,11 +1622,18 @@ function update(dt) {
     if (delivered >= quota) {
       bonus = Math.ceil(time); money += bonus; score += bonus; state = 'shop'; stateT = 0;
       sfx('clear');
-      if (!stats.dmg) unlock('perfect');
-      if (score >= 500) unlock('rich');
+      bump('shifts'); bump('earn', bonus);
+      if (!since('dmg')) bump('perfShift');
+      if (!since('late')) bump('cleanShift');
+      if (!since('holeIn')) bump('noHoleShift');
+      if (bonus >= 40) bump('bigBonus');
+      if (robots.every(r => (r.hp ?? 1) >= 1)) bump('fullHpShift');
+      if (money < 10) bump('poorShop');
+      saveTot();
     } else if (time <= 0) {
       time = 0; state = 'over'; stateT = 0;
       if (score > best) { best = score; try { localStorage.setItem('ruokarobo-best', best); } catch (e) {} }
+      recordRun(); saveTot();
       sfx('over');
     }
   }
@@ -1531,6 +1693,7 @@ function hostRoom() {
   if (role !== 'local' || peer) return;
   if (!window.Peer) return status('Online library failed to load. Check your internet connection.');
   roomCode = Array.from({ length: 5 }, () => pick([...'ABCDEFGHJKMNPQRSTUVWXYZ23456789'])).join('');
+  bump('online'); saveTot();
   status('Opening room…'); showMenuButtons(false);
   peer = new Peer('ruokarobo-' + roomCode);
   peer.on('open', () => { role = 'host'; status(`Room code: ${roomCode} — friends type it in and press Join`); });
@@ -1560,7 +1723,7 @@ function joinRoom(code) {
   peer.on('open', id => {
     hostConn = peer.connect('ruokarobo-' + code, { reliable: true });
     hostConn.on('open', () => {
-      role = 'guest'; myOwner = id; roomCode = code;
+      role = 'guest'; myOwner = id; roomCode = code; bump('online'); saveTot();
       // players who already joined on this machine come along
       localCtrls.push(...robots.map(r => r.ctrl)); [...robots].forEach(removeRobot);
       localCtrls.forEach((_, lid) => hostConn.send({ type: 'add', lid }));
@@ -1911,7 +2074,10 @@ function drawMinimap(v) {
 
 // ---------- DOM screens: title, HUD, shift sign, weather warning, workshop, run over ----------
 const $ = id => document.getElementById(id);
-let achKey = -1;
+let achKey = -1, boardKey = '';
+$('pname').value = pname;
+$('pname').oninput = e => { pname = e.target.value; try { localStorage.setItem('ruokarobo-name', pname); } catch (_) {} };
+const esc = t => String(t).replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
 const setText = (id, v) => { const el = $(id); v = String(v); if (el.textContent !== v) el.textContent = v; };
 const ICONS = { // white pictograms for the workshop cards
   tires: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4L7 17M17 7l1.4-1.4"/>',
@@ -1949,10 +2115,18 @@ function updateDOM() {
         : (touchDev ? 'Touch the stick to join.' : 'Press any key from the table to join. Each row is one player.');
     }
     setText('bestLine', best ? `Best run ${best} €` : '');
-    if (achKey !== achDone.size) {
+    if (achKey !== achDone.size) { // unlocked first, so the newest sit at the top
       achKey = achDone.size;
       setText('achCount', `${achDone.size} / ${ACH.length}`);
-      $('achGrid').innerHTML = ACH.map(a => `<span class="achIt${achDone.has(a.k) ? ' on' : ''}" title="${a.d}"><i>${a.i}</i>${achDone.has(a.k) ? a.n : '???'}</span>`).join('');
+      const row = a => `<span class="achIt${achDone.has(a.k) ? ' on' : ''}" title="${a.d}"><i>${a.i}</i>${achDone.has(a.k) ? a.n : '???'}</span>`;
+      $('achGrid').innerHTML = [...ACH.filter(a => achDone.has(a.k)), ...achLeft].map(row).join('');
+    }
+    const bk = board.length + ':' + lastRank + ':' + (board[0]?.s ?? -1);
+    if (bk !== boardKey) {
+      boardKey = bk;
+      $('boardEmpty').hidden = board.length > 0;
+      $('boardList').innerHTML = board.map((b, i) => `<li class="${i + 1 === lastRank ? 'you' : ''}"><span class="rk">${i + 1}</span><span>${esc(b.n)}</span>`
+        + `<span class="mt">shift ${b.lv} · ${b.p} robot${b.p === 1 ? '' : 's'}</span><span class="sc">${b.s} €</span></li>`).join('');
     }
   }
   // HUD
@@ -2007,6 +2181,7 @@ function updateDOM() {
   if (state === 'over') {
     setText('overSub', `The team missed the quota on shift ${level}.`);
     setText('overEarned', `${score} €`); setText('overBest', `${best} €`);
+    setText('overRank', lastRank ? `🏆 #${lastRank} on the leaderboard` : '');
     $('bRetry').disabled = role === 'guest' || stateT < 1;
     setText('bRetry', role === 'guest' ? 'Waiting for the host' : 'Try again');
   }
