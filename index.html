@@ -398,7 +398,7 @@ const SURF = {
   snow: { acc: 380, kF: 2.6, kL: 3.5, max: 120 },
   ice:  { acc: 110, kF: 0.12, kL: 0.18, max: 270 },
 };
-let ice = [], holes = [], cars = [], peds = [], kids = [], balls = [], plow = null, santa = null, santaIn = Infinity;
+let presents = [], ice = [], holes = [], cars = [], peds = [], kids = [], balls = [], plow = null, santa = null, santaIn = Infinity;
 let weather = { k: null, t: 0 }, weatherIn = Infinity;
 function surf(x, y) { // surface feel with upgrades applied
   const s = SURF[surface(x, y)];
@@ -861,6 +861,11 @@ const rimGeo = new THREE.TorusGeometry(1, .28, 6, 20);
 function buildHazards() {
   scene.remove(hazardGroup); hazardGroup = new THREE.Group(); scene.add(hazardGroup);
   for (const p of ice) { p.mesh = flat(_g.circ ??= new THREE.CircleGeometry(1, 32), iceMat, p.x, p.y, .06, p.rx * S, p.ry * S, hazardGroup); p.mesh.visible = !p.gone; }
+  for (const p of presents) { // wrapped box with a gold ribbon
+    const g = p.mesh = new THREE.Group(); hazardGroup.add(g); place(g, p.x, p.y);
+    box(g, 1.1, .8, 1.1, mat('#c0262d'), 0, .4, 0); box(g, 1.14, .82, .2, mat('#f5c400', null, .3, .6), 0, .4, 0); box(g, .2, .82, 1.14, mat('#f5c400', null, .3, .6), 0, .4, 0);
+    g.rotation.y = rnd(0, 3); g.visible = !p.gone;
+  }
   for (const h of holes) {
     const r = h.r * S;
     const rim = new THREE.Mesh(rimGeo, mat('#6c6f75')); rim.rotation.x = Math.PI / 2; rim.scale.set(r + .2, r, 1);
@@ -1170,7 +1175,7 @@ const CHAPTERS = [
   { title: 'Waking up (Herääminen)', ice: 0, holes: 0, cars: 1, peds: 1, dogs: 0, kids: 0, plow: false, quota: 3, time: 90, darkness: .1, orders: [1, 0, 0, 0, 0, 0, 0, 0, 0],
     intro: 'Delivery robot S-1 wakes up on its charging pad with the odd feeling that it used to have hands. Salepa has three orders waiting. Start with those.',
     outro: 'S-1 drove like it had done this a thousand times.' },
-  { title: 'The crash site (Kolaripaikka)', ice: 2, holes: 1, cars: 2, peds: 2, dogs: 0, kids: 0, plow: false, quota: 4, time: 90, darkness: .25,
+  { title: 'The crash site (Kolaripaikka)', ice: 2, holes: 1, cars: 2, peds: 2, dogs: 0, kids: 0, plow: false, quota: 4, time: 90, darkness: .25, goal: 'collect',
     intro: 'Something pulls S-1 to the main road. Presents lie across both lanes, in wrapping paper it somehow remembers buying. Collect every one before the traffic does.',
     outro: 'Every present found. A few are a bit dented.' },
   { title: 'The first present (Ensimmäinen lahja)', ice: 3, holes: 2, cars: 1, peds: 2, dogs: 1, kids: 3, kidsNearHome: true, plow: false, quota: 4, time: 95, darkness: .4, orders: [0, 0, 0, 0, 0, 0, 1, 0, 0],
@@ -1214,7 +1219,7 @@ function playChapter() {
 if (urlChapter) window.__story = { drain: () => { time = .1; }, clear: () => { delivered = quota; }, setDel: n => { delivered = n; },
   tp: (i, x, y) => Object.assign(robots[i], { x, y, vx: 0, vy: 0, immune: 0, hitCd: 0 }), cargo: i => robots[i].cargo && { ...robots[i].cargo, icon: ORDERS[robots[i].cargo.o].icon },
   doors: () => ({ salepa: SHOPS[0].door, home: HOUSES[KIDS_HOME].door, puoti: SHOPS[1].door }), wreck: i => { robots[i].hp = .01; robots[i].hitCd = 0; robots[i].immune = 0; damage(robots[i], 1, 'test'); },
-  goal: () => goalDone, get: () => ({ state, chapter, level, quota, delivered, money, up, campaign, time, darkness, wx: weather.k, santaIn, ice: ice.length, holes: holes.length, cars: cars.length, peds: peds.length, kids: kids.map(k => [Math.round(k.x), Math.round(k.y)]), plow: !!plow }) };
+  goal: () => goalDone, pres: () => presents.map(({ x, y, gone }) => ({ x, y, gone })), get: () => ({ state, chapter, level, quota, delivered, money, up, campaign, time, darkness, wx: weather.k, santaIn, ice: ice.length, holes: holes.length, cars: cars.length, peds: peds.length, kids: kids.map(k => [Math.round(k.x), Math.round(k.y)]), plow: !!plow }) };
 function retryChapter() { money = storyStart.money; up = { ...storyStart.up }; playChapter(); }
 const DAY = new THREE.Color('#cfdbe8'), NIGHT = new THREE.Color('#0a1328');
 
@@ -1227,6 +1232,7 @@ function spot() {
 }
 function setupLevel(n) {
   ice = []; holes = []; cars = [];
+  presents = chap()?.goal !== 'collect' ? [] : Array.from({ length: cv('quota', 0) + (robots.length - 1) * 2 }, () => ({ x: rnd(500, 1300), y: rnd(615, 705), gone: false }));
   for (let i = 0; i < cv('ice', 2 + n * 2) * BLOCKS; i++) ice.push({ ...spot(), rx: rnd(40, 90), ry: rnd(18, 36) });
   for (let i = 0; i < cv('holes', 2 + n * 2) * BLOCKS; i++) {
     const s = spot();
@@ -1706,8 +1712,12 @@ function updRobot(r, dt) {
 
   if (state !== 'play') return;
   if (r.cargo) r.cargo.t -= dt;
+  for (const p of presents) if (!p.gone && dist(r, p) < R + 10) { // ch 2: presents on the road count as deliveries
+    p.gone = true; if (p.mesh) p.mesh.visible = false; delivered++;
+    pop(r, '🎁 Found one', '#ffd84a'); sfx('pickup');
+  }
   const shop = nearShop(r);
-  if (!r.cargo && dist(r, shop.door) < 45) {
+  if (!r.cargo && dist(r, shop.door) < 45 && !presents.length) {
     // orders go to this block or the next one over, never across the whole map
     const near = HOUSES.flatMap((h, i) => Math.abs(h.door.x - shop.door.x) < BW * 1.2 ? [i] : []);
     // ch 8: once only the sled is missing, S-1 gets it at the Salepa door
@@ -2133,13 +2143,13 @@ function leaveOnline(msg) {
 const inviteCode = new URLSearchParams(location.search).get('join');
 if (inviteCode) { history.replaceState(null, '', location.pathname); joinRoom(inviteCode); }
 function levelMsg() {
-  return { type: 'lvl', n: level, cg: campaign, ch: chapter, ice: ice.map(({ x, y, rx, ry, gone }) => ({ x, y, rx, ry, gone })), holes,
+  return { type: 'lvl', n: level, cg: campaign, ch: chapter, pr: presents.map(({ x, y, gone }) => ({ x, y, gone })), ice: ice.map(({ x, y, rx, ry, gone }) => ({ x, y, rx, ry, gone })), holes,
            cars: cars.map(({ x, y, dir, base, v, color }) => ({ x, y, dir, base, v, color })),
            peds: peds.map(({ x, y, side, kind, color, hat }) => ({ x, y, side, kind, color, hat })),
            kids: kids.map(({ x, y, a, dx, dy, coat, hat }) => ({ x, y, a, dx, dy, coat, hat })), plow: !!plow };
 }
 function applyLevelMsg(m) {
-  level = m.n; campaign = !!m.cg; chapter = m.ch || 0; ice = m.ice; holes = m.holes; cars = m.cars;
+  level = m.n; campaign = !!m.cg; chapter = m.ch || 0; presents = m.pr || []; ice = m.ice; holes = m.holes; cars = m.cars;
   peds = m.peds.map(p => ({ ...p, a: 0, mode: 'walk', kickT: 0, say: '', sayT: 0 }));
   kids = m.kids.map(k => ({ ...k, throwT: 0, say: '', sayT: 0 })); balls = [];
   plow = m.plow ? { x: 20, y: 580, a: 0 } : null;
@@ -2154,7 +2164,7 @@ function broadcast(dt) {
     c: cars.map(c => c.x), fx: outbox.splice(0),
     p: peds.map(p => ({ x: p.x, y: p.y, a: p.a, m: p.mode, k: p.kickT > 0, mv: p.moving, s: p.say, st: p.sayT })),
     kd: kids.map(k => ({ a: k.a, th: k.throwT, s: k.say, st: k.sayT, z: k.zapT > 0 })), b: balls, wx: weather,
-    pl: plow && { x: plow.x, y: plow.y, a: plow.a }, sa: santa, ig: ice.map(p => p.gone ? 1 : 0).join('') };
+    pl: plow && { x: plow.x, y: plow.y, a: plow.a }, sa: santa, ig: ice.map(p => p.gone ? 1 : 0).join(''), pg: presents.map(p => p.gone ? 1 : 0).join('') };
   for (const c of conns) c.send(m);
 }
 function applySnap(m) {
@@ -2175,6 +2185,7 @@ function applySnap(m) {
   balls = m.b || []; weather = m.wx || weather;
   if (plow && m.pl) Object.assign(plow, { tx: m.pl.x, ty: m.pl.y, a: m.pl.a });
   if (!m.sa) santa = null; else if (!santa || Math.abs(santa.x - m.sa.x) > 150) santa = m.sa; // guests run him ahead between snaps
+  [...(m.pg || '')].forEach((g, i) => { const p = presents[i]; if (p && g === '1' && !p.gone) { p.gone = true; if (p.mesh) p.mesh.visible = false; } });
   [...(m.ig || '')].forEach((g, i) => { if (ice[i] && g === '1' && !ice[i].gone) { ice[i].gone = true; if (ice[i].mesh) ice[i].mesh.visible = false; } });
   m.fx.forEach(fx);
 }
@@ -2225,7 +2236,7 @@ function sync(dt) {
     r.beam.visible = mine && state === 'play' && !!r.cargo;
     if (r.cargo) place(r.beam, tgt.x, tgt.y);
   }
-  const want = state === 'play' && robots.some(r => r.owner === myOwner && !r.cargo);
+  const want = state === 'play' && !presents.length && robots.some(r => r.owner === myOwner && !r.cargo);
   for (const g of shopBeams) g.visible = want;
   for (const g of [...shopBeams, ...robots.map(r => r.beam)]) {
     g.userData.pkg.rotation.y = T * 1.5; g.userData.pkg.position.y = 8 + Math.sin(T * 3) * .6;
@@ -2355,9 +2366,10 @@ function drawTag(v) { // the player's own order sign at the bottom of their view
   else if (r.cargo) {
     const O = ORDERS[r.cargo.o];
     title = `${O.icon} ${O.name}`; num = r.cargo.dest + 1;
-    sub = O.duo && !helper(r) ? 'Too heavy alone: get a teammate right next to you' : `Deliver to house ${num}${O.duo ? ' together' : ''}`;
+    sub = O.duo && !helper(r) ? (campaign && robots.length === 1 ? 'Heavy: slow going alone, but it gets there' : 'Too heavy alone: get a teammate right next to you') : `Deliver to house ${num}${O.duo ? ' together' : ''}`;
     late = r.cargo.t <= 0; right = late ? 'Late' : Math.ceil(r.cargo.t) + ' s';
-  } else { const b = nearShop(r); title = `Pick up at ${b.name[0] + b.name.slice(1).toLowerCase()}`; sub = 'Follow the green marker'; num = b.tag; numFill = b.color; }
+  } else if (presents.length) { title = '🎁 Collect the presents'; sub = `${presents.filter(p => !p.gone).length} left on the road. Mind the cars`; }
+  else { const b = nearShop(r); title = `Pick up at ${b.name[0] + b.name.slice(1).toLowerCase()}`; sub = 'Follow the green marker'; num = b.tag; numFill = b.color; }
   ctx.font = F(800, 17); const tw = ctx.measureText(title).width;
   ctx.font = F(600, 13); const sw = ctx.measureText(sub).width;
   ctx.font = F(900, 24); const rw = right ? ctx.measureText(right).width + 34 : 0;
@@ -2796,6 +2808,7 @@ function storyCheck() {
   console.assert(CHAPTERS.every(c => !c.orders || c.orders.length === ORDERS.length), 'order weights match ORDERS');
   console.assert(CHAPTERS.slice(1).every(c => c.darkness >= 0 && c.darkness <= .8), 'darkness in range');
   console.assert(ORDERS.filter(o => !o.story).length === 6, 'endless order set unchanged');
+  console.assert(CHAPTERS[2].goal === 'collect' && CHAPTERS[2].quota > 0, 'ch 2 collects presents from the road');
   console.assert(ORDERS.every(o => !o.story || o.home), 'story orders go home');
   console.assert(ORDERS.some(o => o.s1 && o.keep && o.home), "dad's sled exists, survives breakdowns, goes home");
   console.assert(CHAPTERS[8].goal === 'sled' && CHAPTERS[3].orders?.[ORDERS.findIndex(o => o.icon === '🎁')] > 0, 'ch 3 gives presents, ch 8 ends on the sled');
