@@ -46,6 +46,7 @@
   #hWx svg{width:24px;height:21px}
   #joinHint{position:fixed;right:70px;top:12px;padding:9px 13px 6px;font-size:14px;font-weight:600;pointer-events:none}
   #joinHint kbd{font-size:11px}
+  #bMusic{position:fixed;right:68px;top:12px;height:40px;border:0;font-size:14px;font-weight:800;padding:0 12px}
   #bPause{position:fixed;right:14px;top:12px;width:46px;height:40px;border:0;font-size:18px;font-weight:900;padding:0}
   #joinAsk{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);padding:12px 18px 9px;font-size:17px;font-weight:700;pointer-events:none;z-index:6;width:max-content;max-width:calc(100vw - 40px)}
   #hostPaused{position:fixed;left:50%;top:40%;transform:translateX(-50%);font-size:20px}
@@ -287,6 +288,7 @@
   <div class="actions"><button class="go" id="bRetry">Try again</button><button class="ghost mode" id="bMode2" hidden>Mode: Co-op</button></div>
 </div>
 
+<button class="ghost" id="bMusic" title="Music on (M)">🔇 Unmute music</button>
 <button class="ghost" id="bPause" aria-label="Menu (Esc)" title="Menu (Esc)">❚❚</button>
 <div class="plate yellow" id="joinAsk" hidden></div>
 <div class="plate yellow" id="hostPaused" hidden><b>The host paused the game</b></div>
@@ -994,9 +996,9 @@ addEventListener('keydown', e => {
   const bi = KB.findIndex(k => k.b === e.code);
   if (bi >= 0) confirmJoin({ kb: bi });
   if (e.code === 'Enter') pressStart(); // Space is a handbrake
-  const u = SHOP.find(u => e.code === 'Digit' + u.key);
+  const u = SHOP.find(u => u.key === (e.key === '=' ? '+' : e.key)); // '=' is '+' without shift on US keyboards
   if (u) buy(u.k);
-  if (e.code === 'KeyM') { musicOn = !musicOn; if (!musicOn) bump('music'); }
+  if (e.code === 'KeyM') toggleMusic();
 });
 addEventListener('keyup', e => keys.delete(e.code));
 addEventListener('blur', () => keys.clear());
@@ -1047,16 +1049,20 @@ const UPGRADES = [
   { k: 'motor', key: '2', name: '⚡ Stronger motor', desc: 'Drive faster' },
   { k: 'susp', key: '3', name: '🛞 Suspension', desc: 'Less damage, quicker out of potholes' },
   { k: 'battery', key: '4', name: '🔋 Bigger battery', desc: '+12 s per shift' },
+  { k: 'turbo', key: '5', name: '🚀 Rocket booster', desc: 'Longer, stronger boost that refills faster' },
+  { k: 'tesla', key: '6', name: '⚡ Tesla coil', desc: '+1 zap charge and longer reach' },
+  { k: 'heat', key: '7', name: '🔥 Heated wheels', desc: 'Melt ice patches by driving on them' },
+  { k: 'box', key: '8', name: '📦 Thermobox', desc: 'Longer deadlines, +10 % pay' },
 ];
 const COSMETICS = [
-  { k: 'pipo', key: '5', name: '🧶 Pipo hats', desc: 'Warm heads for every robot' },
-  { k: 'scarf', key: '6', name: '🧣 Scarves', desc: 'Very stylish' },
-  { k: 'fiflag', key: '7', name: '🇫🇮 Finnish flags', desc: 'Swap the orange flags' },
-  { k: 'gold', key: '8', name: '✨ Gold paint', desc: 'Pure bling' },
+  { k: 'pipo', key: '9', name: '🧶 Pipo hats', desc: 'Warm heads for every robot' },
+  { k: 'scarf', key: '0', name: '🧣 Scarves', desc: 'Very stylish' },
+  { k: 'fiflag', key: '+', name: '🇫🇮 Finnish flags', desc: 'Swap the orange flags' },
+  { k: 'gold', key: '-', name: '✨ Gold paint', desc: 'Pure bling' },
 ];
 const SHOP = [...UPGRADES, ...COSMETICS];
 const isStyle = k => COSMETICS.some(c => c.k === k);
-const freshUp = () => ({ tires: 0, motor: 0, susp: 0, battery: 0, pipo: 0, scarf: 0, fiflag: 0, gold: 0 });
+const freshUp = () => ({ tires: 0, motor: 0, susp: 0, battery: 0, turbo: 0, tesla: 0, heat: 0, box: 0, pipo: 0, scarf: 0, fiflag: 0, gold: 0 });
 up = freshUp();
 function buy(k) {
   if (state !== 'shop') return;
@@ -1161,7 +1167,7 @@ function startLevel(n) {
   level = n; setupLevel(n);
   time = 75 + n * 5 + up.battery * 12; delivered = 0;
   quota = 2 + n + (robots.length - 1) * 2;
-  robots.forEach(r => Object.assign(r, spawn(r.i), { vx: 0, vy: 0, a: 0, camYaw: 0, boost: 1, zaps: 3, cargo: null, hole: null, stun: 0, immune: 1, hp: 1, earn: 0 }));
+  robots.forEach(r => Object.assign(r, spawn(r.i), { vx: 0, vy: 0, a: 0, camYaw: 0, boost: 1, zaps: 3 + up.tesla, cargo: null, hole: null, stun: 0, immune: 1, hp: 1, earn: 0 }));
   weather = { k: null, t: 0 }; weatherIn = n >= 2 ? rnd(15, 35) : Infinity;
   mark = { ...stats }; // "clear a shift without X" is measured against this snapshot
   most('players', robots.length);
@@ -1254,7 +1260,7 @@ const ACH = [
   { k: 'earned',   i: '📈', n: 'Vuosikertymä',     d: 'Earn 20 000 € all time',                w: (s, t) => t.earn >= 20000 },
   { k: 'spend500', i: '🛒', n: 'Tuhlari',          d: 'Spend 500 € in one run',                w: s => s.spent >= 500 },
   { k: 'maxed',    i: '🔧', n: 'Täysin viritetty', d: 'Max out any upgrade',                   w: () => UPGRADES.some(u => up[u.k] >= 3) },
-  { k: 'allMax',   i: '⚙️', n: 'Tehdasasetukset ylitetty', d: 'Max out all four upgrades',     w: () => UPGRADES.every(u => up[u.k] >= 3) },
+  { k: 'allMax',   i: '⚙️', n: 'Tehdasasetukset ylitetty', d: 'Max out four upgrades in one run', w: () => UPGRADES.filter(u => up[u.k] >= 3).length >= 4 },
   { k: 'gold',     i: '👑', n: 'Bling',            d: 'Paint the team gold',                   w: () => up.gold >= 1 },
   { k: 'allStyle', i: '🧶', n: 'Tyylitietoinen',   d: 'Own every cosmetic at once',            w: () => COSMETICS.every(c => up[c.k] >= 1) },
   { k: 'poorShop', i: '🪙', n: 'Lama',             d: 'Reach the workshop with under 10 €',    w: (s, t) => t.poorShop >= 1 },
@@ -1415,7 +1421,7 @@ function damage(r, amt, msg) {
 function zap(r) {
   r.zaps -= 1; r.zapCd = .4; sfx('zap');
   const fx_ = Math.cos(r.a), fy = Math.sin(r.a);
-  let best = null, bd = 120;
+  let best = null, bd = 120 + 30 * up.tesla;
   for (const e of [...peds, ...kids, ...(pvp ? robots.filter(q => q !== r && !q.hole) : [])]) {
     if (e.mode === 'fall') continue;
     const dx = e.x - r.x, dy = e.y - r.y, d = Math.hypot(dx, dy);
@@ -1474,23 +1480,27 @@ function updRobot(r, dt) {
   // boost: ~2 s of turbo, recharges in ~7 s. handbrake: wheels lock, back end swings out
   const boosting = !!(inp.b && inp.t > 0 && r.boost > .02 && control);
   if (boosting && !r.boosting) sfx('boost');
-  r.boosting = boosting; r.boost = clamp(r.boost + (boosting ? -dt / 2 : dt / 7), 0, 1);
+  r.boosting = boosting; r.boost = clamp(r.boost + (boosting ? -dt / (2 + .7 * up.turbo) : dt / (7 - 1.5 * up.turbo)), 0, 1);
   // stun gun: 3 charges, one recharges every 6 s; zaps the nearest local, dog or kid in front
-  r.zaps = Math.min(3, r.zaps + dt / 6); r.zapCd -= dt;
+  r.zaps = Math.min(3 + up.tesla, r.zaps + dt / 6); r.zapCd -= dt;
   if (inp.z && !r.zPrev && control && r.zapCd <= 0 && r.zaps >= 1 && state === 'play') zap(r);
   r.zPrev = !!inp.z;
   const hb = !!inp.h;
   r.a += inp.s * 3.4 * (hb ? 1.7 : 1) * dt * control;
   const cx = Math.cos(r.a), sy = Math.sin(r.a);
-  const acc = Sf.acc * inp.t * (inp.t < 0 ? .6 : 1) * control * (boosting ? 1.9 : 1) * (hb ? .2 : 1);
+  const acc = Sf.acc * inp.t * (inp.t < 0 ? .6 : 1) * control * (boosting ? 1.9 + .2 * up.turbo : 1) * (hb ? .2 : 1);
   r.vx += cx * acc * dt; r.vy += sy * acc * dt;
-  const kF = hb ? Sf.kF + (Sf.ice ? .4 : 3) : Sf.kF, kL = hb ? Sf.kL * .2 : Sf.kL, max = Sf.max * (boosting ? 1.5 : 1);
+  const kF = hb ? Sf.kF + (Sf.ice ? .4 : 3) : Sf.kF, kL = hb ? Sf.kL * .2 : Sf.kL, max = Sf.max * (boosting ? 1.5 + .1 * up.turbo : 1);
   let f = r.vx * cx + r.vy * sy, l = -r.vx * sy + r.vy * cx;
   f *= Math.exp(-kF * dt); l *= Math.exp(-kL * dt);
   r.vx = f * cx - l * sy; r.vy = f * sy + l * cx;
   const sp = Math.hypot(r.vx, r.vy);
   if (sp > max) { const k = Math.max(max / sp, Math.exp(-3 * dt)); r.vx *= k; r.vy *= k; }
   r.x += r.vx * dt; r.y += r.vy * dt;
+  // heated wheels: stay on an ice patch and it melts away (the lake stays frozen)
+  if (up.heat && Sf.ice) for (const p of ice) if (!p.gone && ((r.x - p.x) / p.rx) ** 2 + ((r.y - p.y) / p.ry) ** 2 < 1 && (p.melt = (p.melt || 0) + dt * .6 * up.heat) >= 1) {
+    p.gone = true; if (p.mesh) p.mesh.visible = false; pop(r, '🔥 Ice melted', '#ffb35c'); sfx('escape');
+  }
   if (state === 'play') { // driving counters
     most('topSp', sp);
     if (Sf.ice) bump('iceT', dt);
@@ -1508,7 +1518,14 @@ function updRobot(r, dt) {
     const hit = pushOut(r, clamp(r.x, b.x, b.x + b.w), clamp(r.y, b.y, b.y + b.h), R);
     if (hit > 150) { damage(r, .08, surface(r.x, r.y) === 'ice' ? 'Hups!' : 'Auts!'); bump('bumps'); }
   }
-  for (const t of trees) if (pushOut(r, t.x, t.y, R + t.r) > 150) damage(r, .08, 'Auts!');
+  for (const t of trees) if (pushOut(r, t.x, t.y, R + t.r) > 150) {
+    damage(r, .08, 'Auts!');
+    // ponytail: half the time the tree drops its snow on you; being buried plays exactly like a pothole
+    if ((t.kind === 'spruce' || t.kind === 'birch') && r.immune <= 0 && Math.random() < .5) {
+      r.hole = 'snow'; r.esc = 0; r.vx = r.vy = 0; say(r, 'Lunta niskaan! ❄️', 3); sfx('hole');
+      return;
+    }
+  }
   r.x = clamp(r.x, R, W - R); r.y = clamp(r.y, R, H - R);
 
   if (state !== 'play') return;
@@ -1516,11 +1533,11 @@ function updRobot(r, dt) {
   if (!r.cargo && dist(r, SALEPA.door) < 45) {
     const dest = Math.random() * HOUSES.length | 0, o = pickOrder(), O = ORDERS[o];
     // each order has a deadline: arrive in time for the speed tip
-    r.cargo = { dest, o, cond: 1, t0: T, t: Math.round((8 + dist(SALEPA.door, HOUSES[dest].door) / 60) * (O.time || 1)) };
+    r.cargo = { dest, o, cond: 1, t0: T, t: Math.round((8 + dist(SALEPA.door, HOUSES[dest].door) / 60) * (O.time || 1) * (1 + .15 * up.box)) };
     say(r, `${O.icon} → ${dest + 1}`); pop(r, O.name, '#fff'); sfx('pickup');
   } else if (r.cargo && dist(r, HOUSES[r.cargo.dest].door) < 45 && (!isDuo(r) || helper(r))) {
     const c = r.cargo, O = ORDERS[c.o], late = c.t <= 0, tipX = O.tipX || 1;
-    const pay = (late ? 10 : 20) + (O.bonus || 0) + Math.round(15 * c.cond) + (late ? 0 : Math.min(20 * tipX, Math.round(c.t * tipX)));
+    const pay = Math.round(((late ? 10 : 20) + (O.bonus || 0) + Math.round(15 * c.cond) + (late ? 0 : Math.min(20 * tipX, Math.round(c.t * tipX)))) * (1 + .1 * up.box));
     money += pay; score += pay; r.earn += pay; delivered += O.duo ? 2 : 1;
     if (O.duo) { const h = helper(r); say(h, 'Hyvä tiimi! 🛋️'); pop(h, '🛋️ Teamwork', '#9fd3ff'); }
     pop(r, `+${pay} €${late ? ' (late)' : ''}`, late ? '#ff9b9b' : r.color);
@@ -1901,7 +1918,7 @@ function broadcast(dt) {
   netT = 0;
   const m = { type: 's', st: state, pvp, pz: paused, level, time, quota, delivered, score, bonus, money, up, banner, bannerT, best,
     r: robots.map(r => ({ id: r.id, i: r.i, owner: r.owner, x: r.x, y: r.y, a: r.a, vx: r.vx, vy: r.vy, cargo: r.cargo,
-                          hole: !!r.hole, esc: r.esc, stun: r.stun, say: r.say, sayT: r.sayT, bo: r.boost, bz: r.boosting, zp: r.zaps, hp: r.hp, e: r.earn, tw: r.towT > 0 ? r.tow : -1 })),
+                          hole: r.hole === 'snow' ? 'snow' : !!r.hole, esc: r.esc, stun: r.stun, say: r.say, sayT: r.sayT, bo: r.boost, bz: r.boosting, zp: r.zaps, hp: r.hp, e: r.earn, tw: r.towT > 0 ? r.tow : -1 })),
     c: cars.map(c => c.x), fx: outbox.splice(0),
     p: peds.map(p => ({ x: p.x, y: p.y, a: p.a, m: p.mode, k: p.kickT > 0, mv: p.moving, s: p.say, st: p.sayT })),
     kd: kids.map(k => ({ a: k.a, th: k.throwT, s: k.say, st: k.sayT, z: k.zapT > 0 })), b: balls, wx: weather,
@@ -1952,7 +1969,7 @@ function sync(dt) {
     r.body.position.y = r.hole ? -1 : 0;
     r.body.rotation.x = r.hole ? Math.sin(T * 18) * .12 : 0;
     r.body.rotation.z = r.stun > 0 ? Math.sin(T * 30) * .15 : 0;
-    r.flame.visible = !!r.boosting; r.flame.scale.set(1, .8 + Math.random() * .5, 1);
+    r.flame.visible = !!r.boosting; r.flame.scale.set(1 + .25 * up.turbo, (.8 + Math.random() * .5) * (1 + .35 * up.turbo), 1 + .25 * up.turbo);
     r.pipo.visible = !!up.pipo; r.scarf.visible = !!up.scarf; r.fiFlag.visible = !!up.fiflag; r.fl.visible = !up.fiflag;
     r.shell.material = up.gold ? goldMat : mat('#f4f4f2');
     if (!r.hole && (!r.lt || Math.hypot(r.x - r.lt.x, r.y - r.lt.y) > 5)) { // wheel tracks in the snow
@@ -2088,7 +2105,7 @@ function drawUI(vs) {
 function drawTag(v) { // the player's own order sign at the bottom of their view
   const r = v.r, cx = v.x + v.w / 2, by = v.y + v.h - 14;
   let title, sub, num = null, numFill = BLUE, right = '', late = false;
-  if (r.hole) { title = 'Stuck in a pothole'; sub = pvp ? 'Wiggle out: nobody is coming to help' : 'Wiggle out, or wait for a friend to tow you'; }
+  if (r.hole) { title = r.hole === 'snow' ? 'Buried in snow' : 'Stuck in a pothole'; sub = pvp ? 'Wiggle out: nobody is coming to help' : 'Wiggle out, or wait for a friend to tow you'; }
   else if (r.cargo) {
     const O = ORDERS[r.cargo.o];
     title = `${O.icon} ${O.name}`; num = r.cargo.dest + 1;
@@ -2131,10 +2148,11 @@ function drawTag(v) { // the player's own order sign at the bottom of their view
   ctx.fillText('Boost', px + 11, py + 13); ctx.fillText('Zap', px + 146, py + 13);
   ctx.fillStyle = '#d8e0e8'; rr(px + 50, py + 8, 84, 8, 2); ctx.fill();
   ctx.fillStyle = r.boost > .02 ? BLUE : '#9aa5b1'; rr(px + 50, py + 8, 84 * r.boost, 8, 2); ctx.fill();
-  for (let k = 0; k < 3; k++) {
-    const f = clamp((r.zaps ?? 3) - k, 0, 1), zx = px + 172 + k * 17;
-    ctx.fillStyle = '#d8e0e8'; rr(zx, py + 6, 12, 12, 2); ctx.fill();
-    if (f > 0) { ctx.fillStyle = f >= 1 ? '#0a8fa8' : '#8fcfda'; rr(zx, py + 18 - 12 * f, 12, 12 * f, 2); ctx.fill(); }
+  const nz = 3 + up.tesla, zs = 51 / nz, zw = zs - (nz > 3 ? 2 : 5); // tesla coil adds pips, squeeze them in
+  for (let k = 0; k < nz; k++) {
+    const f = clamp((r.zaps ?? 3) - k, 0, 1), zx = px + 172 + k * zs;
+    ctx.fillStyle = '#d8e0e8'; rr(zx, py + 6, zw, 12, 2); ctx.fill();
+    if (f > 0) { ctx.fillStyle = f >= 1 ? '#0a8fa8' : '#8fcfda'; rr(zx, py + 18 - 12 * f, zw, 12 * f, 2); ctx.fill(); }
   }
 }
 function drawLabels(v) {
@@ -2228,6 +2246,10 @@ const ICONS = { // white pictograms for the workshop cards
   motor: '<path d="M13 2L4 14h7l-1 8 9-12h-7z" fill="#fff" stroke="none"/>',
   susp: '<path d="M7 3h10M7 21h10M8 6l8 2-8 2 8 2-8 2 8 2-8 2"/>',
   battery: '<rect x="2" y="7" width="18" height="10" rx="2"/><path d="M22 10v4M6 12h7"/>',
+  turbo: '<path d="M12 2c4 3 5 8 3 13H9C7 10 8 5 12 2z"/><circle cx="12" cy="9" r="1.8"/><path d="M9 13l-3 3 1-5M15 13l3 3-1-5M10 18l2 4 2-4"/>',
+  tesla: '<path d="M9 22h6M10 22V11M14 22V11M8 11h8M8 8h8"/><circle cx="12" cy="4" r="2" fill="#fff"/><path d="M5 2l2 3-2 2 2 3M19 2l-2 3 2 2-2 3"/>',
+  heat: '<path d="M12 2c1 4 6 6 6 12a6 6 0 01-12 0c0-3 2-5 3-6 0 2 1 3 2 3 0-3-1-6 1-9z"/>',
+  box: '<rect x="3" y="10" width="18" height="11" rx="1.5"/><path d="M3 14h18M8 7c0-1.5 1-1.5 1-3M12 7c0-1.5 1-1.5 1-3M16 7c0-1.5 1-1.5 1-3"/>',
   pipo: '<path d="M4 18a8 8 0 0116 0z"/><path d="M3 18h18v3H3z"/><circle cx="12" cy="6" r="2.4" fill="#fff"/>',
   scarf: '<path d="M4 7h16v4H4zM14 11v10h4V11"/>',
   fiflag: '<path d="M4 3v19"/><rect x="4" y="4" width="16" height="11" fill="#fff" stroke="none"/><path d="M10 4v11M4 9.5h16" stroke="#0b4f9c" stroke-width="2.6"/>',
@@ -2315,6 +2337,7 @@ function updateDOM() {
   }
   $('hostPaused').hidden = !(role === 'guest' && hostPaused && play);
   $('bPause').hidden = menuOpen;
+  $('bMusic').hidden = menuOpen || musicOn;
   if (menuOpen) updateMenu();
   // shift sign drops in when a new shift starts
   if (play && bannerT > lastBannerT + .5) {
@@ -2455,7 +2478,13 @@ for (const [id, k] of [['tBoost', 'b'], ['tBrake', 'h'], ['tZap', 'z']]) {
 }
 
 // ---------- music: an original little polka loop, M toggles ----------
-let musicOn = true, musicNext = 0, musicStep = 0;
+let musicOn = false, musicNext = 0, musicStep = 0; // starts muted; the corner button prompts to unmute
+function toggleMusic() {
+  musicOn = !musicOn;
+  if (!musicOn) bump('music');
+  else { beep(880, .06); ac?.resume?.(); } // the click/key is the user gesture that lets audio start
+}
+$('bMusic').onclick = e => { toggleMusic(); e.currentTarget.blur(); };
 const MEL = [12, 15, 19, 15, 17, 15, 12, null, 12, 15, 19, 22, 24, 22, 19, null, 19, 17, 15, 17, 19, null, 15, 12, 10, 12, 15, 12, 7, null, 12, null];
 const BASS = [0, 0, -4, -4, -2, -2, 0, 0];
 function musicTick() {
