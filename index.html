@@ -1307,7 +1307,18 @@ const ACH = [
   { k: 'pulla',    i: '🥐', n: 'Mummon pulla',     d: 'Get pulla from a grandma',              w: (s, t) => t.pulla >= 1 },
   { k: 'pulla10',  i: '🧁', n: 'Pullakuski',       d: 'Collect 10 pullas all time',            w: (s, t) => t.pulla >= 10 },
   { k: 'music',    i: '🎵', n: 'Hiljaisuus',       d: 'Turn the music off',                    w: (s, t) => t.music >= 1 },
-  { k: 'half',     i: '🌟', n: 'Puolimatka',       d: 'Unlock 40 achievements',                w: () => achDone.size >= 40 },
+  { k: 'del100',   i: '🏗️', n: 'Satanen putkeen',  d: 'Deliver 100 orders in one run',         w: s => s.del >= 100 },
+  { k: 'streak25', i: '🎳', n: 'Pitkä putki',      d: '25 deliveries in a row without a scratch', w: s => s.streakMax >= 25 },
+  { k: 'ontime250',i: '🕰️', n: 'Täsmällinen',      d: 'Deliver 250 orders on time all time',   w: (s, t) => t.ontime >= 250 },
+  { k: 'rich6000', i: '💸', n: 'Miljonäärirobotti', d: 'Earn 6000 € in one run',               w: () => score >= 6000 },
+  { k: 'buys20',   i: '🧾', n: 'Kanta-asiakas',    d: 'Buy 20 things at the workshop all time', w: (s, t) => t.buys >= 20 },
+  { k: 'shift15',  i: '🌠', n: 'Kevät ei tule',    d: 'Reach shift 15',                        w: () => level >= 15 },
+  { k: 'runs100',  i: '♾️', n: 'Elämäntapa',       d: 'Start 100 runs all time',               w: (s, t) => t.runs >= 100 },
+  { k: 'peds10',   i: '🚶', n: 'Rauhanrikkoja',    d: 'Zap 10 locals in one run',              w: s => s.peds >= 10 },
+  { k: 'pvp1',     i: '🥊', n: 'Kaksintaistelu',   d: 'Play a PvP match',                      w: (s, t) => t.pvp >= 1 },
+  { k: 'pvpWin',   i: '🏆', n: 'Kortteli on minun', d: 'Win a PvP match',                      w: (s, t) => t.pvpWin >= 1 },
+  { k: 'rival10',  i: '🎯', n: 'Kilpailija kyykkyyn', d: 'Zap rival robots 10 times in one run', w: s => s.rivals >= 10 },
+  { k: 'half',     i: '🌟', n: 'Puolimatka',       d: 'Unlock 50 achievements',                w: () => achDone.size >= 50 },
   { k: 'all',      i: '🎖️', n: 'Kaikki kasassa',   d: 'Unlock everything else',                w: () => achDone.size >= ACH.length - 1 },
 ];
 let achDone = new Set();
@@ -1411,7 +1422,7 @@ function zap(r) {
   }
   fx({ k: 'zap', x1: r.x, y1: r.y, x2: best ? best.x : r.x + fx_ * 70, y2: best ? best.y : r.y + fy * 70 });
   if (!best) return;
-  if (robots.includes(best)) { best.stun = Math.max(best.stun, 1.5); best.vx = best.vy = 0; say(best, 'Bzzzt! ⚡', 1.4); return; }
+  if (robots.includes(best)) { best.stun = Math.max(best.stun, 1.5); best.vx = best.vy = 0; say(best, 'Bzzzt! ⚡', 1.4); bump('rivals'); return; }
   best.zapT = 3; say(best, best.kind === 'dog' ? 'Vuh?' : pick(['Bzzzt!', 'Aijai!', 'Auh!']), 1.4);
   bump('zaps');
   bump(best.kind === 'dog' ? 'dogs' : best.mode ? 'peds' : 'kids'); // only pedestrians carry a mode
@@ -1740,6 +1751,10 @@ function update(dt) {
       if (!pvp) { // a pvp match is not a team run: keep it off the best run and the leaderboard
         if (score > best) { best = score; try { localStorage.setItem('ruokarobo-best', best); } catch (e) {} }
         recordRun();
+      } else { // pvp: the winner counts only on the machine that drives it
+        bump('pvp');
+        const [a, b] = [...robots].sort((x, y) => y.earn - x.earn);
+        if (a?.owner === myOwner && (!b || a.earn > b.earn)) bump('pvpWin');
       }
       saveTot();
       sfx('over');
