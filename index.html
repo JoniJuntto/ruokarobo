@@ -1420,6 +1420,8 @@ const CHAPTERS = [
     intro: 'The sky is getting lighter. One present is left, the one that was always meant for Eetu: a red sled. Only S-1 can take it.' },
 ];
 const ENDING = { title: 'The end', intro: 'S-1 drives back to the warehouse as the sky turns pink.\nIn the window with the paper star, Eetu is still waving.' };
+// chapter 10: end credits, after the ending card
+const CREDITS = { title: 'Credits', intro: 'Ruokarobo\n\nSpecial thanks\nOhDensy\njuhistwitch\nmuumitikkari_\ncrazywako\nHemmuliX\nkekewut\n\nThanks for playing!' };
 // chapter override, or the endless-shift value when there is none
 const chap = () => campaign ? CHAPTERS[chapter] : null;
 const cv = (k, v) => chap()?.[k] ?? v;
@@ -1443,7 +1445,7 @@ function playChapter() {
   startLevel(chapter);
 }
 // dev only (?chapter=N): skip to the end of a chapter for testing
-if (urlChapter) window.__story = { drain: () => { time = .1; }, clear: () => { delivered = quota; }, setDel: n => { delivered = n; },
+if (urlChapter) window.__story = { drain: () => { time = .1; }, end: () => { chapter = 9; state = 'story'; stateT = 0; }, clear: () => { delivered = quota; }, setDel: n => { delivered = n; },
   tp: (i, x, y) => Object.assign(robots[i], { x, y, vx: 0, vy: 0, immune: 0, hitCd: 0 }), cargo: i => robots[i].cargo && { ...robots[i].cargo, icon: ORDERS[robots[i].cargo.o].icon },
   doors: () => ({ salepa: SHOPS[0].door, home: HOUSES[KIDS_HOME].door, puoti: SHOPS[1].door }), wreck: i => { robots[i].hp = .01; robots[i].hitCd = 0; robots[i].immune = 0; damage(robots[i], 1, 'test'); },
   goal: () => goalDone, hook: i => hook(robots[i]), drop: i => removeRobot(robots[i]), robots: () => robots.map(r => ({ id: r.id, owner: r.owner, mine: r.owner === myOwner, x: Math.round(r.x), y: Math.round(r.y) })), face: (i, x, y) => { const r = robots[i]; r.a = Math.atan2(y - r.y, x - r.x); }, eetu: () => eetu && { state: eetu.state, say: eetu.say, x: eetu.x, y: eetu.y }, pres: () => presents.map(({ x, y, gone }) => ({ x, y, gone })), get: () => ({ state, chapter, level, quota, delivered, money, up, campaign, time, darkness, wx: weather.k, santaIn, ice: ice.length, holes: holes.length, cars: cars.length, peds: peds.length, kids: kids.map(k => [Math.round(k.x), Math.round(k.y)]), plow: !!plow }) };
@@ -1555,6 +1557,7 @@ function pressStart() {
   else if (state === 'story' && stateT > .5) {
     if (chapter === 0) { chapter = 1; stateT = 0; }
     else if (chapter <= 8) playChapter();
+    else if (chapter === 9) { chapter = 10; stateT = 0; } // ending → credits
     else { try { localStorage.removeItem('ruokarobo-story'); } catch (e) {} campaign = false; state = 'title'; } // the ending card
   }
 }
@@ -3091,7 +3094,7 @@ function updateDOM() {
   // story card: prologue, chapter intros, ending
   $('story').hidden = state !== 'story';
   if (state === 'story') {
-    const c = CHAPTERS[chapter] || ENDING;
+    const c = CHAPTERS[chapter] || (chapter === 9 ? ENDING : CREDITS);
     if (chapter > 8 && !skins.own.includes('isi')) { // the whole story played: dad's skin
       skins.own.push('isi'); saveSkins(); renderSkins();
       achToast({ i: '👔', n: 'Isi unlocked', d: 'Ultra Rare skin. Pick it under Skins.' });
@@ -3103,7 +3106,7 @@ function updateDOM() {
     setText('storyLbl', chapter >= 1 && chapter <= 8 ? `Chapter ${chapter} of 8` : '');
     setText('storyTitle', c.title); setText('storyText', c.intro);
     $('bStoryGo').disabled = role === 'guest' || stateT < .5;
-    setText('bStoryGo', role === 'guest' ? 'Waiting for the host' : chapter > 8 ? 'Back to the title' : chapter === 0 ? 'Continue' : 'Start chapter');
+    setText('bStoryGo', role === 'guest' ? 'Waiting for the host' : chapter === 9 ? 'Credits' : chapter > 9 ? 'Back to the title' : chapter === 0 ? 'Continue' : 'Start chapter');
   }
   // run over
   $('over').hidden = state !== 'over';
