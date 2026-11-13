@@ -1793,10 +1793,10 @@ function snowball(r) { // pvp only: lob a snowball at the nearest rival ahead, o
   const tx = q ? q.x + q.vx * ft : r.x + fx_ * 160 + r.vx * ft, ty = q ? q.y + q.vy * ft : r.y + fy * 160 + r.vy * ft; // lead the target
   balls.push({ x: r.x, y: r.y, vx: (tx - r.x) / ft, vy: (ty - r.y) / ft, h0, vh: (.5 * G * ft * ft - (h0 - .3)) / ft, age: 0, ft, o: r.id });
 }
-// power-ups fire the moment you drive through an item box; 3G only shows up when there's someone to lag
+// power-ups fire the moment you drive through an item box. pvp only, so there's always a rival
 function powerUp(r) {
   const others = robots.filter(q => q !== r);
-  const k = pick(others.length ? ['3g', '3g', 'turbo', 'star', 'booze', 'storm', 'refill', 'pulla', 'hole'] : ['turbo', 'star', 'refill', 'pulla']);
+  const k = Math.random() < .03 ? 'booze' : pick(['3g', '3g', 'turbo', 'star', 'storm', 'refill', 'pulla', 'hole']); // booze is the 3 % jackpot
   sfx('pickup');
   if (k === 'turbo') { r.mt = 2.5; r.boost = 1; say(r, '🍄 Turbo!', 1.6); sfx('boost'); }
   if (k === 'star') { r.immune = 6; r.stun = 0; say(r, '⭐ Koskematon!', 2); }
@@ -2240,7 +2240,7 @@ function update(dt) {
     const r = !l.got && robots.find(r => !r.hole && Math.hypot(r.x - l.x, r.y - l.y) < 22);
     if (r) { say(r, l.ham ? '🌡️ Kinkkumittari!' : '🎁 Skin case!', 2); fx({ k: 'loot', i, o: r.owner, x: l.x, y: l.y }); }
   }
-  for (const b of BOXES) { // item boxes respawn 8 s after someone drives through
+  if (pvp) for (const b of BOXES) { // item boxes (pvp only) respawn 8 s after someone drives through
     b.t = Math.max(0, b.t - dt);
     const r = state === 'play' && !b.t && robots.find(r => !r.hole && Math.hypot(r.x - b.x, r.y - b.y) < 20);
     if (r) { b.t = 8; fx({ k: 'burst', x: b.x, y: b.y, n: 14 }); powerUp(r); }
@@ -2569,7 +2569,7 @@ function sync(dt) {
   const fly = balls.filter(b => b.age < b.ft), sb = fly.filter(b => !b.bot), bt = fly.filter(b => b.bot);
   ballPool.forEach((m, i) => { const b = sb[i]; m.visible = !!b; if (b) place(m, b.x, b.y, Math.max(.2, ballH(b))); });
   bottlePool.forEach((m, i) => { const b = bt[i]; m.visible = !!b; if (b) { place(m, b.x, b.y, Math.max(.2, ballH(b))); m.rotation.z = b.age * 14; } });
-  for (const b of BOXES) if (b.mesh) { b.mesh.visible = !b.t; b.mesh.rotation.set(T * .7, T * 1.3, 0); b.mesh.position.y = 1.6 + Math.sin(T * 2.5 + b.x) * .2; }
+  for (const b of BOXES) if (b.mesh) { b.mesh.visible = pvp && !b.t; b.mesh.rotation.set(T * .7, T * 1.3, 0); b.mesh.position.y = 1.6 + Math.sin(T * 2.5 + b.x) * .2; }
   boxMat.color.setHSL(T * .15 % 1, .9, .6);
   for (const l of loot) if (l.mesh) { l.mesh.visible = !l.got; l.mesh.rotation.y = T * 1.5; l.mesh.position.y = .7 + Math.sin(T * 3) * .15; }
   if (plow?.mesh) { place(plow.mesh, plow.x, plow.y); plow.mesh.rotation.y = -plow.a; plow.beacon.visible = (T * 4 | 0) % 2 === 0; }
