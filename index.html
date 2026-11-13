@@ -260,7 +260,7 @@
     <span id="joinBox"><input id="code" placeholder="Code" maxlength="5" autocomplete="off" aria-label="Room code"><button class="ghost" id="bJoin">Join</button></span>
   </div>
   <p id="status" class="note"></p>
-  <div class="foot note"><span id="bestLine"></span><span><kbd>M</kbd> music on or off</span></div>
+  <div class="foot note"><span id="bestLine"></span><span><kbd>M</kbd> music on or off</span><span><kbd>Esc</kbd> pause and settings</span></div>
 </div>
 
 <div id="shop" hidden>
@@ -284,6 +284,28 @@
   <p id="overRank"></p>
   <div class="stats" id="overStats"><div><b id="overEarned">0 €</b><span>earned this run</span></div><div><b id="overBest">0 €</b><span>best run</span></div></div>
   <div class="actions"><button class="go" id="bRetry">Try again</button><button class="ghost mode" id="bMode2" hidden>Mode: Co-op</button></div>
+</div>
+
+<button class="ghost" id="bPause" aria-label="Menu (Esc)" title="Menu (Esc)">❚❚</button>
+<div class="plate yellow" id="joinAsk" hidden></div>
+<div class="plate yellow" id="hostPaused" hidden><b>The host paused the game</b></div>
+
+<div id="pause" hidden>
+  <div class="plate white" role="dialog" aria-labelledby="pauseTitle">
+    <h2 id="pauseTitle">Paused</h2>
+    <p id="pauseNote" class="note" hidden>The host's game keeps running while this menu is open.</p>
+    <div class="row">
+      <button class="go" id="bResume">Resume</button>
+      <button class="ghost" id="bQuit">Quit to title</button>
+    </div>
+    <h3>Settings</h3>
+    <label>Music <input type="range" id="sMusic" min="0" max="1" step=".05"></label>
+    <label>Sound effects <input type="range" id="sSfx" min="0" max="1" step=".05"></label>
+    <label>Shadows <input type="checkbox" id="sShadows"></label>
+    <label>Resolution <select id="sScale"><option value="1">Full</option><option value=".75">75 %</option><option value=".5">50 % (fastest)</option></select></label>
+    <h3>Online / debug</h3>
+    <pre id="net"></pre>
+  </div>
 </div>
 
 <div id="achs"></div>
@@ -847,10 +869,10 @@ function buildHazards() {
 // ---------- players & input ----------
 const COLORS = ['#ff7a1a', '#2d9cff', '#2fbf6a', '#e84393', '#f5c400', '#9b59b6', '#00c2c7', '#e74c3c'];
 const KB = [
-  { name: 'WASD', u: 'KeyW', d: 'KeyS', l: 'KeyA', r: 'KeyD', b: 'ShiftLeft', h: 'Space', z: 'KeyE' },
-  { name: 'Arrows', u: 'ArrowUp', d: 'ArrowDown', l: 'ArrowLeft', r: 'ArrowRight', b: 'ShiftRight', h: 'Period', z: 'Comma' },
-  { name: 'IJKL', u: 'KeyI', d: 'KeyK', l: 'KeyJ', r: 'KeyL', b: 'KeyU', h: 'KeyO', z: 'KeyP' },
-  { name: 'TFGH', u: 'KeyT', d: 'KeyG', l: 'KeyF', r: 'KeyH', b: 'KeyR', h: 'KeyY', z: 'KeyV' },
+  { name: 'WASD', u: 'KeyW', d: 'KeyS', l: 'KeyA', r: 'KeyD', b: 'ShiftLeft', h: 'Space', z: 'KeyE', bn: 'Shift' },
+  { name: 'Arrows', u: 'ArrowUp', d: 'ArrowDown', l: 'ArrowLeft', r: 'ArrowRight', b: 'ShiftRight', h: 'Period', z: 'Comma', bn: 'R-Shift' },
+  { name: 'IJKL', u: 'KeyI', d: 'KeyK', l: 'KeyJ', r: 'KeyL', b: 'KeyU', h: 'KeyO', z: 'KeyP', bn: 'U' },
+  { name: 'TFGH', u: 'KeyT', d: 'KeyG', l: 'KeyF', r: 'KeyH', b: 'KeyR', h: 'KeyY', z: 'KeyV', bn: 'R' },
 ];
 // ponytail: the street is sized for 4; grow the map before raising this
 const MAX_PLAYERS = 4;
@@ -911,7 +933,10 @@ function addRobot({ owner = 'H', ctrl = null, lid = 0, id = nextId++, i }) {
   i ??= COLORS.findIndex((_, k) => !robots.some(r => r.i === k));
   const r = { id, owner, ctrl, lid, i, color: COLORS[i], ...spawn(i), a: 0, vx: 0, vy: 0, cargo: null, hole: null, esc: 0,
               immune: 1, hitCd: 0, stun: 0, say: '', sayT: 0, boost: 1, boosting: false, zaps: 3, zapCd: 0, hp: 1, earn: 0 };
-  buildRobot(r); robots.push(r); return r;
+  buildRobot(r); robots.push(r);
+  achToast({ i: `<i style="display:block;width:24px;height:24px;border-radius:5px;background:${r.color}"></i>`, n: `Player ${i + 1} joined`,
+             d: owner === myOwner ? 'On this machine' : 'Online' }, false);
+  return r;
 }
 function removeRobot(r) {
   scene.remove(r.mesh, r.arrow, r.beam);
@@ -926,6 +951,21 @@ function join(ctrl) {
   }
   if (robots.length >= MAX_PLAYERS) return;
   const r = addRobot({ ctrl }); say(r, 'Moi!'); sfx('join'); most('players', robots.length);
+}
+// the first player joins straight away; anyone after that has to confirm with their own Boost button,
+// so a stray arrow key (or a phantom gamepad) never splits the screen
+let askJoin = null; // { ctrl, t }
+const sameCtrl = (a, b) => a.kb === b.kb && a.pad === b.pad;
+function wantJoin(ctrl) {
+  if (menuOpen || myCtrls().some(c => sameCtrl(c, ctrl))) return;
+  if (!myCtrls().length) return join(ctrl);
+  if (role !== 'guest' && robots.length >= MAX_PLAYERS) return;
+  if (askJoin && sameCtrl(askJoin.ctrl, ctrl)) return void (askJoin.t = 6);
+  askJoin = { ctrl, t: 6 }; beep(520, .08);
+}
+function confirmJoin(ctrl) {
+  if (!askJoin || !sameCtrl(askJoin.ctrl, ctrl)) return false;
+  askJoin = null; join(ctrl); return true;
 }
 const ZERO = { t: 0, s: 0 };
 const input = r => r.owner === 'H' ? ctrlInput(r.ctrl) : remoteIn[r.id] || ZERO;
@@ -943,12 +983,15 @@ function ctrlInput(ctrl) {
   return { t, s, b: b(0) || b(5), h: b(1) || b(4), z: b(2) || b(3) };
 }
 addEventListener('keydown', e => {
-  if (e.target.tagName === 'INPUT') { if (e.code === 'Enter') joinRoom(codeIn.value); return; }
+  if (e.code === 'Escape' && !e.repeat) { if (e.target.tagName === 'INPUT') e.target.blur(); return setMenu(!menuOpen); }
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') { if (e.code === 'Enter' && e.target === codeIn) joinRoom(codeIn.value); return; }
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
   keys.add(e.code);
-  if (e.repeat) return;
+  if (e.repeat || menuOpen) return;
   const i = KB.findIndex(k => [k.u, k.d, k.l, k.r].includes(e.code));
-  if (i >= 0 && !myCtrls().some(c => c.kb === i)) join({ kb: i });
+  if (i >= 0) wantJoin({ kb: i });
+  const bi = KB.findIndex(k => k.b === e.code);
+  if (bi >= 0) confirmJoin({ kb: bi });
   if (e.code === 'Enter') pressStart(); // Space is a handbrake
   const u = SHOP.find(u => e.code === 'Digit' + u.key);
   if (u) buy(u.k);
@@ -960,17 +1003,26 @@ const padPrev = {};
 function pollPads() {
   for (const gp of navigator.getGamepads?.() || []) {
     if (!gp) continue;
-    const prev = padPrev[gp.index] || [], now = gp.buttons.map(b => b.pressed);
+    const now = gp.buttons.map(b => b.pressed);
+    // first sighting is the baseline, not a press: Firefox on macOS exposes some HID devices
+    // as gamepads with buttons stuck down, and those used to join as extra players
+    const prev = padPrev[gp.index] || now;
     padPrev[gp.index] = now;
-    const edge = k => now[k] && !prev[k];
-    if (!myCtrls().some(c => c.pad === gp.index)) { if (now.some((p, k) => p && !prev[k])) join({ pad: gp.index }); continue; }
-    if (edge(9) || (state === 'title' && edge(0))) pressStart();
+    const edge = k => now[k] && !prev[k], ctrl = { pad: gp.index };
+    if (!myCtrls().some(c => c.pad === gp.index)) {
+      if (edge(0) && confirmJoin(ctrl)) continue;
+      if (now.some((p, k) => p && !prev[k])) wantJoin(ctrl);
+      continue;
+    }
+    if (edge(9)) state === 'play' || menuOpen ? setMenu(!menuOpen) : pressStart();
+    else if (menuOpen && edge(1)) setMenu(false);
+    else if (state === 'title' && !menuOpen && edge(0)) pressStart();
   }
 }
 
 let ac;
 function beep(f, d = .1, delay = 0, type = 'square', vol = .05) {
-  try { ac = ac || new AudioContext(); tone(f, d, ac.currentTime + delay, type, vol); } catch (e) { /* no audio, no problem */ }
+  try { ac = ac || new AudioContext(); if (cfg.sfx) tone(f, d, ac.currentTime + delay, type, vol * cfg.sfx); } catch (e) { /* no audio, no problem */ }
 }
 function tone(f, d, t0, type, vol) {
   const o = ac.createOscillator(), g = ac.createGain();
@@ -1283,37 +1335,25 @@ function unlock(a) {
   try { localStorage.setItem('ruokarobo-ach', JSON.stringify([...achDone])); } catch (e) {}
   saveTot();
 }
-function achToast(a) {
+function achToast(a, sound = true) { // also announces players joining (sound off: join has its own)
   const el = document.createElement('div');
   el.className = 'plate yellow ach';
   el.innerHTML = `<span class="ic">${a.i}</span><span><b>${a.n}</b><small>${a.d}</small></span>`;
   document.getElementById('achs').append(el);
   setTimeout(() => el.remove(), 4200);
-  SFX.ach(); // local only: an achievement is this machine's, not the whole room's
+  if (sound) SFX.ach(); // local only: an achievement is this machine's, not the whole room's
 }
 
 // ---------- leaderboard ----------
-// Fill BOARD in and every machine shares one board; leave it blank and the board stays on
-// this one. Supabase's anon key is meant to ship in client code — the table's RLS policies
-// decide what it may do, so set the table up like this:
-//   create table scores (
-//     id     bigserial primary key,
-//     name   text not null check (char_length(name) between 1 and 12),
-//     score  int  not null check (score >= 0 and score < 100000),
-//     shift  int  not null check (shift > 0),
-//     robots int  not null check (robots between 1 and 8),
-//     at     timestamptz not null default now());
-//   alter table scores enable row level security;
-//   create policy "anyone reads"   on scores for select using (true);
-//   create policy "anyone inserts" on scores for insert with check (true);
-// ponytail: anyone can POST a score straight from the console — that is what a page with no
-// server of its own means. Sign runs in an edge function if the board ever has to be trusted.
-const BOARD = {
-  url: '', // e.g. 'https://abcdefghijkl.supabase.co/rest/v1/scores'
-  key: '', // that project's anon / publishable key
-};
-const boardOn = () => !!(BOARD.url && BOARD.key);
-const boardHdrs = () => ({ apikey: BOARD.key, Authorization: `Bearer ${BOARD.key}` });
+// The board is served by server/board.js next to the game: GET returns the top ten, POST adds
+// a run. It keeps the top 50 in one JSON file — a database would be more moving parts than a
+// score list is worth.
+// ponytail: anyone can POST a score straight from the console. The server clamps the numbers
+// and rate-limits each address, which is as far as a page with no login can get.
+// Same-origin, so the board works on whatever host serves the game and needs no CORS. Where
+// nothing answers (opening the file locally, say) the fetch fails and the local board shows.
+const BOARD = { url: '/api/scores' };
+const boardOn = () => !!BOARD.url;
 let localBoard = [];
 try { localBoard = JSON.parse(localStorage.getItem('ruokarobo-board') || '[]'); } catch (e) {}
 let board = localBoard;                                 // whatever is on screen right now
@@ -1326,7 +1366,7 @@ const rankRow = () => { lastRank = lastRow ? board.findIndex(b => b.n === lastRo
 async function loadBoard() {
   if (!boardOn()) return;
   try {
-    const r = await fetch(`${BOARD.url}?select=name,score,shift,robots&order=score.desc&limit=10`, { headers: boardHdrs() });
+    const r = await fetch(`${BOARD.url}?limit=10`);
     if (!r.ok) throw new Error('HTTP ' + r.status);
     board = (await r.json()).map(x => ({ s: x.score | 0, lv: x.shift | 0, p: x.robots | 0, n: String(x.name ?? '') }));
     boardState = 'global';
@@ -1335,7 +1375,7 @@ async function loadBoard() {
 }
 async function postScore(row) {
   try {
-    await fetch(BOARD.url, { method: 'POST', headers: { ...boardHdrs(), 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+    await fetch(BOARD.url, { method: 'POST', headers: { 'Content-Type': 'application/json' },
                              body: JSON.stringify({ name: row.n, score: row.s, shift: row.lv, robots: row.p }) });
   } catch (e) { /* the run is still on the local board */ }
   await loadBoard();
@@ -1663,6 +1703,8 @@ function updWeather(dt) {
   fx({ k: 'wx', w: k }); sfx('alarm');
 }
 function update(dt) {
+  if (askJoin && (askJoin.t -= dt) <= 0) askJoin = null;
+  if (frozen()) { pollPads(); return broadcast(dt); } // keep guests' snapshots (and the pause flag) flowing
   T += dt; stateT += dt; bannerT -= dt; wxMsgT -= dt;
   if (achQ.length && (achT -= dt) <= 0) { achT = 1.1; achToast(achQ.shift()); }
   if ((achCheckT -= dt) <= 0) { achCheckT = .4; if (state !== 'title') checkAch(); }
@@ -1770,6 +1812,7 @@ function hostRoom() {
   peer.on('connection', c => {
     c.on('open', () => { conns.add(c); c.send(levelMsg()); sfx('join'); });
     c.on('data', m => {
+      if (onNet(c, c.peer, m)) return;
       if (m.type === 'add' && robots.length < MAX_PLAYERS && !robots.some(r => r.owner === c.peer && r.lid === m.lid)) {
         const r = addRobot({ owner: c.peer, lid: m.lid }); say(r, 'Moi!'); sfx('join');
       } else if (m.type === 'buy') buy(m.k);
@@ -1795,14 +1838,14 @@ function joinRoom(code) {
       localCtrls.forEach((_, lid) => hostConn.send({ type: 'add', lid }));
       status(`Joined room ${code}. Press your keys to add players. Waiting for the host to start…`);
     });
-    hostConn.on('data', m => m.type === 'lvl' ? applyLevelMsg(m) : applySnap(m));
+    hostConn.on('data', m => onNet(hostConn, 'host', m) || (m.type === 'lvl' ? applyLevelMsg(m) : applySnap(m)));
     hostConn.on('close', () => leaveOnline('The host left the game.'));
   });
   peer.on('error', e => leaveOnline(e.type === 'peer-unavailable' ? `No room called ${code}.` : 'Online error: ' + e.type));
 }
 function leaveOnline(msg) {
   peer?.destroy(); peer = hostConn = null;
-  role = 'local'; myOwner = 'H'; localCtrls.length = 0;
+  role = 'local'; myOwner = 'H'; localCtrls.length = 0; paused = hostPaused = false;
   [...robots].forEach(removeRobot);
   state = 'title'; setupLevel(1); showMenuButtons(true); status(msg);
 }
@@ -1822,7 +1865,7 @@ function applyLevelMsg(m) {
 function broadcast(dt) {
   if (role !== 'host' || (netT += dt) < .05) return;
   netT = 0;
-  const m = { type: 's', st: state, pvp, level, time, quota, delivered, score, bonus, money, up, banner, bannerT, best,
+  const m = { type: 's', st: state, pvp, pz: paused, level, time, quota, delivered, score, bonus, money, up, banner, bannerT, best,
     r: robots.map(r => ({ id: r.id, i: r.i, owner: r.owner, x: r.x, y: r.y, a: r.a, vx: r.vx, vy: r.vy, cargo: r.cargo,
                           hole: !!r.hole, esc: r.esc, stun: r.stun, say: r.say, sayT: r.sayT, bo: r.boost, bz: r.boosting, zp: r.zaps, hp: r.hp, e: r.earn, tw: r.towT > 0 ? r.tow : -1 })),
     c: cars.map(c => c.x), fx: outbox.splice(0),
@@ -1833,6 +1876,7 @@ function broadcast(dt) {
 }
 function applySnap(m) {
   ({ st: state, pvp, level, time, quota, delivered, score, bonus, money, up, banner, bannerT, best } = m);
+  hostPaused = !!m.pz; net.snaps++; net.lastSnap = performance.now();
   const ids = new Set(m.r.map(s => s.id));
   robots.filter(r => !ids.has(r.id)).forEach(removeRobot);
   for (const s of m.r) {
@@ -2166,14 +2210,15 @@ $('bNext').onclick = $('bStart').onclick = $('bRetry').onclick = pressStart;
 $('bMode').onclick = $('bMode2').onclick = () => { if (role !== 'guest') pvp = !pvp; };
 const BOARD_WHERE = { local: 'best runs on this machine', loading: 'loading…', global: 'best runs anywhere', offline: 'offline — showing this machine' };
 const WX_TEXT = { blizzard: ['Blizzard', 'You can barely see the street'], freeze: ['Freezing rain', 'Every surface is ice for a while'] };
-let lastBannerT = 0, lastWxT = 0, playersKey = '', shopKey = '', pipsKey = '', scoresKey = '';
+let lastBannerT = 0, lastWxT = 0, playersKey = null, shopKey = '', pipsKey = '', scoresKey = '';
 function restartAnim(el) { el.classList.remove('show'); void el.offsetWidth; el.classList.add('show'); }
 function updateDOM() {
   const play = state === 'play';
-  for (const id of ['bMode', 'bMode2']) { // co-op or pvp: a choice once there is someone to play with
-    $(id).hidden = robots.length < 2;
-    $(id).disabled = role === 'guest';
-    setText(id, `Mode: ${pvp ? 'PvP' : 'Co-op'}`);
+  for (const id of ['bMode', 'bMode2']) { // co-op or pvp: always on the title, so solo players can see pvp exists
+    const solo = robots.length < 2;
+    $(id).hidden = solo && id === 'bMode2';
+    $(id).disabled = solo || role === 'guest';
+    setText(id, solo ? 'PvP: needs a 2nd player' : `Mode: ${pvp ? 'PvP' : 'Co-op'}`);
   }
   const ranked = [...robots].sort((a, b) => b.earn - a.earn);
   // title
@@ -2186,7 +2231,7 @@ function updateDOM() {
       playersKey = pk;
       $('players').innerHTML = robots.length
         ? robots.map(r => `<span class="chip"><i style="background:${r.color}"></i>Player ${r.i + 1}</span>`).join('')
-        : (touchDev ? 'Touch the stick to join.' : 'Press any key from the table to join. Each row is one player.');
+        : (touchDev ? 'Touch the stick to join.' : 'Drive with any row of the table. Each row is one player.');
     }
     setText('bestLine', best ? `Best run ${best} €` : '');
     if (achKey !== achDone.size) { // unlocked first, so the newest sit at the top
@@ -2222,6 +2267,16 @@ function updateDOM() {
     $('joinHint').hidden = robots.length >= MAX_PLAYERS || vw < 900 || touchDev;
     setText('joinHint', `More players can join with ${free.length ? free.join(', ') + ' or ' : ''}a gamepad`);
   } else $('joinHint').hidden = true;
+  // a second controller asks before it joins
+  $('joinAsk').hidden = !askJoin;
+  if (askJoin) {
+    const k = KB[askJoin.ctrl.kb], who = k ? k.name : 'A gamepad', n = role === 'guest' ? '' : ` as Player ${robots.length + 1}`;
+    const html = `${who} wants to join${n}. Press <kbd>${k ? k.bn : 'A'}</kbd> to join.`;
+    if ($('joinAsk').innerHTML !== html) $('joinAsk').innerHTML = html;
+  }
+  $('hostPaused').hidden = !(role === 'guest' && hostPaused && play);
+  $('bPause').hidden = menuOpen;
+  if (menuOpen) updateMenu();
   // shift sign drops in when a new shift starts
   if (play && bannerT > lastBannerT + .5) {
     setText('signTitle', pvp ? 'PvP' : `Shift ${level}`);
@@ -2268,6 +2323,75 @@ function updateDOM() {
   }
 }
 
+// ---------- pause menu: settings + online debug ----------
+// Esc / P / gamepad Start opens it. Local and host games freeze; a guest can't pause the host's world.
+let menuOpen = false, paused = false, hostPaused = false, fps = 60;
+const frozen = () => paused;
+const cfg = { music: 1, sfx: 1, shadows: true, scale: 1 };
+try { Object.assign(cfg, JSON.parse(localStorage.getItem('ruokarobo-cfg') || '{}')); } catch (e) {}
+function applyCfg() {
+  try { localStorage.setItem('ruokarobo-cfg', JSON.stringify(cfg)); } catch (e) {}
+  sun.castShadow = cfg.shadows;
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2) * cfg.scale); resize();
+}
+$('sMusic').value = cfg.music; $('sSfx').value = cfg.sfx; $('sShadows').checked = cfg.shadows; $('sScale').value = cfg.scale;
+$('sMusic').oninput = e => { cfg.music = +e.target.value; applyCfg(); };
+$('sSfx').oninput = e => { cfg.sfx = +e.target.value; applyCfg(); beep(880, .06); };
+$('sShadows').onchange = e => { cfg.shadows = e.target.checked; applyCfg(); };
+$('sScale').onchange = e => { cfg.scale = +e.target.value; applyCfg(); };
+applyCfg();
+function setMenu(open) {
+  menuOpen = open; paused = open && role !== 'guest' && state !== 'title'; keys.clear();
+  $('pause').hidden = !open;
+  setText('pauseTitle', state === 'title' ? 'Settings' : paused ? 'Paused' : 'Menu');
+  $('pauseNote').hidden = role !== 'guest' || state === 'title';
+  $('bQuit').hidden = state === 'title';
+  if (open) { updateMenu(); $('bResume').focus(); }
+}
+$('bPause').onclick = () => setMenu(true);
+$('bResume').onclick = () => setMenu(false);
+$('bQuit').onclick = () => {
+  setMenu(false);
+  if (role !== 'local') return leaveOnline('You left the online game.');
+  state = 'title'; setupLevel(1);
+};
+// ping both ways once a second; RTT is measured on our own clock, so no clock sync is needed
+const net = { ping: {}, route: {}, snaps: 0, snapRate: 0, lastSnap: 0 };
+const ROUTE = { host: 'direct (same network)', srflx: 'direct (via STUN)', prflx: 'direct (via STUN)', relay: 'RELAYED via TURN server' };
+function onNet(c, k, m) {
+  if (m.type === 'ping') { c.send({ type: 'pong', t: m.t }); return true; }
+  if (m.type === 'pong') { net.ping[k] = performance.now() - m.t; return true; }
+  return false;
+}
+const netConns = () => role === 'host' ? [...conns].map(c => [c, c.peer]) : role === 'guest' && hostConn ? [[hostConn, 'host']] : [];
+setInterval(() => {
+  net.snapRate = net.snaps; net.snaps = 0;
+  for (const [c, k] of netConns()) {
+    if (c.open) c.send({ type: 'ping', t: performance.now() });
+    c.peerConnection?.getStats().then(st => { // which ICE route won: LAN, STUN hole-punch, or TURN relay
+      let pair; st.forEach(s => { if (s.type === 'candidate-pair' && s.state === 'succeeded' && (s.nominated || s.selected)) pair = s; });
+      net.route[k] = pair && st.get(pair.localCandidateId)?.candidateType;
+    }).catch(() => {});
+  }
+}, 1000);
+function updateMenu() {
+  const L = [`Role: ${role}${roomCode ? '   Room: ' + roomCode : ''}   FPS: ${Math.round(fps)}`];
+  if (role === 'local') L.push('Not online. Host or join a game from the title screen.');
+  if (peer) L.push(`Peer id: ${peer.id || '…'}   Signalling server: ${peer.disconnected ? 'disconnected' : 'connected'}`);
+  const cs = netConns();
+  if (role === 'host' && !cs.length) L.push('No guests yet.');
+  for (const [c, k] of cs) {
+    const ms = net.ping[k], n = role === 'host' ? robots.filter(r => r.owner === c.peer).length : localCtrls.length;
+    L.push(`${k === 'host' ? 'Host' : 'Guest ' + k.slice(0, 8)}: ping ${ms != null ? Math.round(ms) + ' ms' : '…'}${ms > 150 ? ' ⚠ laggy' : ''}`
+      + `\n  route: ${ROUTE[net.route[k]] || 'unknown'}   players: ${n}${c.open ? '' : '   CLOSED'}`);
+  }
+  if (role === 'guest') {
+    const age = net.lastSnap ? Math.round(performance.now() - net.lastSnap) : -1;
+    L.push(`Snapshots: ${net.snapRate}/s of 20${net.snapRate < 15 ? ' ⚠ dropping' : ''}   last: ${age < 0 ? 'none' : age + ' ms ago'}`);
+  }
+  setText('net', L.join('\n'));
+}
+
 // ---------- touch controls ----------
 const touchDev = matchMedia('(pointer: coarse)').matches;
 const touchIn = { t: 0, s: 0, b: false, h: false, z: false };
@@ -2296,12 +2420,12 @@ let musicOn = true, musicNext = 0, musicStep = 0;
 const MEL = [12, 15, 19, 15, 17, 15, 12, null, 12, 15, 19, 22, 24, 22, 19, null, 19, 17, 15, 17, 19, null, 15, 12, 10, 12, 15, 12, 7, null, 12, null];
 const BASS = [0, 0, -4, -4, -2, -2, 0, 0];
 function musicTick() {
-  if (!ac || !musicOn || ac.state !== 'running') return;
+  if (!ac || !musicOn || !cfg.music || ac.state !== 'running') return;
   if (musicNext < ac.currentTime) musicNext = ac.currentTime + .05;
   while (musicNext < ac.currentTime + .25) {
     const st = musicStep++ % MEL.length, n = MEL[st];
-    if (n != null) tone(220 * 2 ** (n / 12), .2, musicNext, 'triangle', .018);
-    if (st % 4 === 0) tone(55 * 2 ** (BASS[st / 4 % BASS.length] / 12), .6, musicNext, 'sine', .05);
+    if (n != null) tone(220 * 2 ** (n / 12), .2, musicNext, 'triangle', .018 * cfg.music);
+    if (st % 4 === 0) tone(55 * 2 ** (BASS[st / 4 % BASS.length] / 12), .6, musicNext, 'sine', .05 * cfg.music);
     musicNext += .19;
   }
 }
@@ -2310,8 +2434,9 @@ function musicTick() {
 setupLevel(1);
 let last = performance.now();
 renderer.setAnimationLoop(now => {
-  const dt = Math.min(.05, (now - last) / 1000); last = now;
-  update(dt); sync(dt);
+  const raw = (now - last) / 1000, dt = Math.min(.05, raw); last = now;
+  if (raw > 0) fps += (1 / raw - fps) * .05;
+  update(dt); sync(frozen() ? 0 : dt);
   const vs = views();
   renderer.shadowMap.needsUpdate = true;
   renderer.setScissorTest(true);

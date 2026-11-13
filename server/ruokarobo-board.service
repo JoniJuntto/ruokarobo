@@ -1,0 +1,22 @@
+[Unit]
+Description=Ruokarobo leaderboard
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/node /opt/ruokarobo-board/board.js
+Restart=always
+RestartSec=2
+# DynamicUser gives the service its own throwaway account and StateDirectory is the only
+# place it may write, so a bug in it cannot reach the rest of the box.
+DynamicUser=yes
+StateDirectory=ruokarobo-board
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target
