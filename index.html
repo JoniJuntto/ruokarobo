@@ -152,11 +152,12 @@
   .sk.r4 i{box-shadow:inset -6px -8px 0 rgba(0,0,0,.18),0 0 0 2px var(--ink),0 0 18px 5px #ff2d55;animation:ultra 1.6s ease-in-out infinite alternate}
   @keyframes ultra{to{filter:hue-rotate(40deg) brightness(1.15)}}
   #caseMsg:empty{display:none}
-  #skinGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px}
-  #skinGrid .sk{height:108px;border:0;border-bottom:7px solid var(--rc);border-radius:8px;background:#fff;box-shadow:0 4px 0 rgba(0,0,0,.22)}
-  #skinGrid .sk.on{outline:4px solid var(--orange);outline-offset:-4px}
-  #skinGrid .sk:disabled{background:#e9eef3;color:#8a96a3;cursor:default}
-  #skinGrid .sk:disabled i{background:#c9d1da}
+  .sk i{display:grid;place-items:center;font-size:26px;font-style:normal}
+  #skinGrid,#hornGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px}
+  :is(#skinGrid,#hornGrid) .sk{height:108px;border:0;border-bottom:7px solid var(--rc);border-radius:8px;background:#fff;box-shadow:0 4px 0 rgba(0,0,0,.22)}
+  :is(#skinGrid,#hornGrid) .sk.on{outline:4px solid var(--orange);outline-offset:-4px}
+  :is(#skinGrid,#hornGrid) .sk:disabled{background:#e9eef3;color:#8a96a3;cursor:default}
+  :is(#skinGrid,#hornGrid) .sk:disabled i{background:#c9d1da}
   .card:not(:disabled):hover{box-shadow:inset 0 0 0 3px #fff,inset 0 0 0 5px var(--blue),0 4px 0 rgba(0,0,0,.22)}
   #bNext{align-self:flex-end;margin-top:4px}
 
@@ -212,6 +213,7 @@
   #tZap{right:112px;bottom:131px;background:#0a8fa8}
   #tHook{right:112px;bottom:225px;background:#6b3b1c}
   #tBall{right:20px;bottom:272px;background:#5aa9d6}
+  #tHorn{right:112px;bottom:37px;width:64px;height:64px;background:#e0a100}
 
   @media (max-width:640px){#sign h2{font-size:34px}#shop h2{font-size:32px}#hud .plate{font-size:18px;padding:8px 11px 5px}#hud{max-width:calc(100vw - 28px)}}
   @media (prefers-reduced-motion:reduce){#sign.show,#alert.show,.ach{animation:none}}
@@ -263,15 +265,15 @@
   </div>
   <div class="plate white" id="keys">
     <table>
-      <tr><th>Who</th><th>Drive</th><th>Boost</th><th>Brake / drift</th><th>Zap</th><th>Hook</th><th>Snowball (PvP)</th></tr>
-      <tr><td>Player 1</td><td><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></td><td><kbd>Shift</kbd></td><td><kbd>Space</kbd></td><td><kbd>E</kbd></td><td><kbd>Q</kbd></td><td><kbd>Z</kbd></td></tr>
-      <tr><td>Player 2</td><td><kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd></td><td><kbd>R-Shift</kbd></td><td><kbd>.</kbd></td><td><kbd>,</kbd></td><td><kbd>/</kbd></td><td><kbd>R-Alt</kbd></td></tr>
-      <tr><td>Player 3</td><td><kbd>I</kbd><kbd>J</kbd><kbd>K</kbd><kbd>L</kbd></td><td><kbd>U</kbd></td><td><kbd>O</kbd></td><td><kbd>P</kbd></td><td><kbd>N</kbd></td><td><kbd>Ö</kbd></td></tr>
-      <tr><td>Player 4</td><td><kbd>T</kbd><kbd>F</kbd><kbd>G</kbd><kbd>H</kbd></td><td><kbd>R</kbd></td><td><kbd>Y</kbd></td><td><kbd>V</kbd></td><td><kbd>B</kbd></td><td><kbd>C</kbd></td></tr>
-      <tr><td>Gamepad</td><td>Stick</td><td><kbd>A</kbd></td><td><kbd>B</kbd></td><td><kbd>X</kbd></td><td><kbd>Y</kbd></td><td><kbd>LB</kbd></td></tr>
+      <tr><th>Who</th><th>Drive</th><th>Boost</th><th>Brake / drift</th><th>Zap</th><th>Hook</th><th>Snowball (PvP)</th><th>Horn</th></tr>
+      <tr><td>Player 1</td><td><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></td><td><kbd>Shift</kbd></td><td><kbd>Space</kbd></td><td><kbd>E</kbd></td><td><kbd>Q</kbd></td><td><kbd>Z</kbd></td><td><kbd>X</kbd></td></tr>
+      <tr><td>Player 2</td><td><kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd></td><td><kbd>R-Shift</kbd></td><td><kbd>.</kbd></td><td><kbd>,</kbd></td><td><kbd>/</kbd></td><td><kbd>R-Alt</kbd></td><td><kbd>R-Ctrl</kbd></td></tr>
+      <tr><td>Player 3</td><td><kbd>I</kbd><kbd>J</kbd><kbd>K</kbd><kbd>L</kbd></td><td><kbd>U</kbd></td><td><kbd>O</kbd></td><td><kbd>P</kbd></td><td><kbd>N</kbd></td><td><kbd>Ö</kbd></td><td><kbd>Å</kbd></td></tr>
+      <tr><td>Player 4</td><td><kbd>T</kbd><kbd>F</kbd><kbd>G</kbd><kbd>H</kbd></td><td><kbd>R</kbd></td><td><kbd>Y</kbd></td><td><kbd>V</kbd></td><td><kbd>B</kbd></td><td><kbd>C</kbd></td><td><kbd>6</kbd></td></tr>
+      <tr><td>Gamepad</td><td>Stick</td><td><kbd>A</kbd></td><td><kbd>B</kbd></td><td><kbd>X</kbd></td><td><kbd>Y</kbd></td><td><kbd>LB</kbd></td><td><kbd>L3</kbd></td></tr>
     </table>
   </div>
-  <div class="plate white" id="touchNote" hidden>Steer with the stick on the left. Boost, brake, zap, hook and (in PvP) snowball are on the right. Hold brake while steering at speed to drift; let go for a mini-turbo.</div>
+  <div class="plate white" id="touchNote" hidden>Steer with the stick on the left. Boost, brake, zap, hook, horn and (in PvP) snowball are on the right. Hold brake while steering at speed to drift; let go for a mini-turbo.</div>
   <details class="plate white fold" id="achBox">
     <summary>Achievements<span id="achCount"></span></summary>
     <div class="achGrid" id="achGrid"></div>
@@ -289,7 +291,7 @@
     <button class="ghost mode" id="bMode" hidden>Mode: Co-op</button>
     <button class="go" id="bStory">Story</button>
     <button class="ghost" id="bNewStory" hidden>New story</button>
-    <button class="ghost" id="bCases">🎁 Skins</button>
+    <button class="ghost" id="bCases">🎁 Skins &amp; horns</button>
     <button class="ghost" id="bHost">Host online game</button>
     <button class="ghost" id="bInvite" hidden>Copy invite link</button>
     <span id="joinBox"><input id="code" placeholder="Code" maxlength="5" autocomplete="off" aria-label="Room code"><button class="ghost" id="bJoin">Join</button></span>
@@ -322,13 +324,15 @@
 <div id="cases" hidden>
   <div class="wrap">
     <div class="plate head">
-      <div><h2>Skin cases</h2><p>Cases are hidden around the map on every shift, tucked in beside buildings. Drive into one to grab it.</p></div>
+      <div><h2>Skin cases</h2><p>Cases are hidden around the map on every shift, tucked in beside buildings. Drive into one to grab it. A case holds a skin or a horn.</p></div>
       <div class="actions"><span id="caseCount">0 🎁</span><button class="go" id="bOpen">Open case</button><button class="ghost" id="bCasesX">Close</button></div>
     </div>
     <div class="plate white" id="reel"><div id="strip"></div></div>
     <p class="note" id="caseMsg"></p>
     <h3>Your skins</h3>
     <div id="skinGrid"></div>
+    <h3>Your horns</h3>
+    <div id="hornGrid"></div>
   </div>
 </div>
 
@@ -365,7 +369,7 @@
 </div>
 
 <div id="achs"></div>
-<div id="touch" hidden><div id="stick"><div id="knob"></div></div><button id="tBoost" class="tbtn">Boost</button><button id="tBrake" class="tbtn">Brake</button><button id="tZap" class="tbtn">Zap</button><button id="tHook" class="tbtn">Hook</button><button id="tBall" class="tbtn" hidden>Snow</button></div>
+<div id="touch" hidden><div id="stick"><div id="knob"></div></div><button id="tBoost" class="tbtn">Boost</button><button id="tBrake" class="tbtn">Brake</button><button id="tZap" class="tbtn">Zap</button><button id="tHook" class="tbtn">Hook</button><button id="tBall" class="tbtn" hidden>Snow</button><button id="tHorn" class="tbtn">Tööt</button></div>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script type="module">
@@ -1025,10 +1029,10 @@ const sleigh = new THREE.Group(); scene.add(sleigh); sleigh.visible = false;
 // ---------- players & input ----------
 const COLORS = ['#ff7a1a', '#2d9cff', '#2fbf6a', '#e84393', '#f5c400', '#9b59b6', '#00c2c7', '#e74c3c'];
 const KB = [
-  { name: 'WASD', u: 'KeyW', d: 'KeyS', l: 'KeyA', r: 'KeyD', b: 'ShiftLeft', h: 'Space', z: 'KeyE', g: 'KeyQ', x: 'KeyZ', bn: 'Shift' },
-  { name: 'Arrows', u: 'ArrowUp', d: 'ArrowDown', l: 'ArrowLeft', r: 'ArrowRight', b: 'ShiftRight', h: 'Period', z: 'Comma', g: 'Slash', x: 'AltRight', bn: 'R-Shift' },
-  { name: 'IJKL', u: 'KeyI', d: 'KeyK', l: 'KeyJ', r: 'KeyL', b: 'KeyU', h: 'KeyO', z: 'KeyP', g: 'KeyN', x: 'Semicolon', bn: 'U' },
-  { name: 'TFGH', u: 'KeyT', d: 'KeyG', l: 'KeyF', r: 'KeyH', b: 'KeyR', h: 'KeyY', z: 'KeyV', g: 'KeyB', x: 'KeyC', bn: 'R' },
+  { name: 'WASD', u: 'KeyW', d: 'KeyS', l: 'KeyA', r: 'KeyD', b: 'ShiftLeft', h: 'Space', z: 'KeyE', g: 'KeyQ', x: 'KeyZ', o: 'KeyX', bn: 'Shift' },
+  { name: 'Arrows', u: 'ArrowUp', d: 'ArrowDown', l: 'ArrowLeft', r: 'ArrowRight', b: 'ShiftRight', h: 'Period', z: 'Comma', g: 'Slash', x: 'AltRight', o: 'ControlRight', bn: 'R-Shift' },
+  { name: 'IJKL', u: 'KeyI', d: 'KeyK', l: 'KeyJ', r: 'KeyL', b: 'KeyU', h: 'KeyO', z: 'KeyP', g: 'KeyN', x: 'Semicolon', o: 'BracketLeft', bn: 'U' },
+  { name: 'TFGH', u: 'KeyT', d: 'KeyG', l: 'KeyF', r: 'KeyH', b: 'KeyR', h: 'KeyY', z: 'KeyV', g: 'KeyB', x: 'KeyC', o: 'Digit6', bn: 'R' }, // ponytail: 6 is also a workshop key; only bites player 4 honking in the workshop,
 ];
 // ponytail: the street is sized for 4; grow the map before raising this
 const MAX_PLAYERS = 4;
@@ -1129,10 +1133,12 @@ function confirmJoin(ctrl) {
   askJoin = null; join(ctrl); return true;
 }
 const ZERO = { t: 0, s: 0 };
+// o carries this machine's horn key, so the host never has to track which horn each guest picked
+const myHorn = () => skins.horn || 1;
 const input = r => r.owner === 'H' ? ctrlInput(r.ctrl) : remoteIn[r.id] || ZERO;
 function ctrlInput(ctrl) {
   if (ctrl.touch) return touchIn;
-  if (ctrl.kb != null) { const k = KB[ctrl.kb]; return { t: keys.has(k.u) - keys.has(k.d), s: keys.has(k.r) - keys.has(k.l), b: keys.has(k.b), h: keys.has(k.h), z: keys.has(k.z), g: keys.has(k.g), x: keys.has(k.x) }; }
+  if (ctrl.kb != null) { const k = KB[ctrl.kb]; return { t: keys.has(k.u) - keys.has(k.d), s: keys.has(k.r) - keys.has(k.l), b: keys.has(k.b), h: keys.has(k.h), z: keys.has(k.z), g: keys.has(k.g), x: keys.has(k.x), o: keys.has(k.o) && myHorn() }; }
   const gp = navigator.getGamepads?.()[ctrl.pad];
   if (!gp) return { t: 0, s: 0 };
   const dz = v => Math.abs(v) < .2 ? 0 : v, b = k => gp.buttons[k]?.pressed;
@@ -1141,7 +1147,7 @@ function ctrlInput(ctrl) {
   if (b(6) || b(13)) t = -1;
   if (b(14)) s = -1; if (b(15)) s = 1;
   if (b(0) && !t) t = 1; // boost alone also drives
-  return { t, s, b: b(0) || b(5), h: b(1), z: b(2), g: b(3), x: b(4) };
+  return { t, s, b: b(0) || b(5), h: b(1), z: b(2), g: b(3), x: b(4), o: b(10) && myHorn() }; // L3: press the stick to honk
 }
 addEventListener('keydown', e => {
   if (!document.getElementById('cases').hidden) { if (e.code === 'Escape') closeCases(); return; } // skins screen eats keys, so Enter can't start a shift under it
@@ -1192,6 +1198,18 @@ function tone(f, d, t0, type, vol) {
   g.gain.setValueAtTime(vol, t0); g.gain.exponentialRampToValueAtTime(.0001, t0 + d);
   o.connect(g).connect(ac.destination); o.start(t0); o.stop(t0 + d);
 }
+// horn note: holds its level (beep decays), and can slide from f to f1
+function toot(f, d, delay = 0, type = 'square', vol = .05, f1 = f) {
+  try {
+    ac = ac || new AudioContext(); if (!cfg.sfx) return;
+    const t0 = ac.currentTime + delay, o = ac.createOscillator(), g = ac.createGain(), v = vol * cfg.sfx;
+    o.type = type; o.frequency.setValueAtTime(f, t0); o.frequency.exponentialRampToValueAtTime(f1, t0 + d);
+    g.gain.setValueAtTime(.0001, t0); g.gain.exponentialRampToValueAtTime(v, t0 + .015); g.gain.setValueAtTime(v, t0 + d * .85); g.gain.exponentialRampToValueAtTime(.0001, t0 + d);
+    o.connect(g).connect(ac.destination); o.start(t0); o.stop(t0 + d);
+  } catch (e) { /* no audio, no problem */ }
+}
+const chord = (fs, d, t, type, vol) => fs.forEach(f => toot(f, d, t, type, vol));
+const mel = (ns, type, vol) => ns.reduce((t, [f, d]) => (f && toot(f, d * .9, t, type, vol), t + d), 0); // [freq, length] pairs, 0 = rest
 
 // ---------- game state ----------
 let state = 'title', stateT = 0, level = 1, time = 0, quota = 0, delivered = 0, score = 0, bonus = 0, T = 0;
@@ -1273,7 +1291,27 @@ const SKINS = [ // c = shell colour, ro/me = roughness/metalness, e = glow, p = 
     g.fillStyle = '#b3261e'; g.fillRect(0, 0, w, w); g.fillStyle = 'rgba(20,8,8,.55)'; // buffalo check: dark bands both ways
     for (let i = 0; i < w; i += w / 4) { g.fillRect(i, 0, w / 8, w); g.fillRect(0, i, w, w / 8); } } },
 ];
-let skins = { cases: 0, own: [], sel: '' }; // cases are found on the map, see loot
+// horns come out of the same cases as skins; i = icon, play = the sound. keys start with h- so they never clash with skins in skins.own
+const HORNS = [
+  { k: '', n: 'Perustööt', r: 0, i: '📯', play: () => chord([415, 523], .35, 0, 'square', .05) }, // the default, never in a case
+  { k: 'h-kello', n: 'Pyöränkello', r: 0, i: '🔔', play: () => [0, .14].forEach(t => { beep(2093, .3, t, 'triangle', .06); beep(2637, .22, t, 'sine', .03); }) },
+  { k: 'h-piip', n: 'Piip piip', r: 0, i: '🐤', play: () => [0, .16].forEach(t => toot(1320, .1, t, 'square', .035)) },
+  { k: 'h-mopo', n: 'Mopo', r: 0, i: '🛵', play: () => [0, .18].forEach(t => chord([740, 880], .13, t, 'square', .035)) },
+  { k: 'h-ankka', n: 'Kumiankka', r: 0, i: '🦆', play: () => { toot(900, .12, 0, 'square', .04, 1500); toot(1100, .2, .15, 'square', .04, 650); } },
+  { k: 'h-rekka', n: 'Rekkatorvi', r: 1, i: '🚛', play: () => chord([131, 165, 196], .9, 0, 'sawtooth', .035) },
+  { k: 'h-pelle', n: 'Pellen torvi', r: 1, i: '🤡', play: () => [0, .24].forEach(t => toot(330, .18, t, 'square', .06, 480)) },
+  { k: 'h-kukko', n: 'Kukko', r: 1, i: '🐓', play: () => { toot(700, .12, 0, 'sawtooth', .04, 900); toot(900, .12, .14, 'sawtooth', .04, 1000); toot(1000, .5, .28, 'sawtooth', .04, 650); } },
+  { k: 'h-laiva', n: 'Sumutorvi', r: 2, i: '🚢', play: () => chord([73, 110, 147], 1.6, 0, 'sawtooth', .05) },
+  { k: 'h-halytys', n: 'Hälytys', r: 2, i: '🚨', play: () => mel([[622, .3], [466, .3], [622, .3], [466, .3]], 'square', .035) },
+  { k: 'h-cucaracha', n: 'Cucaracha', r: 2, i: '🌮', play: () => mel([[392, .1], [392, .1], [392, .1], [523, .3], [659, .3], [0, .1], [392, .1], [392, .1], [392, .1], [523, .3], [659, .45]], 'square', .035) },
+  { k: 'h-jaatelo', n: 'Jäätelöauto', r: 3, i: '🍦', play: () => mel([[784, .15], [988, .15], [1175, .15], [1568, .3], [1175, .15], [1568, .45]], 'triangle', .06) },
+  { k: 'h-reki', n: 'Joulupukin reki', r: 3, i: '🛷', play: () => SFX.jingle() },
+  { k: 'h-ilma', n: 'Ilmatorvi', r: 4, i: '🎺', play: () => [[0, .18], [.24, .18], [.48, .75]].forEach(([t, d]) => chord([466, 470, 587, 698], d, t, 'sawtooth', .03)) },
+  { k: 'h-ufo', n: 'Ufo', r: 4, i: '👽', play: () => { toot(300, .4, 0, 'sine', .07, 1400); toot(1400, .3, .4, 'sine', .07, 500); toot(500, .5, .7, 'sine', .07, 1800); } },
+  { k: 'h-isi', n: 'Isin tööt', r: 4, i: '🚗', story: true, hint: 'Finish the story', play: () => SFX.honk() }, // tö-tö-tööt, dad's honk from the story
+];
+const hornOf = k => HORNS.find(h => h.k === k) || HORNS[0]; // anything unknown (old saves, remote input) is the default
+let skins = { cases: 0, own: [], sel: '', horn: '' }; // cases are found on the map, see loot
 try { Object.assign(skins, JSON.parse(localStorage.getItem('ruokarobo-skins') || '{}')); } catch (e) {}
 const saveSkins = () => { try { localStorage.setItem('ruokarobo-skins', JSON.stringify(skins)); } catch (e) {} };
 const skinMat = k => { const s = SKINS.find(s => s.k === k) || SKINS[0]; if (!s.p && s.op == null) return mat(s.c, s.e, s.ro ?? .82, s.me ?? 0);
@@ -1281,7 +1319,7 @@ const skinMat = k => { const s = SKINS.find(s => s.k === k) || SKINS[0]; if (!s.
     ...s.glow && { emissive: '#fff', emissiveMap: t, emissiveIntensity: .8 }, ...s.op != null && { transparent: true, opacity: s.op, depthWrite: false } }))(
     s.p ? Object.assign(new THREE.CanvasTexture(skinCanvas(s)), { colorSpace: THREE.SRGBColorSpace }) : null); };
 const skinOf = r => r.owner === myOwner ? skins.sel : r.skin || '';
-function rollSkin() { let x = Math.random() * 100; const r = RARITY.findIndex(q => (x -= q.w) < 0); return pick(SKINS.filter(s => s.k && s.r === r && !s.story)); }
+function rollSkin() { let x = Math.random() * 100; const r = RARITY.findIndex(q => (x -= q.w) < 0); return pick([...SKINS, ...HORNS].filter(s => s.k && s.r === r && !s.story)); }
 function buy(k) {
   if (state !== 'shop') return;
   if (role === 'guest') return hostConn.send({ type: 'buy', k });
@@ -1513,6 +1551,7 @@ const sfx = n => fx({ k: 'sfx', n });
 let wxKind = '', wxMsgT = 0;
 function fx(e) { // play locally; the host also forwards it to guests
   if (e.k === 'sfx') SFX[e.n]();
+  else if (e.k === 'horn') hornOf(e.h).play();
   else if (e.k === 'pop') floats.push({ x: e.x, y: e.y, h: 6, text: e.text, color: e.color, t: 1.4 });
   else if (e.k === 'cust') HOUSES[e.i].custT = 2.5;
   else if (e.k === 'burst') burst(e.x, e.y, e.n);
@@ -1901,6 +1940,9 @@ function updRobot(r, dt) {
   r.ballCd = (r.ballCd || 0) - dt;
   if (inp.x && !r.xPrev && control && pvp && r.ballCd <= 0 && state === 'play') snowball(r);
   r.xPrev = !!inp.x;
+  r.hornCd = (r.hornCd || 0) - dt;
+  if (inp.o && !r.oPrev && r.hornCd <= 0) { r.hornCd = .5; const h = hornOf(inp.o); fx({ k: 'horn', h: h.k }); say(r, h.i + ' Tööt!', .8); }
+  r.oPrev = !!inp.o;
   const hb = !!inp.h;
   // drift, kart-style manual: brake + gas + steer at speed. the direction locks in; steer into it to tighten, away to widen.
   // hold it to charge sparks (blue → orange → purple), let go of brake for a mini-turbo. slow down or get stunned and the charge is lost
@@ -2845,17 +2887,19 @@ $('bRoam').onclick = () => { if (state !== 'title' || role === 'guest') return; 
 const TILE = 104, WIN_AT = 40;
 let spinning = false, unrevealed = ''; // unrevealed: already saved as owned, but the reel hasn't stopped on it yet
 const skinTile = (s, tag = 'div', mine = true) =>
-  `<${tag} class="sk r${s.r}${s.k === skins.sel && tag === 'button' ? ' on' : ''}" data-k="${s.k}" style="--sc:${s.p ? `url(${skinCanvas(s).toDataURL()}) center/cover` : s.c};--rc:${RARITY[s.r].c}"${mine ? '' : ' disabled'}><i></i>${mine ? s.n : s.hint || '???'}</${tag}>`;
+  `<${tag} class="sk r${s.r}${s.k === (s.play ? skins.horn : skins.sel) && tag === 'button' ? ' on' : ''}" data-k="${s.k}" style="--sc:${s.p ? `url(${skinCanvas(s).toDataURL()}) center/cover` : s.c || '#fff'};--rc:${RARITY[s.r].c}"${mine ? '' : ' disabled'}><i>${mine && s.i || ''}</i>${mine ? s.n : s.hint || '???'}</${tag}>`;
 function renderSkins() {
   setText('caseCount', `${skins.cases} 🎁`);
   $('bOpen').disabled = spinning || !skins.cases;
   setText('bOpen', skins.cases ? 'Open case' : 'No cases yet');
-  $('skinGrid').innerHTML = [...SKINS].sort((a, b) => a.r - b.r).map(s => skinTile(s, 'button', !s.k || (skins.own.includes(s.k) && s.k !== unrevealed))).join('');
+  const grid = list => [...list].sort((a, b) => a.r - b.r).map(s => skinTile(s, 'button', !s.k || (skins.own.includes(s.k) && s.k !== unrevealed))).join('');
+  $('skinGrid').innerHTML = grid(SKINS); $('hornGrid').innerHTML = grid(HORNS);
 }
 function equipSkin(k) {
   skins.sel = k; saveSkins(); renderSkins();
   if (role === 'guest') hostConn.send({ type: 'skin', k });
 }
+function equipHorn(k) { skins.horn = k; saveSkins(); renderSkins(); hornOf(k).play(); }
 function openCases() {
   if (!$('strip').childElementCount) $('strip').innerHTML = Array.from({ length: 12 }, rollSkin).map(s => skinTile(s)).join('');
   $('cases').hidden = false; renderSkins();
@@ -2883,14 +2927,15 @@ function openCase() {
     if (!spinning) return;
     spinning = false; unrevealed = '';
     (win.r >= 2 ? SFX.ach : SFX.pickup)();
-    setText('caseMsg', `${RARITY[win.r].n}: ${win.n}! ` + (dup ? 'You had it already.' : 'Your robots wear it now.'));
-    if (!dup) equipSkin(win.k); else renderSkins();
+    setText('caseMsg', `${RARITY[win.r].n}: ${win.n}! ` + (dup ? 'You had it already.' : win.play ? 'Your robots honk with it now.' : 'Your robots wear it now.'));
+    if (dup) renderSkins(); else if (win.play) setTimeout(() => equipHorn(win.k), 600); else equipSkin(win.k); // the fanfare first, then the horn
   };
 }
 $('bCases').onclick = openCases;
 $('bCasesX').onclick = closeCases;
 $('bOpen').onclick = openCase;
 $('skinGrid').onclick = e => { const b = e.target.closest('button.sk'); if (b && !b.disabled) equipSkin(b.dataset.k); };
+$('hornGrid').onclick = e => { const b = e.target.closest('button.sk'); if (b && !b.disabled) equipHorn(b.dataset.k); };
 const BOARD_WHERE = { local: 'best runs on this machine', loading: 'loading…', global: 'best runs anywhere', offline: 'offline — showing this machine' };
 const WX_TEXT = { santa: ['Hohoho! 🎅', 'Santa is bowling down the road. Stay off it!'], blizzard: ['Blizzard', 'You can barely see the street'], freeze: ['Freezing rain', 'Every surface is ice for a while'] };
 let lastBannerT = 0, lastWxT = 0, playersKey = null, shopKey = '', pipsKey = '', scoresKey = '';
@@ -3012,6 +3057,10 @@ function updateDOM() {
       skins.own.push('isi'); saveSkins(); renderSkins();
       achToast({ i: '👔', n: 'Isi unlocked', d: 'Ultra Rare skin. Pick it under Skins.' });
     }
+    if (chapter > 8 && !skins.own.includes('h-isi')) { // and dad's tö-tö-tööt (separate check: saves that already have the skin get it too)
+      skins.own.push('h-isi'); saveSkins(); renderSkins();
+      achToast({ i: '🚗', n: 'Isin tööt unlocked', d: 'Ultra Rare horn. Pick it under Skins & horns.' });
+    }
     setText('storyLbl', chapter >= 1 && chapter <= 8 ? `Chapter ${chapter} of 8` : '');
     setText('storyTitle', c.title); setText('storyText', c.intro);
     $('bStoryGo').disabled = role === 'guest' || stateT < .5;
@@ -3102,7 +3151,7 @@ function updateMenu() {
 
 // ---------- touch controls ----------
 const touchDev = matchMedia('(pointer: coarse)').matches;
-const touchIn = { t: 0, s: 0, b: false, h: false, z: false, g: false, x: false };
+const touchIn = { t: 0, s: 0, b: false, h: false, z: false, g: false, x: false, o: 0 };
 const stick = $('stick'), knob = $('knob');
 const joinTouch = () => { if (!myCtrls().some(c => c.touch)) join({ touch: 1 }); };
 function moveStick(e) {
@@ -3117,9 +3166,9 @@ let stickId = null; // follow the finger that grabbed the stick
 stick.onpointerdown = e => { stickId = e.pointerId; try { stick.setPointerCapture(e.pointerId); } catch (_) {} joinTouch(); moveStick(e); };
 stick.onpointermove = e => { if (e.pointerId === stickId) moveStick(e); };
 stick.onpointerup = stick.onpointercancel = e => { if (e.pointerId !== stickId) return; stickId = null; touchIn.t = touchIn.s = 0; knob.style.transform = ''; };
-for (const [id, k] of [['tBoost', 'b'], ['tBrake', 'h'], ['tZap', 'z'], ['tHook', 'g'], ['tBall', 'x']]) {
+for (const [id, k] of [['tBoost', 'b'], ['tBrake', 'h'], ['tZap', 'z'], ['tHook', 'g'], ['tBall', 'x'], ['tHorn', 'o']]) {
   const el = $(id);
-  el.onpointerdown = e => { try { el.setPointerCapture(e.pointerId); } catch (_) {} joinTouch(); touchIn[k] = true; };
+  el.onpointerdown = e => { try { el.setPointerCapture(e.pointerId); } catch (_) {} joinTouch(); touchIn[k] = k === 'o' ? myHorn() : true; };
   el.onpointerup = el.onpointercancel = () => { touchIn[k] = false; };
 }
 
@@ -3168,7 +3217,11 @@ renderer.setAnimationLoop(now => {
 // campaign data invariants: any failure shows as "Assertion failed" in the console
 function storyCheck() {
   console.assert(SKINS.some(s => s.k === 'isi' && s.p && RARITY[s.r].n === 'Ultra Rare' && s.story), 'Isi: Ultra Rare, patterned, story-only');
-  console.assert(Array.from({ length: 5000 }, rollSkin).every(s => s?.k !== 'isi'), 'cases never roll Isi');
+  console.assert(Array.from({ length: 5000 }, rollSkin).every(s => s?.k !== 'isi' && s?.k !== 'h-isi'), 'cases never roll Isi or his horn');
+  console.assert(HORNS.slice(1).every(h => h.k.startsWith('h-') && h.play) && new Set(HORNS.map(h => h.k)).size === HORNS.length, 'horn keys unique, h- prefixed');
+  console.assert(RARITY.slice(0, 5).every((_, r) => HORNS.some(h => h.k && h.r === r && !h.story)), 'every case rarity has a horn');
+  console.assert(Array.from({ length: 2000 }, rollSkin).some(s => s.play), 'cases roll horns');
+  console.assert(hornOf('nope') === HORNS[0] && hornOf(1) === HORNS[0], 'unknown horn falls back to the default');
   console.assert(CHAPTERS.length === 9, 'prologue + 8 chapters');
   console.assert(CHAPTERS.every(c => c.title && c.intro), 'every chapter has title + intro');
   console.assert(HOUSES[KIDS_HOME] && HOUSES[KIDS_HOME].door.x < BW, 'kids home is in block 0');
