@@ -932,12 +932,14 @@ function buildRobot(r) {
   Object.assign(r, { mesh: g, body, flag, fl, fiFlag, pipo, scarf, shell, flame, spot, arrow, beam: beam(r.color), cam: new THREE.PerspectiveCamera(60, 1, .5, 700), camYaw: r.a });
 }
 // owner 'H' = this machine when local/hosting; a guest's robots are owned by its peer id
-function addRobot({ owner = 'H', ctrl = null, lid = 0, id = nextId++, i }) {
+// online every robot shows its player's nickname; couch play keeps Player N
+function nameOf(r) { return (role !== 'local' && (r.n || (r.owner === 'H' && pname))) || `Player ${r.i + 1}`; }
+function addRobot({ owner = 'H', ctrl = null, lid = 0, id = nextId++, i, n = '' }) {
   i ??= COLORS.findIndex((_, k) => !robots.some(r => r.i === k));
-  const r = { id, owner, ctrl, lid, i, color: COLORS[i], ...spawn(i), a: 0, vx: 0, vy: 0, cargo: null, hole: null, esc: 0,
+  const r = { id, owner, ctrl, lid, i, n, color: COLORS[i], ...spawn(i), a: 0, vx: 0, vy: 0, cargo: null, hole: null, esc: 0,
               immune: 1, hitCd: 0, stun: 0, say: '', sayT: 0, boost: 1, boosting: false, zaps: 3, zapCd: 0, hp: 1, earn: 0 };
   buildRobot(r); robots.push(r);
-  achToast({ i: `<i style="display:block;width:24px;height:24px;border-radius:5px;background:${r.color}"></i>`, n: `Player ${i + 1} joined`,
+  achToast({ i: `<i style="display:block;width:24px;height:24px;border-radius:5px;background:${r.color}"></i>`, n: `${esc(nameOf(r))} joined`,
              d: owner === myOwner ? 'On this machine' : 'Online' }, false);
   return r;
 }
@@ -949,7 +951,7 @@ const myCtrls = () => role === 'guest' ? localCtrls : robots.filter(r => r.owner
 function join(ctrl) {
   if (role === 'guest') {
     if (localCtrls.length >= 4) return;
-    localCtrls.push(ctrl); hostConn.send({ type: 'add', lid: localCtrls.length - 1 });
+    localCtrls.push(ctrl); hostConn.send({ type: 'add', lid: localCtrls.length - 1, n: pname });
     return;
   }
   if (robots.length >= MAX_PLAYERS) return;
@@ -1830,7 +1832,14 @@ const menu = document.getElementById('menu'), statusEl = document.getElementById
 const status = t => statusEl.textContent = t;
 // Signaling goes through server/peer.js on api.ruokarobo.com (Caddy proxies /peerjs), so every
 // copy of the game, local file included, meets in the same rooms.
-const PEER_OPTS = { host: API, port: 443, path: '/peerjs', secure: true };
+// PeerJS's own default TURN relays (*.turn.peerjs.com) are gone, so players behind CGNAT or strict
+// firewalls never connected. coturn on the same box (server/turnserver.conf) relays for them.
+// ponytail: static creds, public anyway since the client ships them; coturn's quotas and
+// denied-peer-ip are what keep the relay from being abused.
+const PEER_OPTS = { host: API, port: 443, path: '/peerjs', secure: true, config: { iceServers: [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: [`turn:${API}:3478?transport=udp`, `turn:${API}:3478?transport=tcp`], username: 'ruokarobo', credential: 'ruokarobo-relay' },
+] } };
 document.getElementById('bHost').onclick = hostRoom;
 document.getElementById('bJoin').onclick = () => joinRoom(codeIn.value);
 function showMenuButtons(on) { document.getElementById('bHost').hidden = document.getElementById('joinBox').hidden = !on; bInvite.hidden = true; }
@@ -1840,8 +1849,14 @@ bInvite.onclick = () => navigator.clipboard.writeText(inviteUrl()).then(
   () => { bInvite.textContent = 'Link copied!'; setTimeout(() => bInvite.textContent = 'Copy invite link', 2000); },
   () => status('Copy this link: ' + inviteUrl()));
 
+// online players are told apart by nickname, so going online needs one
+function needName() {
+  if (pname.trim()) return false;
+  status('Type your name first, then go online.'); document.getElementById('pname').focus(); // $ isn't defined yet when an invite link joins on load
+  return true;
+}
 function hostRoom() {
-  if (role !== 'local' || peer) return;
+  if (role !== 'local' || peer || needName()) return;
   if (!window.Peer) return status('Online library failed to load. Check your internet connection.');
   roomCode = Array.from({ length: 5 }, () => pick([...'ABCDEFGHJKMNPQRSTUVWXYZ23456789'])).join('');
   bump('online'); saveTot();
@@ -1860,7 +1875,7 @@ function hostRoom() {
     c.on('data', m => {
       if (onNet(c, c.peer, m)) return;
       if (m.type === 'add' && robots.length < MAX_PLAYERS && !robots.some(r => r.owner === c.peer && r.lid === m.lid)) {
-        const r = addRobot({ owner: c.peer, lid: m.lid }); say(r, 'Moi!'); sfx('join');
+        const r = addRobot({ owner: c.peer, lid: m.lid, n: String(m.n || '').trim().slice(0, 12) }); say(r, 'Moi!'); sfx('join');
       } else if (m.type === 'buy') buy(m.k);
       else if (m.type === 'in') {
         for (const r of robots) if (r.owner === c.peer && m.in[r.lid]) remoteIn[r.id] = m.in[r.lid];
@@ -1872,9 +1887,12 @@ function hostRoom() {
 function joinRoom(code) {
   code = code.trim().toUpperCase();
   if (!code || role !== 'local' || peer) return;
+  if (needName()) return void (codeIn.value = code);
   if (!window.Peer) return status('Online library failed to load. Check your internet connection.');
   status('Connecting…'); showMenuButtons(false);
-  peer = new Peer(PEER_OPTS);
+  const p = peer = new Peer(PEER_OPTS);
+  // ICE that can't find any route never errors, it just never opens; don't leave them on Connecting… forever
+  setTimeout(() => { if (peer === p && role !== 'guest') leaveOnline(`Couldn't reach room ${code}. Try another network (e.g. phone hotspot), or have someone else host.`); }, 20000);
   peer.on('open', id => {
     hostConn = peer.connect('ruokarobo-' + code, { reliable: true });
     hostConn.on('open', () => {
@@ -1883,7 +1901,7 @@ function joinRoom(code) {
       localCtrls.push(...robots.map(r => r.ctrl)); [...robots].forEach(removeRobot);
       // nobody on this machine yet: give them a robot now, joining should be enough to play
       if (!localCtrls.length) localCtrls.push(touchDev ? { touch: 1 } : { kb: 0 });
-      localCtrls.forEach((_, lid) => hostConn.send({ type: 'add', lid }));
+      localCtrls.forEach((_, lid) => hostConn.send({ type: 'add', lid, n: pname }));
       status(`Joined room ${code}. ${touchDev ? 'Touch the stick to drive' : 'You drive with WASD'}. Waiting for the host to start…`);
     });
     hostConn.on('data', m => onNet(hostConn, 'host', m) || (m.type === 'lvl' ? applyLevelMsg(m) : applySnap(m)));
@@ -1917,7 +1935,7 @@ function broadcast(dt) {
   if (role !== 'host' || (netT += dt) < .05) return;
   netT = 0;
   const m = { type: 's', st: state, pvp, pz: paused, level, time, quota, delivered, score, bonus, money, up, banner, bannerT, best,
-    r: robots.map(r => ({ id: r.id, i: r.i, owner: r.owner, x: r.x, y: r.y, a: r.a, vx: r.vx, vy: r.vy, cargo: r.cargo,
+    r: robots.map(r => ({ id: r.id, i: r.i, n: nameOf(r), owner: r.owner, x: r.x, y: r.y, a: r.a, vx: r.vx, vy: r.vy, cargo: r.cargo,
                           hole: r.hole === 'snow' ? 'snow' : !!r.hole, esc: r.esc, stun: r.stun, say: r.say, sayT: r.sayT, bo: r.boost, bz: r.boosting, zp: r.zaps, hp: r.hp, e: r.earn, tw: r.towT > 0 ? r.tow : -1 })),
     c: cars.map(c => c.x), fx: outbox.splice(0),
     p: peds.map(p => ({ x: p.x, y: p.y, a: p.a, m: p.mode, k: p.kickT > 0, mv: p.moving, s: p.say, st: p.sayT })),
@@ -1932,8 +1950,8 @@ function applySnap(m) {
   robots.filter(r => !ids.has(r.id)).forEach(removeRobot);
   for (const s of m.r) {
     let r = robots.find(q => q.id === s.id);
-    if (!r) r = Object.assign(addRobot({ id: s.id, owner: s.owner, i: s.i }), { x: s.x, y: s.y, a: s.a });
-    Object.assign(r, { owner: s.owner, tx: s.x, ty: s.y, ta: s.a, vx: s.vx, vy: s.vy, cargo: s.cargo, hole: s.hole || null,
+    if (!r) r = Object.assign(addRobot({ id: s.id, owner: s.owner, i: s.i, n: s.n }), { x: s.x, y: s.y, a: s.a });
+    Object.assign(r, { owner: s.owner, n: s.n, tx: s.x, ty: s.y, ta: s.a, vx: s.vx, vy: s.vy, cargo: s.cargo, hole: s.hole || null,
                        esc: s.esc, stun: s.stun, say: s.say, sayT: s.sayT, boost: s.bo, boosting: s.bz, zaps: s.zp, hp: s.hp ?? 1, earn: s.e ?? 0, tow: s.tw, towT: s.tw >= 0 ? 1 : 0 });
   }
   m.c.forEach((x, i) => cars[i] && (cars[i].tx = x));
@@ -2287,11 +2305,11 @@ function updateDOM() {
   if (state === 'title') {
     $('bStart').hidden = role === 'guest';
     $('keys').hidden = touchDev; $('touchNote').hidden = !touchDev;
-    const pk = robots.map(r => r.i).join();
+    const pk = robots.map(r => r.i + nameOf(r)).join();
     if (pk !== playersKey) {
       playersKey = pk;
       $('players').innerHTML = robots.length
-        ? robots.map(r => `<span class="chip"><i style="background:${r.color}"></i>Player ${r.i + 1}</span>`).join('')
+        ? robots.map(r => `<span class="chip"><i style="background:${r.color}"></i>${esc(nameOf(r))}</span>`).join('')
         : (touchDev ? 'Touch the stick to join.' : 'Drive with any row of the table. Each row is one player.');
     }
     setText('bestLine', best ? `Best run ${best} €` : '');
@@ -2375,8 +2393,8 @@ function updateDOM() {
   $('over').hidden = state !== 'over';
   if (state === 'over') {
     const tie = ranked.length > 1 && ranked[0].earn === ranked[1].earn;
-    setText('overTitle', !pvp ? 'Battery dead' : tie || !ranked[0] ? "It's a tie!" : `Player ${ranked[0].i + 1} wins!`);
-    setText('overSub', pvp ? ranked.map(r => `Player ${r.i + 1}: ${r.earn} €`).join(' · ') : `The team missed the quota on shift ${level}.`);
+    setText('overTitle', !pvp ? 'Battery dead' : tie || !ranked[0] ? "It's a tie!" : `${nameOf(ranked[0])} wins!`);
+    setText('overSub', pvp ? ranked.map(r => `${nameOf(r)}: ${r.earn} €`).join(' · ') : `The team missed the quota on shift ${level}.`);
     $('overStats').hidden = pvp;
     setText('overEarned', `${score} €`); setText('overBest', `${best} €`);
     setText('overRank', lastRank ? `🏆 #${lastRank} ${boardState === 'global' ? 'worldwide' : 'on this machine'}` : '');
