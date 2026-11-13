@@ -44,8 +44,21 @@
   .pips i{width:8px;height:14px;border-radius:2px;box-shadow:inset 0 0 0 2px var(--blue)}
   .pips i.on{background:var(--blue)}
   #hWx svg{width:24px;height:21px}
-  #joinHint{position:fixed;right:14px;top:12px;padding:9px 13px 6px;font-size:14px;font-weight:600;pointer-events:none}
+  #joinHint{position:fixed;right:70px;top:12px;padding:9px 13px 6px;font-size:14px;font-weight:600;pointer-events:none}
   #joinHint kbd{font-size:11px}
+  #bPause{position:fixed;right:14px;top:12px;width:46px;height:40px;border:0;font-size:18px;font-weight:900;padding:0}
+  #joinAsk{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);padding:12px 18px 9px;font-size:17px;font-weight:700;pointer-events:none;z-index:6;width:max-content;max-width:calc(100vw - 40px)}
+  #hostPaused{position:fixed;left:50%;top:40%;transform:translateX(-50%);font-size:20px}
+
+  /* pause menu */
+  #pause{position:fixed;inset:0;display:grid;place-items:center;background:rgba(13,27,42,.55);overflow:auto;padding:20px;box-sizing:border-box;z-index:10}
+  #pause .plate{width:min(460px,100%);padding:22px 24px 20px;box-sizing:border-box;display:flex;flex-direction:column;gap:12px}
+  #pause h2{margin:0;font-size:38px;font-weight:900;line-height:1}
+  #pause h3{margin:6px 0 0;font-size:15px;font-weight:800;color:#5a6470}
+  #pause label{display:grid;grid-template-columns:9em 1fr;align-items:center;gap:10px;font-weight:700}
+  #pause input[type=range]{width:100%}
+  #pause .row{display:flex;gap:10px;flex-wrap:wrap}
+  #net{margin:0;font:600 12.5px/1.5 ui-monospace,Menlo,monospace;background:#eef2f7;border-radius:6px;padding:8px 10px;white-space:pre-wrap}
 
   /* shift start: a guide sign drops in */
   #sign{position:fixed;left:50%;top:78px;transform:translateX(-50%);padding:18px 22px 14px 26px;width:max-content;max-width:calc(100vw - 40px);
@@ -69,6 +82,7 @@
   /* title */
   #title{position:fixed;left:max(20px,5vw);top:50%;transform:translateY(-50%);width:min(580px,calc(100vw - 40px));
          display:flex;flex-direction:column;gap:12px;max-height:calc(100vh - 32px);overflow:auto;padding:4px 4px 8px;box-sizing:border-box}
+  #title > *{flex-shrink:0} /* short windows scroll the column instead of squashing the keys table */
   #title .hero{padding:22px 28px 20px}
   #title .hero svg{width:92px;height:62px;display:block;margin-bottom:8px}
   #title h1{margin:0;font-size:clamp(48px,9vw,80px);font-weight:900;line-height:.88;letter-spacing:-.015em}
@@ -84,6 +98,7 @@
   #players:has(.chip){background:none;padding:0}
   .chip{display:inline-flex;align-items:center;gap:7px;background:#fff;color:var(--ink);border-radius:6px;padding:6px 11px 3px;font-weight:900;text-shadow:none;box-shadow:0 3px 0 rgba(0,0,0,.2)}
   .chip i{width:12px;height:12px;border-radius:3px}
+  #hScores i{width:14px;height:14px;border-radius:3px;margin-left:6px}
   .actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
   #joinBox{display:inline-flex;gap:6px}
   #code{width:5.4em;font:900 18px var(--font);text-transform:uppercase;text-align:center;letter-spacing:.12em;border:0;border-radius:8px;
@@ -181,11 +196,12 @@
     <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="7" width="18" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="2.2"/><rect x="20" y="10" width="2.6" height="4" fill="currentColor"/></svg>
     <span class="meter"><i id="hBat"></i></span><b id="hTime">80</b><span class="lbl">s</span>
   </div>
-  <div class="plate white">
+  <div class="plate white" id="hDelPlate">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8l9-4 9 4v8l-9 4-9-4zM3 8l9 4 9-4M12 12v8" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
     <span class="pips" id="hPips"></span><b id="hDel">0 / 3</b>
   </div>
-  <div class="plate white"><b id="hMoney">0</b><span class="lbl">€</span></div>
+  <div class="plate white" id="hMoneyPlate"><b id="hMoney">0</b><span class="lbl">€</span></div>
+  <div class="plate white" id="hScores" hidden></div>
   <div class="plate yellow" id="hWx" hidden>
     <svg viewBox="0 0 48 42" aria-hidden="true"><path d="M24 4L45 39H3z" fill="#ffcc00" stroke="#d7261e" stroke-width="5" stroke-linejoin="round"/><path d="M24 16v11" stroke="#1d232b" stroke-width="4.5" stroke-linecap="round"/><circle cx="24" cy="33" r="2.6" fill="#1d232b"/></svg>
     <span id="hWxText"></span>
@@ -231,7 +247,7 @@
     <div class="achGrid" id="achGrid"></div>
   </details>
   <details class="plate white fold" id="boardBox">
-    <summary>Leaderboard<span>best runs on this machine</span></summary>
+    <summary>Leaderboard<span id="boardWhere"></span></summary>
     <ol id="boardList"></ol>
     <p id="boardEmpty">No runs yet. Finish a shift and the board fills up.</p>
   </details>
@@ -239,6 +255,7 @@
   <div class="actions" id="menu">
     <input id="pname" placeholder="Name" maxlength="12" autocomplete="off" aria-label="Name for the leaderboard">
     <button class="go" id="bStart">Start shift</button>
+    <button class="ghost mode" id="bMode" hidden>Mode: Co-op</button>
     <button class="ghost" id="bHost">Host online game</button>
     <span id="joinBox"><input id="code" placeholder="Code" maxlength="5" autocomplete="off" aria-label="Room code"><button class="ghost" id="bJoin">Join</button></span>
   </div>
@@ -262,11 +279,11 @@
 
 <div class="plate danger" id="over" hidden>
   <svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="27" fill="#fff" stroke="#d7261e" stroke-width="8"/><rect x="18" y="25" width="24" height="14" rx="2" fill="none" stroke="#1d232b" stroke-width="3.5"/><rect x="42" y="29" width="4" height="6" fill="#1d232b"/></svg>
-  <h2>Battery dead</h2>
+  <h2 id="overTitle">Battery dead</h2>
   <p id="overSub"></p>
   <p id="overRank"></p>
-  <div class="stats"><div><b id="overEarned">0 €</b><span>earned this run</span></div><div><b id="overBest">0 €</b><span>best run</span></div></div>
-  <button class="go" id="bRetry">Try again</button>
+  <div class="stats" id="overStats"><div><b id="overEarned">0 €</b><span>earned this run</span></div><div><b id="overBest">0 €</b><span>best run</span></div></div>
+  <div class="actions"><button class="go" id="bRetry">Try again</button><button class="ghost mode" id="bMode2" hidden>Mode: Co-op</button></div>
 </div>
 
 <div id="achs"></div>
@@ -893,7 +910,7 @@ function buildRobot(r) {
 function addRobot({ owner = 'H', ctrl = null, lid = 0, id = nextId++, i }) {
   i ??= COLORS.findIndex((_, k) => !robots.some(r => r.i === k));
   const r = { id, owner, ctrl, lid, i, color: COLORS[i], ...spawn(i), a: 0, vx: 0, vy: 0, cargo: null, hole: null, esc: 0,
-              immune: 1, hitCd: 0, stun: 0, say: '', sayT: 0, boost: 1, boosting: false, zaps: 3, zapCd: 0, hp: 1 };
+              immune: 1, hitCd: 0, stun: 0, say: '', sayT: 0, boost: 1, boosting: false, zaps: 3, zapCd: 0, hp: 1, earn: 0 };
   buildRobot(r); robots.push(r); return r;
 }
 function removeRobot(r) {
@@ -965,6 +982,8 @@ function tone(f, d, t0, type, vol) {
 // ---------- game state ----------
 let state = 'title', stateT = 0, level = 1, time = 0, quota = 0, delivered = 0, score = 0, bonus = 0, T = 0;
 let darkness = 0, banner = '', bannerT = 0, snowCount = 0, wind = 0;
+// pvp: one shift, each robot banks its own € (r.earn), most € when the battery dies wins. no quota, no workshop
+let pvp = false;
 let best = 0; try { best = +localStorage.getItem('ruokarobo-best') || 0; } catch (e) {}
 const floats = [];
 // team money buys robot upgrades between shifts; each upgrade has 3 levels
@@ -997,6 +1016,7 @@ function buy(k) {
   bump('spent', price); bump('buys');
 }
 function newRun() {
+  if (robots.length < 2) pvp = false;
   score = 0; money = 0; up = freshUp();
   for (const k in stats) delete stats[k];
   bump('runs'); lastRank = 0;
@@ -1012,7 +1032,7 @@ const ORDERS = [
   { icon: '🛋️', name: 'Sofa – needs two robots', duo: true, time: 1.6, bonus: 30, w: 3 }, // counts as 2 orders
 ];
 function pickOrder() {
-  const ws = ORDERS.map(o => o.duo && robots.length < 2 ? 0 : o.w);
+  const ws = ORDERS.map(o => o.duo && (robots.length < 2 || pvp) ? 0 : o.w);
   let x = Math.random() * ws.reduce((a, w) => a + w, 0);
   return ws.findIndex(w => (x -= w) < 0);
 }
@@ -1088,7 +1108,7 @@ function startLevel(n) {
   level = n; setupLevel(n);
   time = 75 + n * 5 + up.battery * 12; delivered = 0;
   quota = 2 + n + (robots.length - 1) * 2;
-  robots.forEach(r => Object.assign(r, spawn(r.i), { vx: 0, vy: 0, a: 0, camYaw: 0, boost: 1, zaps: 3, cargo: null, hole: null, stun: 0, immune: 1, hp: 1 }));
+  robots.forEach(r => Object.assign(r, spawn(r.i), { vx: 0, vy: 0, a: 0, camYaw: 0, boost: 1, zaps: 3, cargo: null, hole: null, stun: 0, immune: 1, hp: 1, earn: 0 }));
   weather = { k: null, t: 0 }; weatherIn = n >= 2 ? rnd(15, 35) : Infinity;
   mark = { ...stats }; // "clear a shift without X" is measured against this snapshot
   most('players', robots.length);
@@ -1272,19 +1292,60 @@ function achToast(a) {
   SFX.ach(); // local only: an achievement is this machine's, not the whole room's
 }
 
-// ---------- leaderboard: the ten best local runs ----------
-let board = [];
-try { board = JSON.parse(localStorage.getItem('ruokarobo-board') || '[]'); } catch (e) {}
+// ---------- leaderboard ----------
+// Fill BOARD in and every machine shares one board; leave it blank and the board stays on
+// this one. Supabase's anon key is meant to ship in client code — the table's RLS policies
+// decide what it may do, so set the table up like this:
+//   create table scores (
+//     id     bigserial primary key,
+//     name   text not null check (char_length(name) between 1 and 12),
+//     score  int  not null check (score >= 0 and score < 100000),
+//     shift  int  not null check (shift > 0),
+//     robots int  not null check (robots between 1 and 8),
+//     at     timestamptz not null default now());
+//   alter table scores enable row level security;
+//   create policy "anyone reads"   on scores for select using (true);
+//   create policy "anyone inserts" on scores for insert with check (true);
+// ponytail: anyone can POST a score straight from the console — that is what a page with no
+// server of its own means. Sign runs in an edge function if the board ever has to be trusted.
+const BOARD = {
+  url: '', // e.g. 'https://abcdefghijkl.supabase.co/rest/v1/scores'
+  key: '', // that project's anon / publishable key
+};
+const boardOn = () => !!(BOARD.url && BOARD.key);
+const boardHdrs = () => ({ apikey: BOARD.key, Authorization: `Bearer ${BOARD.key}` });
+let localBoard = [];
+try { localBoard = JSON.parse(localStorage.getItem('ruokarobo-board') || '[]'); } catch (e) {}
+let board = localBoard;                                 // whatever is on screen right now
+let boardState = boardOn() ? 'loading' : 'local';       // local | loading | global | offline
+let boardNext = 0;                                      // next refresh, in game seconds
 let pname = '';
 try { pname = localStorage.getItem('ruokarobo-name') || ''; } catch (e) {}
-let lastRank = 0;
+let lastRow = null, lastRank = 0;
+const rankRow = () => { lastRank = lastRow ? board.findIndex(b => b.n === lastRow.n && b.s === lastRow.s) + 1 : 0; };
+async function loadBoard() {
+  if (!boardOn()) return;
+  try {
+    const r = await fetch(`${BOARD.url}?select=name,score,shift,robots&order=score.desc&limit=10`, { headers: boardHdrs() });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    board = (await r.json()).map(x => ({ s: x.score | 0, lv: x.shift | 0, p: x.robots | 0, n: String(x.name ?? '') }));
+    boardState = 'global';
+  } catch (e) { board = localBoard; boardState = 'offline'; } // a dead network just shows the local board
+  rankRow();
+}
+async function postScore(row) {
+  try {
+    await fetch(BOARD.url, { method: 'POST', headers: { ...boardHdrs(), 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+                             body: JSON.stringify({ name: row.n, score: row.s, shift: row.lv, robots: row.p }) });
+  } catch (e) { /* the run is still on the local board */ }
+  await loadBoard();
+}
 function recordRun() {
   const row = { s: score, lv: level, p: robots.length, n: (pname || 'Robo').slice(0, 12), d: Date.now() };
-  board.push(row);
-  board.sort((a, b) => b.s - a.s || a.d - b.d);
-  board = board.slice(0, 10);
-  lastRank = board.indexOf(row) + 1; // 0 when the run did not place
-  try { localStorage.setItem('ruokarobo-board', JSON.stringify(board)); } catch (e) {}
+  lastRow = row;
+  localBoard = [...localBoard, row].sort((a, b) => b.s - a.s || a.d - b.d).slice(0, 10);
+  try { localStorage.setItem('ruokarobo-board', JSON.stringify(localBoard)); } catch (e) {}
+  if (boardOn()) { boardNext = 0; postScore(row); } else { board = localBoard; rankRow(); }
 }
 function damage(r, amt, msg) {
   if (r.hitCd > 0) return;
@@ -1303,13 +1364,14 @@ function zap(r) {
   r.zaps -= 1; r.zapCd = .4; sfx('zap');
   const fx_ = Math.cos(r.a), fy = Math.sin(r.a);
   let best = null, bd = 120;
-  for (const e of [...peds, ...kids]) {
+  for (const e of [...peds, ...kids, ...(pvp ? robots.filter(q => q !== r && !q.hole) : [])]) {
     if (e.mode === 'fall') continue;
     const dx = e.x - r.x, dy = e.y - r.y, d = Math.hypot(dx, dy);
     if (d < bd && (dx * fx_ + dy * fy) / (d || 1) > .7) { best = e; bd = d; } // within ~45° ahead
   }
   fx({ k: 'zap', x1: r.x, y1: r.y, x2: best ? best.x : r.x + fx_ * 70, y2: best ? best.y : r.y + fy * 70 });
   if (!best) return;
+  if (robots.includes(best)) { best.stun = Math.max(best.stun, 1.5); best.vx = best.vy = 0; say(best, 'Bzzzt! ⚡', 1.4); return; }
   best.zapT = 3; say(best, best.kind === 'dog' ? 'Vuh?' : pick(['Bzzzt!', 'Aijai!', 'Auh!']), 1.4);
   bump('zaps');
   bump(best.kind === 'dog' ? 'dogs' : best.mode ? 'peds' : 'kids'); // only pedestrians carry a mode
@@ -1407,7 +1469,7 @@ function updRobot(r, dt) {
   } else if (r.cargo && dist(r, HOUSES[r.cargo.dest].door) < 45 && (!isDuo(r) || helper(r))) {
     const c = r.cargo, O = ORDERS[c.o], late = c.t <= 0, tipX = O.tipX || 1;
     const pay = (late ? 10 : 20) + (O.bonus || 0) + Math.round(15 * c.cond) + (late ? 0 : Math.min(20 * tipX, Math.round(c.t * tipX)));
-    money += pay; score += pay; delivered += O.duo ? 2 : 1;
+    money += pay; score += pay; r.earn += pay; delivered += O.duo ? 2 : 1;
     if (O.duo) { const h = helper(r); say(h, 'Hyvä tiimi! 🛋️'); pop(h, '🛋️ Teamwork', '#9fd3ff'); }
     pop(r, `+${pay} €${late ? ' (late)' : ''}`, late ? '#ff9b9b' : r.color);
     say(r, late ? 'Anteeksi, myöhässä…' : c.cond > .8 ? pick(['Kiitos!', 'Ole hyvä!', 'Hyvää ruokahalua!']) : 'Vähän kolhuja…');
@@ -1438,7 +1500,7 @@ function robotPairs(dt) {
     const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy);
     // handoff: park next to a teammate for a moment and the package changes robots
     const key = a.id + '-' + b.id;
-    if (state === 'play' && d < 2 * R + 8 && !a.hole && !b.hole && !a.cargo !== !b.cargo && !isDuo(a) && !isDuo(b) && Math.hypot(a.vx, a.vy) < 50 && Math.hypot(b.vx, b.vy) < 50
+    if (state === 'play' && !pvp && d < 2 * R + 8 && !a.hole && !b.hole && !a.cargo !== !b.cargo && !isDuo(a) && !isDuo(b) && Math.hypot(a.vx, a.vy) < 50 && Math.hypot(b.vx, b.vy) < 50
         && dist(a, SALEPA.door) > 80) {
       handT[key] = (handT[key] || 0) + dt;
       if (handT[key] > .8) {
@@ -1450,8 +1512,8 @@ function robotPairs(dt) {
     if (d >= 2 * R || d < .001) continue;
     const nx = dx / d, ny = dy / d;
     // friend to the rescue: bumping a stuck robot hooks a tow rope and pulls it out
-    if (a.hole && !b.hole) { escape(a, 'Kiitos kaveri! 💛', -nx, -ny); Object.assign(a, { tow: b.id, towT: 1.5 }); money += 5; score += 5; pop(a, 'Rescue +5 €', '#ffd84a'); bump('rescues'); continue; }
-    if (b.hole && !a.hole) { escape(b, 'Kiitos kaveri! 💛', nx, ny); Object.assign(b, { tow: a.id, towT: 1.5 }); money += 5; score += 5; pop(b, 'Rescue +5 €', '#ffd84a'); bump('rescues'); continue; }
+    if (!pvp && a.hole && !b.hole) { escape(a, 'Kiitos kaveri! 💛', -nx, -ny); Object.assign(a, { tow: b.id, towT: 1.5 }); money += 5; score += 5; pop(a, 'Rescue +5 €', '#ffd84a'); bump('rescues'); continue; }
+    if (!pvp && b.hole && !a.hole) { escape(b, 'Kiitos kaveri! 💛', nx, ny); Object.assign(b, { tow: a.id, towT: 1.5 }); money += 5; score += 5; pop(b, 'Rescue +5 €', '#ffd84a'); bump('rescues'); continue; }
     if (a.hole || b.hole) continue;
     const o = (2 * R - d) / 2;
     a.x -= nx * o; a.y -= ny * o; b.x += nx * o; b.y += ny * o;
@@ -1604,6 +1666,7 @@ function update(dt) {
   T += dt; stateT += dt; bannerT -= dt; wxMsgT -= dt;
   if (achQ.length && (achT -= dt) <= 0) { achT = 1.1; achToast(achQ.shift()); }
   if ((achCheckT -= dt) <= 0) { achCheckT = .4; if (state !== 'title') checkAch(); }
+  if (boardOn() && state !== 'play' && T > boardNext) { boardNext = T + 30; loadBoard(); }
   pollPads();
   wind = Math.sin(T * .3) * 2.5 * level * (weather.k === 'blizzard' ? 4 : 1);
   for (const f of floats) { f.t -= dt; f.h += 3 * dt; }
@@ -1619,7 +1682,7 @@ function update(dt) {
   broadcast(dt);
   if (state === 'play') {
     time -= dt;
-    if (delivered >= quota) {
+    if (!pvp && delivered >= quota) {
       bonus = Math.ceil(time); money += bonus; score += bonus; state = 'shop'; stateT = 0;
       sfx('clear');
       bump('shifts'); bump('earn', bonus);
@@ -1632,8 +1695,11 @@ function update(dt) {
       saveTot();
     } else if (time <= 0) {
       time = 0; state = 'over'; stateT = 0;
-      if (score > best) { best = score; try { localStorage.setItem('ruokarobo-best', best); } catch (e) {} }
-      recordRun(); saveTot();
+      if (!pvp) { // a pvp match is not a team run: keep it off the best run and the leaderboard
+        if (score > best) { best = score; try { localStorage.setItem('ruokarobo-best', best); } catch (e) {} }
+        recordRun();
+      }
+      saveTot();
       sfx('over');
     }
   }
@@ -1756,9 +1822,9 @@ function applyLevelMsg(m) {
 function broadcast(dt) {
   if (role !== 'host' || (netT += dt) < .05) return;
   netT = 0;
-  const m = { type: 's', st: state, level, time, quota, delivered, score, bonus, money, up, banner, bannerT, best,
+  const m = { type: 's', st: state, pvp, level, time, quota, delivered, score, bonus, money, up, banner, bannerT, best,
     r: robots.map(r => ({ id: r.id, i: r.i, owner: r.owner, x: r.x, y: r.y, a: r.a, vx: r.vx, vy: r.vy, cargo: r.cargo,
-                          hole: !!r.hole, esc: r.esc, stun: r.stun, say: r.say, sayT: r.sayT, bo: r.boost, bz: r.boosting, zp: r.zaps, hp: r.hp, tw: r.towT > 0 ? r.tow : -1 })),
+                          hole: !!r.hole, esc: r.esc, stun: r.stun, say: r.say, sayT: r.sayT, bo: r.boost, bz: r.boosting, zp: r.zaps, hp: r.hp, e: r.earn, tw: r.towT > 0 ? r.tow : -1 })),
     c: cars.map(c => c.x), fx: outbox.splice(0),
     p: peds.map(p => ({ x: p.x, y: p.y, a: p.a, m: p.mode, k: p.kickT > 0, mv: p.moving, s: p.say, st: p.sayT })),
     kd: kids.map(k => ({ a: k.a, th: k.throwT, s: k.say, st: k.sayT, z: k.zapT > 0 })), b: balls, wx: weather,
@@ -1766,14 +1832,14 @@ function broadcast(dt) {
   for (const c of conns) c.send(m);
 }
 function applySnap(m) {
-  ({ st: state, level, time, quota, delivered, score, bonus, money, up, banner, bannerT, best } = m);
+  ({ st: state, pvp, level, time, quota, delivered, score, bonus, money, up, banner, bannerT, best } = m);
   const ids = new Set(m.r.map(s => s.id));
   robots.filter(r => !ids.has(r.id)).forEach(removeRobot);
   for (const s of m.r) {
     let r = robots.find(q => q.id === s.id);
     if (!r) r = Object.assign(addRobot({ id: s.id, owner: s.owner, i: s.i }), { x: s.x, y: s.y, a: s.a });
     Object.assign(r, { owner: s.owner, tx: s.x, ty: s.y, ta: s.a, vx: s.vx, vy: s.vy, cargo: s.cargo, hole: s.hole || null,
-                       esc: s.esc, stun: s.stun, say: s.say, sayT: s.sayT, boost: s.bo, boosting: s.bz, zaps: s.zp, hp: s.hp ?? 1, tow: s.tw, towT: s.tw >= 0 ? 1 : 0 });
+                       esc: s.esc, stun: s.stun, say: s.say, sayT: s.sayT, boost: s.bo, boosting: s.bz, zaps: s.zp, hp: s.hp ?? 1, earn: s.e ?? 0, tow: s.tw, towT: s.tw >= 0 ? 1 : 0 });
   }
   m.c.forEach((x, i) => cars[i] && (cars[i].tx = x));
   m.p?.forEach((q, i) => peds[i] && Object.assign(peds[i], { tx: q.x, ty: q.y, a: q.a, mode: q.m, kickT: q.k ? .3 : 0, moving: q.mv, say: q.s, sayT: q.st }));
@@ -1944,7 +2010,7 @@ function drawUI(vs) {
 function drawTag(v) { // the player's own order sign at the bottom of their view
   const r = v.r, cx = v.x + v.w / 2, by = v.y + v.h - 14;
   let title, sub, num = null, numFill = BLUE, right = '', late = false;
-  if (r.hole) { title = 'Stuck in a pothole'; sub = 'Wiggle out, or wait for a friend to tow you'; }
+  if (r.hole) { title = 'Stuck in a pothole'; sub = pvp ? 'Wiggle out: nobody is coming to help' : 'Wiggle out, or wait for a friend to tow you'; }
   else if (r.cargo) {
     const O = ORDERS[r.cargo.o];
     title = `${O.icon} ${O.name}`; num = r.cargo.dest + 1;
@@ -2097,11 +2163,19 @@ for (const u of SHOP) {
   $(isStyle(u.k) ? 'cardsStyle' : 'cardsUp').append(b);
 }
 $('bNext').onclick = $('bStart').onclick = $('bRetry').onclick = pressStart;
+$('bMode').onclick = $('bMode2').onclick = () => { if (role !== 'guest') pvp = !pvp; };
+const BOARD_WHERE = { local: 'best runs on this machine', loading: 'loading…', global: 'best runs anywhere', offline: 'offline — showing this machine' };
 const WX_TEXT = { blizzard: ['Blizzard', 'You can barely see the street'], freeze: ['Freezing rain', 'Every surface is ice for a while'] };
-let lastBannerT = 0, lastWxT = 0, playersKey = '', shopKey = '', pipsKey = '';
+let lastBannerT = 0, lastWxT = 0, playersKey = '', shopKey = '', pipsKey = '', scoresKey = '';
 function restartAnim(el) { el.classList.remove('show'); void el.offsetWidth; el.classList.add('show'); }
 function updateDOM() {
   const play = state === 'play';
+  for (const id of ['bMode', 'bMode2']) { // co-op or pvp: a choice once there is someone to play with
+    $(id).hidden = robots.length < 2;
+    $(id).disabled = role === 'guest';
+    setText(id, `Mode: ${pvp ? 'PvP' : 'Co-op'}`);
+  }
+  const ranked = [...robots].sort((a, b) => b.earn - a.earn);
   // title
   $('title').hidden = state !== 'title';
   if (state === 'title') {
@@ -2121,10 +2195,11 @@ function updateDOM() {
       const row = a => `<span class="achIt${achDone.has(a.k) ? ' on' : ''}" title="${a.d}"><i>${a.i}</i>${achDone.has(a.k) ? a.n : '???'}</span>`;
       $('achGrid').innerHTML = [...ACH.filter(a => achDone.has(a.k)), ...achLeft].map(row).join('');
     }
-    const bk = board.length + ':' + lastRank + ':' + (board[0]?.s ?? -1);
+    const bk = board.length + ':' + lastRank + ':' + boardState + ':' + (board[0]?.s ?? -1);
     if (bk !== boardKey) {
       boardKey = bk;
       $('boardEmpty').hidden = board.length > 0;
+      setText('boardWhere', BOARD_WHERE[boardState]);
       $('boardList').innerHTML = board.map((b, i) => `<li class="${i + 1 === lastRank ? 'you' : ''}"><span class="rk">${i + 1}</span><span>${esc(b.n)}</span>`
         + `<span class="mt">shift ${b.lv} · ${b.p} robot${b.p === 1 ? '' : 's'}</span><span class="sc">${b.s} €</span></li>`).join('');
     }
@@ -2137,6 +2212,9 @@ function updateDOM() {
     $('hBatPlate').classList.toggle('low', time < 15);
     const pk = `${delivered}/${quota}`;
     if (pk !== pipsKey) { pipsKey = pk; $('hPips').innerHTML = quota <= 12 ? Array.from({ length: quota }, (_, i) => `<i class="${i < delivered ? 'on' : ''}"></i>`).join('') : ''; }
+    $('hDelPlate').hidden = $('hMoneyPlate').hidden = pvp; $('hScores').hidden = !pvp;
+    const sc = pvp ? ranked.map(r => `<i style="background:${r.color}"></i><b>${r.earn}</b>`).join('') + '<span class="lbl">€</span>' : '';
+    if (sc !== scoresKey) $('hScores').innerHTML = scoresKey = sc;
     $('hWx').hidden = !weather.k;
     if (weather.k) setText('hWxText', `${WX_TEXT[weather.k][0]} ${Math.ceil(weather.t)} s`);
     $('hRoom').hidden = !roomCode; setText('hRoomCode', roomCode);
@@ -2146,9 +2224,9 @@ function updateDOM() {
   } else $('joinHint').hidden = true;
   // shift sign drops in when a new shift starts
   if (play && bannerT > lastBannerT + .5) {
-    setText('signTitle', `Shift ${level}`);
-    setText('signSub', `${LEVEL_NAMES[Math.min(level, 4) - 1]}. Deliver before the battery runs out.`);
-    setText('signQuota', quota);
+    setText('signTitle', pvp ? 'PvP' : `Shift ${level}`);
+    setText('signSub', pvp ? 'Most € when the battery dies wins. Zap rivals to stun them.' : `${LEVEL_NAMES[Math.min(level, 4) - 1]}. Deliver before the battery runs out.`);
+    setText('signQuota', quota); $('signQuota').parentElement.hidden = pvp;
     $('sign').hidden = false; restartAnim($('sign'));
   }
   lastBannerT = bannerT;
@@ -2179,9 +2257,12 @@ function updateDOM() {
   // run over
   $('over').hidden = state !== 'over';
   if (state === 'over') {
-    setText('overSub', `The team missed the quota on shift ${level}.`);
+    const tie = ranked.length > 1 && ranked[0].earn === ranked[1].earn;
+    setText('overTitle', !pvp ? 'Battery dead' : tie || !ranked[0] ? "It's a tie!" : `Player ${ranked[0].i + 1} wins!`);
+    setText('overSub', pvp ? ranked.map(r => `Player ${r.i + 1}: ${r.earn} €`).join(' · ') : `The team missed the quota on shift ${level}.`);
+    $('overStats').hidden = pvp;
     setText('overEarned', `${score} €`); setText('overBest', `${best} €`);
-    setText('overRank', lastRank ? `🏆 #${lastRank} on the leaderboard` : '');
+    setText('overRank', lastRank ? `🏆 #${lastRank} ${boardState === 'global' ? 'worldwide' : 'on this machine'}` : '');
     $('bRetry').disabled = role === 'guest' || stateT < 1;
     setText('bRetry', role === 'guest' ? 'Waiting for the host' : 'Try again');
   }
