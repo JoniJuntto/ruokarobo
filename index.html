@@ -1070,6 +1070,7 @@ function addRobot({ owner = 'H', ctrl = null, lid = 0, id = nextId++, i, n = '',
   return r;
 }
 function removeRobot(r) {
+  if (eetu && r.cargo?.o === EETU) { eetu.state = 'ice'; if (eetu.mesh) eetu.mesh.visible = true; } // nobody may leave with Eetu: back to the edge
   scene.remove(r.mesh, r.arrow, r.beam);
   robots.splice(robots.indexOf(r), 1);
 }
@@ -1314,14 +1315,14 @@ function startStory(ch, save) {
 }
 // a chapter starts from its card; a retry restarts it with the money and upgrades it began with
 function playChapter() {
-  storyStart = { money, up: { ...up } }; storySave(chapter);
+  pvp = false; storyStart = { money, up: { ...up } }; storySave(chapter);
   startLevel(chapter);
 }
 // dev only (?chapter=N): skip to the end of a chapter for testing
 if (urlChapter) window.__story = { drain: () => { time = .1; }, clear: () => { delivered = quota; }, setDel: n => { delivered = n; },
   tp: (i, x, y) => Object.assign(robots[i], { x, y, vx: 0, vy: 0, immune: 0, hitCd: 0 }), cargo: i => robots[i].cargo && { ...robots[i].cargo, icon: ORDERS[robots[i].cargo.o].icon },
   doors: () => ({ salepa: SHOPS[0].door, home: HOUSES[KIDS_HOME].door, puoti: SHOPS[1].door }), wreck: i => { robots[i].hp = .01; robots[i].hitCd = 0; robots[i].immune = 0; damage(robots[i], 1, 'test'); },
-  goal: () => goalDone, face: (i, x, y) => { const r = robots[i]; r.a = Math.atan2(y - r.y, x - r.x); }, eetu: () => eetu && { state: eetu.state, say: eetu.say, x: eetu.x, y: eetu.y }, pres: () => presents.map(({ x, y, gone }) => ({ x, y, gone })), get: () => ({ state, chapter, level, quota, delivered, money, up, campaign, time, darkness, wx: weather.k, santaIn, ice: ice.length, holes: holes.length, cars: cars.length, peds: peds.length, kids: kids.map(k => [Math.round(k.x), Math.round(k.y)]), plow: !!plow }) };
+  goal: () => goalDone, hook: i => hook(robots[i]), drop: i => removeRobot(robots[i]), robots: () => robots.map(r => ({ id: r.id, owner: r.owner, mine: r.owner === myOwner, x: Math.round(r.x), y: Math.round(r.y) })), face: (i, x, y) => { const r = robots[i]; r.a = Math.atan2(y - r.y, x - r.x); }, eetu: () => eetu && { state: eetu.state, say: eetu.say, x: eetu.x, y: eetu.y }, pres: () => presents.map(({ x, y, gone }) => ({ x, y, gone })), get: () => ({ state, chapter, level, quota, delivered, money, up, campaign, time, darkness, wx: weather.k, santaIn, ice: ice.length, holes: holes.length, cars: cars.length, peds: peds.length, kids: kids.map(k => [Math.round(k.x), Math.round(k.y)]), plow: !!plow }) };
 function retryChapter() { money = storyStart.money; up = { ...storyStart.up }; playChapter(); }
 const DAY = new THREE.Color('#cfdbe8'), NIGHT = new THREE.Color('#0a1328');
 
@@ -1901,8 +1902,8 @@ function updRobot(r, dt) {
   if (!r.cargo && dist(r, shop.door) < 45 && !presents.length && !eetu) {
     // orders go to this block or the next one over, never across the whole map
     const near = HOUSES.flatMap((h, i) => Math.abs(h.door.x - shop.door.x) < BW * 1.2 ? [i] : []);
-    // ch 8: once only the sled is missing, S-1 gets it at the Salepa door
-    const sled = chap()?.goal === 'sled' && r === robots[0] && shop === SHOPS[0] && delivered >= quota - 1 && !goalDone;
+    // ch 8: once only the sled is missing, S-1 gets it at the next shop it reaches (the HUD points to the nearest)
+    const sled = chap()?.goal === 'sled' && r === robots[0] && delivered >= quota - 1 && !goalDone;
     const o = sled ? SLED : pickOrder(), O = ORDERS[o], dest = O.home ? KIDS_HOME : pick(near);
     // each order has a deadline: arrive in time for the speed tip
     r.cargo = { dest, o, cond: 1, t0: T, t: Math.round((8 + dist(shop.door, HOUSES[dest].door) / 60) * (O.time || 1) * (1 + .15 * up.box)) };
@@ -2144,7 +2145,7 @@ function update(dt) {
   if (frozen()) { pollPads(); return broadcast(dt); } // keep guests' snapshots (and the pause flag) flowing
   T += dt; stateT += dt; bannerT -= dt; wxMsgT -= dt;
   if (achQ.length && (achT -= dt) <= 0) { achT = 1.1; achToast(achQ.shift()); }
-  if ((achCheckT -= dt) <= 0) { achCheckT = .4; if (state !== 'title') checkAch(); }
+  if ((achCheckT -= dt) <= 0) { achCheckT = .4; if (state !== 'title' && !campaign) checkAch(); } // story chapters are not shifts: no endless achievements
   if (boardOn() && state !== 'play' && T > boardNext) { boardNext = T + 30; loadBoard(); }
   pollPads();
   wind = Math.sin(T * .3) * 2.5 * level * (weather.k === 'blizzard' ? 4 : 1);
@@ -2806,7 +2807,7 @@ function updateDOM() {
   const play = state === 'play';
   for (const id of ['bMode', 'bMode2']) { // co-op or pvp: always on the title, so solo players can see pvp exists
     const solo = robots.length < 2;
-    $(id).hidden = solo && id === 'bMode2';
+    $(id).hidden = solo && id === 'bMode2' || campaign && id === 'bMode2'; // no pvp inside the story
     $(id).disabled = solo || role === 'guest';
     // a robot only exists once its player presses a key, so say that instead of just "needs a 2nd player"
     setText(id, !solo ? `Mode: ${pvp ? 'PvP' : 'Co-op'}`
