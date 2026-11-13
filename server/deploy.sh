@@ -4,7 +4,7 @@
 set -euo pipefail
 
 HOST=${HOST:-root@94.237.112.119}
-WWW=/var/www/ruokarobo          # Caddy serves this on robo.huikaton.online (and :8099)
+WWW=/var/www/ruokarobo          # Caddy serves this on ruokarobo.com (and robo.huikaton.online, :8099)
 APP=/opt/ruokarobo-board        # the leaderboard service
 PEER=/opt/ruokarobo-peer        # PeerJS signaling; `npm i peer@1.0.2` lives in node_modules there
 
@@ -17,4 +17,4 @@ ssh "$HOST" "[ -d $PEER/node_modules/peer ] || (cd $PEER && npm i --omit=dev --n
   systemctl daemon-reload && systemctl enable -q ruokarobo-peer &&
   systemctl restart ruokarobo-board ruokarobo-peer && sleep 1 && systemctl is-active ruokarobo-board ruokarobo-peer"
 
-echo "https://robo.huikaton.online/"
+echo "https://ruokarobo.com/"

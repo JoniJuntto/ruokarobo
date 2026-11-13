@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
-<script src="https://analytics.huikaton.online/api/script.js" data-site-id="2d0719c58b53" defer></script>
+<script src="https://analytics.huikaton.online/api/script.js" data-site-id="1a793a74bbc4" defer></script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>Ruokarobo</title>
@@ -1368,10 +1368,11 @@ function achToast(a, sound = true) { // also announces players joining (sound of
 // score list is worth.
 // ponytail: anyone can POST a score straight from the console. The server clamps the numbers
 // and rate-limits each address, which is as far as a page with no login can get.
-// Absolute URL so every copy of the game (the live site, :8099, a local dev server, the file
-// opened straight from disk) shares the one global board; board.js answers CORS for any origin.
-// Where nothing answers (no network) the fetch fails and the local board shows.
-const BOARD = { url: 'https://robo.huikaton.online/api/scores' };
+// Absolute URL so every copy of the game (ruokarobo.com, the old huikaton host, a local dev
+// server, the file opened straight from disk) shares the one global board; board.js answers CORS
+// for any origin. Where nothing answers (no network) the fetch fails and the local board shows.
+const API = 'api.ruokarobo.com';
+const BOARD = { url: `https://${API}/api/scores` };
 const boardOn = () => !!BOARD.url;
 let localBoard = [];
 try { localBoard = JSON.parse(localStorage.getItem('ruokarobo-board') || '[]'); } catch (e) {}
@@ -1827,11 +1828,9 @@ let role = 'local', peer = null, hostConn = null, myOwner = 'H', roomCode = '', 
 const conns = new Set(), remoteIn = {}, outbox = [], localCtrls = [];
 const menu = document.getElementById('menu'), statusEl = document.getElementById('status'), codeIn = document.getElementById('code');
 const status = t => statusEl.textContent = t;
-// Signaling goes through server/peer.js on whatever host serves the game (Caddy proxies /peerjs).
-// Opened as a local file there is no such host, so it falls back to the public PeerJS cloud.
-const PEER_OPTS = location.protocol.startsWith('http')
-  ? { host: location.hostname, port: +location.port || (location.protocol === 'https:' ? 443 : 80), path: '/peerjs', secure: location.protocol === 'https:' }
-  : {};
+// Signaling goes through server/peer.js on api.ruokarobo.com (Caddy proxies /peerjs), so every
+// copy of the game, local file included, meets in the same rooms.
+const PEER_OPTS = { host: API, port: 443, path: '/peerjs', secure: true };
 document.getElementById('bHost').onclick = hostRoom;
 document.getElementById('bJoin').onclick = () => joinRoom(codeIn.value);
 function showMenuButtons(on) { document.getElementById('bHost').hidden = document.getElementById('joinBox').hidden = !on; bInvite.hidden = true; }
