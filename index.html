@@ -183,6 +183,7 @@
   #tBoost{right:20px;bottom:178px;background:var(--blue)}
   #tBrake{right:20px;bottom:84px;background:var(--orange)}
   #tZap{right:112px;bottom:131px;background:#0a8fa8}
+  #tHook{right:112px;bottom:225px;background:#6b3b1c}
 
   @media (max-width:640px){#sign h2{font-size:34px}#shop h2{font-size:32px}#hud .plate{font-size:18px;padding:8px 11px 5px}#hud{max-width:calc(100vw - 28px)}}
   @media (prefers-reduced-motion:reduce){#sign.show,#alert.show,.ach{animation:none}}
@@ -234,15 +235,15 @@
   </div>
   <div class="plate white" id="keys">
     <table>
-      <tr><th>Who</th><th>Drive</th><th>Boost</th><th>Brake</th><th>Zap</th></tr>
-      <tr><td>Player 1</td><td><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></td><td><kbd>Shift</kbd></td><td><kbd>Space</kbd></td><td><kbd>E</kbd></td></tr>
-      <tr><td>Player 2</td><td><kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd></td><td><kbd>R-Shift</kbd></td><td><kbd>.</kbd></td><td><kbd>,</kbd></td></tr>
-      <tr><td>Player 3</td><td><kbd>I</kbd><kbd>J</kbd><kbd>K</kbd><kbd>L</kbd></td><td><kbd>U</kbd></td><td><kbd>O</kbd></td><td><kbd>P</kbd></td></tr>
-      <tr><td>Player 4</td><td><kbd>T</kbd><kbd>F</kbd><kbd>G</kbd><kbd>H</kbd></td><td><kbd>R</kbd></td><td><kbd>Y</kbd></td><td><kbd>V</kbd></td></tr>
-      <tr><td>Gamepad</td><td>Stick</td><td><kbd>A</kbd></td><td><kbd>B</kbd></td><td><kbd>X</kbd></td></tr>
+      <tr><th>Who</th><th>Drive</th><th>Boost</th><th>Brake</th><th>Zap</th><th>Hook</th></tr>
+      <tr><td>Player 1</td><td><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></td><td><kbd>Shift</kbd></td><td><kbd>Space</kbd></td><td><kbd>E</kbd></td><td><kbd>Q</kbd></td></tr>
+      <tr><td>Player 2</td><td><kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd></td><td><kbd>R-Shift</kbd></td><td><kbd>.</kbd></td><td><kbd>,</kbd></td><td><kbd>/</kbd></td></tr>
+      <tr><td>Player 3</td><td><kbd>I</kbd><kbd>J</kbd><kbd>K</kbd><kbd>L</kbd></td><td><kbd>U</kbd></td><td><kbd>O</kbd></td><td><kbd>P</kbd></td><td><kbd>N</kbd></td></tr>
+      <tr><td>Player 4</td><td><kbd>T</kbd><kbd>F</kbd><kbd>G</kbd><kbd>H</kbd></td><td><kbd>R</kbd></td><td><kbd>Y</kbd></td><td><kbd>V</kbd></td><td><kbd>B</kbd></td></tr>
+      <tr><td>Gamepad</td><td>Stick</td><td><kbd>A</kbd></td><td><kbd>B</kbd></td><td><kbd>X</kbd></td><td><kbd>Y</kbd></td></tr>
     </table>
   </div>
-  <div class="plate white" id="touchNote" hidden>Steer with the stick on the left. Boost, brake and zap are on the right.</div>
+  <div class="plate white" id="touchNote" hidden>Steer with the stick on the left. Boost, brake, zap and hook are on the right.</div>
   <details class="plate white fold" id="achBox">
     <summary>Achievements<span id="achCount"></span></summary>
     <div class="achGrid" id="achGrid"></div>
@@ -312,7 +313,7 @@
 </div>
 
 <div id="achs"></div>
-<div id="touch" hidden><div id="stick"><div id="knob"></div></div><button id="tBoost" class="tbtn">Boost</button><button id="tBrake" class="tbtn">Brake</button><button id="tZap" class="tbtn">Zap</button></div>
+<div id="touch" hidden><div id="stick"><div id="knob"></div></div><button id="tBoost" class="tbtn">Boost</button><button id="tBrake" class="tbtn">Brake</button><button id="tZap" class="tbtn">Zap</button><button id="tHook" class="tbtn">Hook</button></div>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script type="module">
@@ -875,10 +876,10 @@ function buildHazards() {
 // ---------- players & input ----------
 const COLORS = ['#ff7a1a', '#2d9cff', '#2fbf6a', '#e84393', '#f5c400', '#9b59b6', '#00c2c7', '#e74c3c'];
 const KB = [
-  { name: 'WASD', u: 'KeyW', d: 'KeyS', l: 'KeyA', r: 'KeyD', b: 'ShiftLeft', h: 'Space', z: 'KeyE', bn: 'Shift' },
-  { name: 'Arrows', u: 'ArrowUp', d: 'ArrowDown', l: 'ArrowLeft', r: 'ArrowRight', b: 'ShiftRight', h: 'Period', z: 'Comma', bn: 'R-Shift' },
-  { name: 'IJKL', u: 'KeyI', d: 'KeyK', l: 'KeyJ', r: 'KeyL', b: 'KeyU', h: 'KeyO', z: 'KeyP', bn: 'U' },
-  { name: 'TFGH', u: 'KeyT', d: 'KeyG', l: 'KeyF', r: 'KeyH', b: 'KeyR', h: 'KeyY', z: 'KeyV', bn: 'R' },
+  { name: 'WASD', u: 'KeyW', d: 'KeyS', l: 'KeyA', r: 'KeyD', b: 'ShiftLeft', h: 'Space', z: 'KeyE', g: 'KeyQ', bn: 'Shift' },
+  { name: 'Arrows', u: 'ArrowUp', d: 'ArrowDown', l: 'ArrowLeft', r: 'ArrowRight', b: 'ShiftRight', h: 'Period', z: 'Comma', g: 'Slash', bn: 'R-Shift' },
+  { name: 'IJKL', u: 'KeyI', d: 'KeyK', l: 'KeyJ', r: 'KeyL', b: 'KeyU', h: 'KeyO', z: 'KeyP', g: 'KeyN', bn: 'U' },
+  { name: 'TFGH', u: 'KeyT', d: 'KeyG', l: 'KeyF', r: 'KeyH', b: 'KeyR', h: 'KeyY', z: 'KeyV', g: 'KeyB', bn: 'R' },
 ];
 // ponytail: the street is sized for 4; grow the map before raising this
 const MAX_PLAYERS = 4;
@@ -940,7 +941,7 @@ function nameOf(r) { return (role !== 'local' && (r.n || (r.owner === 'H' && pna
 function addRobot({ owner = 'H', ctrl = null, lid = 0, id = nextId++, i, n = '' }) {
   i ??= COLORS.findIndex((_, k) => !robots.some(r => r.i === k));
   const r = { id, owner, ctrl, lid, i, n, color: COLORS[i], ...spawn(i), a: 0, vx: 0, vy: 0, cargo: null, hole: null, esc: 0,
-              immune: 1, hitCd: 0, stun: 0, say: '', sayT: 0, boost: 1, boosting: false, zaps: 3, zapCd: 0, hp: 1, earn: 0 };
+              immune: 1, hitCd: 0, stun: 0, say: '', sayT: 0, boost: 1, boosting: false, zaps: 3, zapCd: 0, hookCd: 0, hp: 1, earn: 0 };
   buildRobot(r); robots.push(r);
   achToast({ i: `<i style="display:block;width:24px;height:24px;border-radius:5px;background:${r.color}"></i>`, n: `${esc(nameOf(r))} joined`,
              d: owner === myOwner ? 'On this machine' : 'Online' }, false);
@@ -979,7 +980,7 @@ const ZERO = { t: 0, s: 0 };
 const input = r => r.owner === 'H' ? ctrlInput(r.ctrl) : remoteIn[r.id] || ZERO;
 function ctrlInput(ctrl) {
   if (ctrl.touch) return touchIn;
-  if (ctrl.kb != null) { const k = KB[ctrl.kb]; return { t: keys.has(k.u) - keys.has(k.d), s: keys.has(k.r) - keys.has(k.l), b: keys.has(k.b), h: keys.has(k.h), z: keys.has(k.z) }; }
+  if (ctrl.kb != null) { const k = KB[ctrl.kb]; return { t: keys.has(k.u) - keys.has(k.d), s: keys.has(k.r) - keys.has(k.l), b: keys.has(k.b), h: keys.has(k.h), z: keys.has(k.z), g: keys.has(k.g) }; }
   const gp = navigator.getGamepads?.()[ctrl.pad];
   if (!gp) return { t: 0, s: 0 };
   const dz = v => Math.abs(v) < .2 ? 0 : v, b = k => gp.buttons[k]?.pressed;
@@ -988,7 +989,7 @@ function ctrlInput(ctrl) {
   if (b(6) || b(13)) t = -1;
   if (b(14)) s = -1; if (b(15)) s = 1;
   if (b(0) && !t) t = 1; // boost alone also drives
-  return { t, s, b: b(0) || b(5), h: b(1) || b(4), z: b(2) || b(3) };
+  return { t, s, b: b(0) || b(5), h: b(1) || b(4), z: b(2), g: b(3) };
 }
 addEventListener('keydown', e => {
   if (e.code === 'Escape' && !e.repeat) { if (e.target.tagName === 'INPUT') e.target.blur(); return setMenu(!menuOpen); }
@@ -1172,7 +1173,7 @@ function startLevel(n) {
   level = n; setupLevel(n);
   time = 75 + n * 5 + up.battery * 12; delivered = 0;
   quota = 2 + n + (robots.length - 1) * 2;
-  robots.forEach(r => Object.assign(r, spawn(r.i), { vx: 0, vy: 0, a: 0, camYaw: 0, boost: 1, zaps: 3 + up.tesla, cargo: null, hole: null, stun: 0, immune: 1, hp: 1, earn: 0 }));
+  robots.forEach(r => Object.assign(r, spawn(r.i), { vx: 0, vy: 0, a: 0, camYaw: 0, boost: 1, zaps: 3 + up.tesla, cargo: null, hole: null, stun: 0, immune: 1, hp: 1, earn: 0, towT: 0, hookCd: 0 }));
   weather = { k: null, t: 0 }; weatherIn = n >= 2 ? rnd(15, 35) : Infinity;
   mark = { ...stats }; // "clear a shift without X" is measured against this snapshot
   most('players', robots.length);
@@ -1198,6 +1199,7 @@ const SFX = {
   alarm: () => [880, 660, 880, 660].forEach((f, i) => beep(f, .12, i * .14, 'square', .04)),
   splat: () => beep(300, .08, 0, 'triangle', .07),
   zap: () => { beep(1400, .07, 0, 'sawtooth', .05); beep(700, .14, .05, 'square', .04); beep(1800, .05, .1, 'sawtooth', .03); },
+  hook: () => { beep(900, .05, 0, 'triangle', .06); beep(300, .12, .05, 'sawtooth', .05); },
   bark: () => { beep(420, .07, 0, 'square', .06); beep(380, .09, .12, 'square', .06); },
   boost: () => { beep(160, .3, 0, 'sawtooth', .04); beep(320, .25, .05, 'sawtooth', .03); },
   clear: () => [523, 659, 784, 1047].forEach((f, i) => beep(f, .15, i * .12)),
@@ -1444,6 +1446,18 @@ function zap(r) {
   stats.zapT = T; most('spree', stats.spreeN);
   if (best.mode) { best.mode = 'zapped'; best.moving = false; }
 }
+function hook(r) { // grappling hook: the nearest robot ahead is dragged behind you on a rope for 5 s
+  r.hookCd = 8; sfx('hook');
+  const fx_ = Math.cos(r.a), fy = Math.sin(r.a);
+  let best = null, bd = 220;
+  for (const q of robots) {
+    if (q === r || q.hole || q.towT > 0) continue;
+    const dx = q.x - r.x, dy = q.y - r.y, d = Math.hypot(dx, dy);
+    if (d < bd && (dx * fx_ + dy * fy) / (d || 1) > .5) { best = q; bd = d; } // within ~60° ahead
+  }
+  if (!best) return say(r, 'Ohi!', 1);
+  Object.assign(best, { tow: r.id, towT: 5 }); say(best, 'Hei! 🪝', 1.4); say(r, 'Mukaan! 🪝', 1.4);
+}
 function escape(r, msg, nx = Math.cos(r.a), ny = Math.sin(r.a)) {
   r.hole = null; r.immune = 1.5; r.vx = nx * 150; r.vy = ny * 150;
   say(r, msg); sfx('escape');
@@ -1477,6 +1491,8 @@ function updRobot(r, dt) {
       r.vx = t.vx + (tx - r.x) * 6; r.vy = t.vy + (ty - r.y) * 6;
       const d = t.a - r.a; r.a += Math.atan2(Math.sin(d), Math.cos(d)) * Math.min(1, dt * 5);
       r.x += r.vx * dt; r.y += r.vy * dt;
+      for (const b of SOLIDS) pushOut(r, clamp(r.x, b.x, b.x + b.w), clamp(r.y, b.y, b.y + b.h), R); // hooked for 5 s: don't drag through houses
+      r.x = clamp(r.x, R, W - R); r.y = clamp(r.y, R, H - R);
       return;
     }
   }
@@ -1492,6 +1508,9 @@ function updRobot(r, dt) {
   r.zaps = Math.min(3 + up.tesla, r.zaps + dt / 6); r.zapCd -= dt;
   if (inp.z && !r.zPrev && control && r.zapCd <= 0 && r.zaps >= 1 && state === 'play') zap(r);
   r.zPrev = !!inp.z;
+  r.hookCd -= dt;
+  if (inp.g && !r.gPrev && control && r.hookCd <= 0 && robots.length > 1 && state === 'play') hook(r);
+  r.gPrev = !!inp.g;
   const hb = !!inp.h;
   r.a += inp.s * 3.4 * (hb ? 1.7 : 1) * dt * control;
   const cx = Math.cos(r.a), sy = Math.sin(r.a);
@@ -1592,6 +1611,7 @@ function robotPairs(dt) {
         say(from, 'Ota tästä! 📦'); say(to, 'Selvä!'); pop(to, '🤝 Handoff', '#9fd3ff'); sfx('pickup'); bump('handoffs');
       }
     } else handT[key] = Math.min(0, (handT[key] || 0) + dt);
+    if (a.towT > 0 && a.tow === b.id || b.towT > 0 && b.tow === a.id) continue; // a hooked robot gets reeled past you, not into you
     if (d >= 2 * R || d < .001) continue;
     const nx = dx / d, ny = dy / d;
     // friend to the rescue: bumping a stuck robot hooks a tow rope and pulls it out
@@ -2485,7 +2505,7 @@ function updateMenu() {
 
 // ---------- touch controls ----------
 const touchDev = matchMedia('(pointer: coarse)').matches;
-const touchIn = { t: 0, s: 0, b: false, h: false, z: false };
+const touchIn = { t: 0, s: 0, b: false, h: false, z: false, g: false };
 const stick = $('stick'), knob = $('knob');
 const joinTouch = () => { if (!myCtrls().some(c => c.touch)) join({ touch: 1 }); };
 function moveStick(e) {
@@ -2500,7 +2520,7 @@ let stickId = null; // follow the finger that grabbed the stick
 stick.onpointerdown = e => { stickId = e.pointerId; try { stick.setPointerCapture(e.pointerId); } catch (_) {} joinTouch(); moveStick(e); };
 stick.onpointermove = e => { if (e.pointerId === stickId) moveStick(e); };
 stick.onpointerup = stick.onpointercancel = e => { if (e.pointerId !== stickId) return; stickId = null; touchIn.t = touchIn.s = 0; knob.style.transform = ''; };
-for (const [id, k] of [['tBoost', 'b'], ['tBrake', 'h'], ['tZap', 'z']]) {
+for (const [id, k] of [['tBoost', 'b'], ['tBrake', 'h'], ['tZap', 'z'], ['tHook', 'g']]) {
   const el = $(id);
   el.onpointerdown = e => { try { el.setPointerCapture(e.pointerId); } catch (_) {} joinTouch(); touchIn[k] = true; };
   el.onpointerup = el.onpointercancel = () => { touchIn[k] = false; };
