@@ -257,6 +257,7 @@
     <button class="go" id="bStart">Start shift</button>
     <button class="ghost mode" id="bMode" hidden>Mode: Co-op</button>
     <button class="ghost" id="bHost">Host online game</button>
+    <button class="ghost" id="bInvite" hidden>Copy invite link</button>
     <span id="joinBox"><input id="code" placeholder="Code" maxlength="5" autocomplete="off" aria-label="Room code"><button class="ghost" id="bJoin">Join</button></span>
   </div>
   <p id="status" class="note"></p>
@@ -1815,7 +1816,12 @@ const PEER_OPTS = location.protocol.startsWith('http')
   : {};
 document.getElementById('bHost').onclick = hostRoom;
 document.getElementById('bJoin').onclick = () => joinRoom(codeIn.value);
-function showMenuButtons(on) { document.getElementById('bHost').hidden = document.getElementById('joinBox').hidden = !on; }
+function showMenuButtons(on) { document.getElementById('bHost').hidden = document.getElementById('joinBox').hidden = !on; bInvite.hidden = true; }
+// a file:// link is useless to a friend, so the invite button only shows when the game is served
+const bInvite = document.getElementById('bInvite'), inviteUrl = () => location.origin + location.pathname + '?join=' + roomCode;
+bInvite.onclick = () => navigator.clipboard.writeText(inviteUrl()).then(
+  () => { bInvite.textContent = 'Link copied!'; setTimeout(() => bInvite.textContent = 'Copy invite link', 2000); },
+  () => status('Copy this link: ' + inviteUrl()));
 
 function hostRoom() {
   if (role !== 'local' || peer) return;
@@ -1824,7 +1830,10 @@ function hostRoom() {
   bump('online'); saveTot();
   status('Opening room…'); showMenuButtons(false);
   peer = new Peer('ruokarobo-' + roomCode, PEER_OPTS);
-  peer.on('open', () => { role = 'host'; status(`Room code: ${roomCode} — friends type it in and press Join`); });
+  peer.on('open', () => {
+    role = 'host'; bInvite.hidden = !location.protocol.startsWith('http');
+    status(`Room code: ${roomCode} — send the invite link, or friends type the code and press Join`);
+  });
   peer.on('error', e => {
     if (e.type !== 'unavailable-id') return leaveOnline('Online error: ' + e.type);
     peer.destroy(); peer = null; hostRoom(); // code taken, roll a new one
@@ -1855,8 +1864,10 @@ function joinRoom(code) {
       role = 'guest'; myOwner = id; roomCode = code; bump('online'); saveTot();
       // players who already joined on this machine come along
       localCtrls.push(...robots.map(r => r.ctrl)); [...robots].forEach(removeRobot);
+      // nobody on this machine yet: give them a robot now, joining should be enough to play
+      if (!localCtrls.length) localCtrls.push(touchDev ? { touch: 1 } : { kb: 0 });
       localCtrls.forEach((_, lid) => hostConn.send({ type: 'add', lid }));
-      status(`Joined room ${code}. Press your keys to add players. Waiting for the host to start…`);
+      status(`Joined room ${code}. ${touchDev ? 'Touch the stick to drive' : 'You drive with WASD'}. Waiting for the host to start…`);
     });
     hostConn.on('data', m => onNet(hostConn, 'host', m) || (m.type === 'lvl' ? applyLevelMsg(m) : applySnap(m)));
     hostConn.on('close', () => leaveOnline('The host left the game.'));
@@ -1869,6 +1880,9 @@ function leaveOnline(msg) {
   [...robots].forEach(removeRobot);
   state = 'title'; setupLevel(1); showMenuButtons(true); status(msg);
 }
+// invite link: ?join=CODE connects straight away; drop it from the URL so a reload doesn't rejoin a dead room
+const inviteCode = new URLSearchParams(location.search).get('join');
+if (inviteCode) { history.replaceState(null, '', location.pathname); joinRoom(inviteCode); }
 function levelMsg() {
   return { type: 'lvl', n: level, ice: ice.map(({ x, y, rx, ry, gone }) => ({ x, y, rx, ry, gone })), holes,
            cars: cars.map(({ x, y, dir, base, v, color }) => ({ x, y, dir, base, v, color })),
@@ -2238,7 +2252,12 @@ function updateDOM() {
     const solo = robots.length < 2;
     $(id).hidden = solo && id === 'bMode2';
     $(id).disabled = solo || role === 'guest';
-    setText(id, solo ? 'PvP: needs a 2nd player' : `Mode: ${pvp ? 'PvP' : 'Co-op'}`);
+    // a robot only exists once its player presses a key, so say that instead of just "needs a 2nd player"
+    setText(id, !solo ? `Mode: ${pvp ? 'PvP' : 'Co-op'}`
+      : !myCtrls().length ? 'PvP: press a key to get your robot'
+      : role === 'guest' ? 'PvP: waiting for the host to press a key'
+      : conns.size ? 'PvP: friend joined, they press a key'
+      : 'PvP: 2nd player, press a key');
   }
   const ranked = [...robots].sort((a, b) => b.earn - a.earn);
   // title
