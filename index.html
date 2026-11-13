@@ -1261,6 +1261,13 @@ const PAT = {
     for (const c of ['#7b2cff55', '#1fa2ff44', '#ff3fa455']) { const x = rnd(0, w), y = rnd(0, w), gr = g.createRadialGradient(x, y, 0, x, y, w * .45);
       gr.addColorStop(0, c); gr.addColorStop(1, '#0000'); g.fillStyle = gr; g.fillRect(0, 0, w, w); }
     g.fillStyle = '#fff'; for (let i = 0; i < 70; i++) g.fillRect(rnd(0, w), rnd(0, w), i % 9 ? 1 : 2, i % 9 ? 1 : 2); },
+  zebra: (g, w) => { g.fillStyle = '#f5f4ee'; g.fillRect(0, 0, w, w); g.strokeStyle = '#111'; g.lineCap = 'round';
+    for (let x = -4; x < w; x += w / 11) { g.lineWidth = rnd(3, 6); g.beginPath(); g.moveTo(x, -4); g.bezierCurveTo(x + rnd(-14, 14), w * .35, x + rnd(-14, 14), w * .65, x + rnd(-8, 8), w + 4); g.stroke(); } },
+  candy: (g, w) => { g.fillStyle = '#fff'; g.fillRect(0, 0, w, w); g.fillStyle = '#d4141c'; // candy cane: diagonal stripes
+    for (let x = 0; x < w * 2; x += w / 4) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x + w / 8, 0); g.lineTo(x + w / 8 - w, w); g.lineTo(x - w, w); g.fill(); } },
+  knit: (g, w) => { const q = w / 16; // christmas sweater: red bands, white zigzag between
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+      g.fillStyle = y < 2 || y > 13 ? '#c8102e' : y > 4 && y < 11 && (x + Math.abs(y - 7.5) | 0) % 4 === 0 ? '#fff' : '#1d5b34'; g.fillRect(x * q, y * q, q, q); } },
 };
 const skinCanvas = s => s.cv ??= (() => { const c = document.createElement('canvas'); c.width = c.height = 128; s.p(c.getContext('2d'), 128, 128); return c; })();
 const SKINS = [ // c = shell colour, ro/me = roughness/metalness, e = glow, p = pattern
@@ -1277,8 +1284,15 @@ const SKINS = [ // c = shell colour, ro/me = roughness/metalness, e = glow, p = 
   { k: 'chrome', n: 'Kromi', r: 2, c: '#dfe4ea', ro: .12, me: 1 },
   { k: 'bubble', n: 'Purkka', r: 2, c: '#ff5fb0', ro: .2, me: .3 },
   { k: 'onyx', n: 'Onyx', r: 2, c: '#15171b', ro: .18, me: .6 },
+  { k: 'copper', n: 'Kupari', r: 2, c: '#b8733a', ro: .25, me: 1 },
+  { k: 'pearl', n: 'Helmiäinen', r: 2, c: '#f3ece0', ro: .15, me: .45 },
   { k: 'aurora', n: 'Revontuli', r: 3, c: '#3fe0b0', e: '#0d6b55', ro: .25 },
   { k: 'lava', n: 'Laava', r: 3, c: '#ff5a1f', e: '#7a1800', ro: .4 },
+  { k: 'neon', n: 'Neon', r: 3, c: '#39ff14', e: '#1f8a0c', ro: .3 },
+  { k: 'ice', n: 'Jää', r: 3, c: '#bfe9ff', e: '#2f6f94', ro: .08, me: .2 },
+  { k: 'zebra', n: 'Seepra', r: 4, c: '#f5f4ee', p: PAT.zebra },
+  { k: 'candy', n: 'Karkkikeppi', r: 4, c: '#d4141c', p: PAT.candy, ro: .3 },
+  { k: 'knit', n: 'Jouluneule', r: 4, c: '#1d5b34', p: PAT.knit, ro: .95 },
   { k: 'camo', n: 'Maastokuvio', r: 4, c: '#6b7a45', p: PAT.camo },
   { k: 'frost', n: 'Pakkaskamo', r: 4, c: '#dfe6ec', p: PAT.frost, ro: .6 },
   { k: 'tiger', n: 'Tiikeri', r: 4, c: '#f2871c', p: PAT.tiger, ro: .5 },
@@ -1304,10 +1318,18 @@ const HORNS = [
   { k: 'h-laiva', n: 'Sumutorvi', r: 2, i: '🚢', play: () => chord([73, 110, 147], 1.6, 0, 'sawtooth', .05) },
   { k: 'h-halytys', n: 'Hälytys', r: 2, i: '🚨', play: () => mel([[622, .3], [466, .3], [622, .3], [466, .3]], 'square', .035) },
   { k: 'h-cucaracha', n: 'Cucaracha', r: 2, i: '🌮', play: () => mel([[392, .1], [392, .1], [392, .1], [523, .3], [659, .3], [0, .1], [392, .1], [392, .1], [392, .1], [523, .3], [659, .45]], 'square', .035) },
+  { k: 'h-lehma', n: 'Lehmä', r: 2, i: '🐄', play: () => { toot(190, 1.1, 0, 'sawtooth', .045, 130); toot(95, 1.1, 0, 'sawtooth', .03, 65); } },
+  { k: 'h-ovikello', n: 'Ovikello', r: 2, i: '🛎️', play: () => { beep(659, .8, 0, 'sine', .09); beep(523, 1, .4, 'sine', .09); } }, // ding-dong, the food is here
   { k: 'h-jaatelo', n: 'Jäätelöauto', r: 3, i: '🍦', play: () => mel([[784, .15], [988, .15], [1175, .15], [1568, .3], [1175, .15], [1568, .45]], 'triangle', .06) },
   { k: 'h-reki', n: 'Joulupukin reki', r: 3, i: '🛷', play: () => SFX.jingle() },
+  { k: 'h-juna', n: 'Höyryjuna', r: 3, i: '🚂', play: () => [[0, .4], [.55, 1]].forEach(([t, d]) => [523, 659, 784].forEach(f => toot(f * .94, d, t, 'sawtooth', .022, f))) },
+  { k: 'h-laser', n: 'Laser', r: 3, i: '🔫', play: () => [0, .14, .28].forEach(t => toot(1900, .12, t, 'square', .03, 180)) },
   { k: 'h-ilma', n: 'Ilmatorvi', r: 4, i: '🎺', play: () => [[0, .18], [.24, .18], [.48, .75]].forEach(([t, d]) => chord([466, 470, 587, 698], d, t, 'sawtooth', .03)) },
   { k: 'h-ufo', n: 'Ufo', r: 4, i: '👽', play: () => { toot(300, .4, 0, 'sine', .07, 1400); toot(1400, .3, .4, 'sine', .07, 500); toot(500, .5, .7, 'sine', .07, 1800); } },
+  { k: 'h-urut', n: 'Urut', r: 4, i: '🎹', play: () => { const ns = [[440, .08], [392, .08], [440, .7], [0, .15], [392, .12], [349, .12], [330, .12], [294, .12], [277, .4], [294, 1]]; // Bach's toccata, both hands
+    mel(ns, 'sawtooth', .025); mel(ns.map(([f, d]) => [f / 2, d]), 'sawtooth', .025); } },
+  { k: 'h-modeemi', n: 'Modeemi', r: 4, i: '📠', play: () => { mel([[1209, .08], [0, .03], [1336, .08], [0, .03], [1477, .08], [0, .03], [1336, .08], [0, .1]], 'sine', .05);
+    toot(2100, .25, .5, 'square', .025, 1200); toot(980, .4, .75, 'sawtooth', .025, 2400); toot(1650, .35, 1.15, 'square', .02); } },
   { k: 'h-isi', n: 'Isin tööt', r: 4, i: '🚗', story: true, hint: 'Finish the story', play: () => SFX.honk() }, // tö-tö-tööt, dad's honk from the story
 ];
 const hornOf = k => HORNS.find(h => h.k === k) || HORNS[0]; // anything unknown (old saves, remote input) is the default
