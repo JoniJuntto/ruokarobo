@@ -446,7 +446,7 @@ const SURF = {
   snow: { acc: 380, kF: 2.6, kL: 3.5, max: 120 },
   ice:  { acc: 110, kF: 0.12, kL: 0.18, max: 270 },
 };
-let presents = [], eetu = null, ice = [], holes = [], cars = [], peds = [], kids = [], balls = [], loot = [], plow = null, santa = null, santaIn = Infinity;
+let presents = [], eetu = null, ice = [], holes = [], cars = [], peds = [], kids = [], balls = [], loot = [], thieves = [], plow = null, santa = null, santaIn = Infinity;
 let weather = { k: null, t: 0 }, weatherIn = Infinity;
 function surf(x, y) { // surface feel with upgrades applied
   const s = SURF[surface(x, y)];
@@ -974,6 +974,13 @@ function buildHazards() {
       box(m.body, .6, .7, .7, mat(WOLT, null, .6), -.6, 1.6, 0);
     }
     Object.assign(p, { mesh: m.g, body: m.body, legs: m.legs, head: m.head });
+  }
+  for (const t of thieves) { // Prösma: the rival chain's delivery bot, green with red eyes
+    const g = t.mesh = new THREE.Group(); hazardGroup.add(g); g.scale.setScalar(.4);
+    rbox(g, 3.6, 1.45, 2.6, .38, mat('#0a8f3c', '#053d1a', .45), 0, 1.25, 0);
+    rbox(g, 3.66, .42, 2.66, .16, mat('#14181d', null, .6), 0, .62, 0);
+    rbox(g, 3, .22, 2.25, .1, mat('#f2f2ee', null, .5), -.08, 2.02, 0);
+    for (const sz of [-.55, .55]) mesh(sphGeo(.16), mat('#ff3b30', '#ff3b30'), g, 1.84, 1.45, sz);
   }
   for (const b of BOXES) { // translucent rainbow cube with a ? on every face
     b.mesh = place(new THREE.Group(), b.x, b.y); hazardGroup.add(b.mesh);
@@ -1514,6 +1521,11 @@ function setupLevel(n) {
   }
   if (Math.random() < .2) loot.push({ x: SAUNA.x + SAUNA.w / 2, y: SAUNA.y + SAUNA.h + 25, got: 0, ham: 1 }); // rare: a kinkkumittari left by the sauna
   plow = cv('plow', n >= 2) ? { x: 20, y: 580, a: 0, wi: 1, dir: 1 } : null;
+  // Prösma robots (endless, shift 5+): one per block, two from shift 8. they wander until someone nearby carries an order
+  thieves = campaign || pvp || roam || n < 5 ? [] : Array.from({ length: hz(n >= 8 ? 2 : 1) * BLOCKS }, () => {
+    const s = spot(), g = spot();
+    return { ...s, gx: g.x, gy: g.y, a: 0, vx: 0, vy: 0, cargo: null, cd: 0, imm: 0, say: '', sayT: 0 };
+  });
   applyLevel(n);
   if (role === 'host') for (const c of conns) c.send(levelMsg());
 }
@@ -1823,7 +1835,7 @@ function zap(r) {
   r.zaps -= 1; r.zapCd = .4; sfx('zap');
   const fx_ = Math.cos(r.a), fy = Math.sin(r.a);
   let best = null, bd = 120 + 30 * up.tesla;
-  for (const e of [...peds, ...kids, ...(pvp ? robots.filter(q => q !== r && !q.hole) : [])]) {
+  for (const e of [...peds, ...kids, ...thieves, ...(pvp ? robots.filter(q => q !== r && !q.hole) : [])]) {
     if (e.mode === 'fall') continue;
     const dx = e.x - r.x, dy = e.y - r.y, d = Math.hypot(dx, dy);
     if (d < bd && (dx * fx_ + dy * fy) / (d || 1) > .7) { best = e; bd = d; } // within ~45° ahead
@@ -1831,6 +1843,7 @@ function zap(r) {
   fx({ k: 'zap', x1: r.x, y1: r.y, x2: best ? best.x : r.x + fx_ * 70, y2: best ? best.y : r.y + fy * 70 });
   if (!best) return;
   if (robots.includes(best)) { best.stun = Math.max(best.stun, 1.5); best.vx = best.vy = 0; say(best, 'Bzzzt! ⚡', 1.4); bump('rivals'); return; }
+  if (thieves.includes(best)) { best.cd = 3; say(best, 'Bzzzt! ⚡', 1.4); return; } // frozen in place: go bump it
   best.zapT = 3; say(best, best.kind === 'dog' ? 'Vuh?' : pick(['Bzzzt!', 'Aijai!', 'Auh!']), 1.4);
   bump('zaps');
   bump(best.kind === 'dog' ? 'dogs' : best.mode ? 'peds' : 'kids'); // only pedestrians carry a mode
@@ -2237,6 +2250,43 @@ function updPlow(dt) {
     }
   }
 }
+// ---------- Prösma robots: shove you, take the order and run. bump one to take the order back ----------
+const stealable = r => !!r.cargo && !r.hole && !isDuo(r) && !ORDERS[r.cargo.o].keep;
+function updThieves(dt) {
+  for (const t of thieves) {
+    t.cd -= dt; t.imm -= dt; t.sayT -= dt; // cd > 0: stunned
+    if (t.cargo && t.sayT <= 0) say(t, ORDERS[t.cargo.o].icon + ' 😈', .3); // the loot stays on show
+    const byDist = (a, b) => dist(t, a) - dist(t, b);
+    const near = robots.filter(r => !r.hole).sort(byDist)[0], prey = !t.cargo && robots.filter(r => stealable(r) && dist(t, r) < 420).sort(byDist)[0];
+    let gx = t.gx, gy = t.gy, sp = 60;
+    if (t.cargo && near && dist(t, near) < 320) { gx = 2 * t.x - near.x; gy = 2 * t.y - near.y; sp = 140; } // runs, but a robot on a clear sidewalk (190) catches it
+    else if (prey) { gx = prey.x; gy = prey.y; sp = 170; }
+    else if (Math.hypot(gx - t.x, gy - t.y) < 12) { const s = spot(); t.gx = s.x; t.gy = s.y; }
+    t.mode = prey ? 'chase' : 'walk';
+    const d = Math.hypot(gx - t.x, gy - t.y);
+    if (state === 'play' && t.cd <= 0 && d > 2) { t.a = Math.atan2(gy - t.y, gx - t.x); const m = Math.min(d, sp * dt); t.x += Math.cos(t.a) * m; t.y += Math.sin(t.a) * m; }
+    // ponytail: no pathfinding, it steers straight and slides along walls; a cornered thief is the catchable kind
+    for (const b of SOLIDS) pushOut(t, clamp(t.x, b.x, b.x + b.w), clamp(t.y, b.y, b.y + b.h), R);
+    for (const tr of trees) pushOut(t, tr.x, tr.y, R + tr.r);
+    t.x = clamp(t.x, 10, W - 10); t.y = clamp(t.y, 10, H - 10); t.vx = t.vy = 0;
+    if (state !== 'play') continue;
+    for (const r of robots) {
+      const dd = dist(r, t);
+      if (r.hole || dd >= 2 * R) continue;
+      const nx = (r.x - t.x) / (dd || 1), ny = (r.y - t.y) / (dd || 1);
+      pushOut(r, t.x, t.y, 2 * R);
+      if (t.cargo) { // bumped: the order goes back to whoever has room for it
+        if (t.imm > 0 || r.cargo) continue;
+        r.cargo = t.cargo; t.cargo = null; t.cd = 4;
+        say(t, 'Höh! 😵', 2); say(r, 'Mun tilaus! 📦'); pop(r, '📦 Got it back', '#9fd3ff'); sfx('pickup'); fx({ k: 'burst', x: t.x, y: t.y, n: 14 });
+      } else if (t.cd <= 0) {
+        r.vx += nx * 260; r.vy += ny * 260; r.stun = Math.max(r.stun, .4); sfx('kick');
+        if (stealable(r)) { t.cargo = r.cargo; r.cargo = null; t.imm = 1; say(t, 'Prösma kiittää! 😈', 1.5); pop(r, '📦 Prösma took your order!', '#ff9b9b'); }
+        else { t.cd = 1.5; say(t, 'Pois tieltä!', 1); }
+      }
+    }
+  }
+}
 // Santa sweeps a whole lane now and then: cars tumble like pins, robots get flung
 function updSanta(dt) {
   if (!santa) {
@@ -2319,6 +2369,7 @@ function update(dt) {
   updCars(dt);
   updPeds(dt);
   updPlow(dt);
+  updThieves(dt);
   updSanta(dt);
   updKids(dt);
   if (state === 'play') for (const [i, l] of loot.entries()) {
@@ -2510,13 +2561,14 @@ function levelMsg() {
   return { type: 'lvl', n: level, cg: campaign, ch: chapter, pr: presents.map(({ x, y, gone }) => ({ x, y, gone })), et: eetu?.state, ice: ice.map(({ x, y, rx, ry, gone }) => ({ x, y, rx, ry, gone })), holes,
            cars: cars.map(({ x, y, dir, base, v, color }) => ({ x, y, dir, base, v, color })),
            peds: peds.map(({ x, y, side, kind, color, hat }) => ({ x, y, side, kind, color, hat })),
-           kids: kids.map(({ x, y, a, dx, dy, coat, hat, bum }) => ({ x, y, a, dx, dy, coat, hat, bum })), loot: loot.map(({ x, y, got, ham }) => ({ x, y, got, ham })), plow: !!plow };
+           kids: kids.map(({ x, y, a, dx, dy, coat, hat, bum }) => ({ x, y, a, dx, dy, coat, hat, bum })), loot: loot.map(({ x, y, got, ham }) => ({ x, y, got, ham })), th: thieves.map(({ x, y }) => ({ x, y })), plow: !!plow };
 }
 function applyLevelMsg(m) {
   level = m.n; campaign = !!m.cg; chapter = m.ch || 0; presents = m.pr || []; eetu = m.et ? { x: AVANTO.x, y: AVANTO.y, state: m.et, say: '', sayT: 0 } : null; ice = m.ice; holes = m.holes; cars = m.cars;
   peds = m.peds.map(p => ({ ...p, a: 0, mode: 'walk', kickT: 0, say: '', sayT: 0 }));
   kids = m.kids.map(k => ({ ...k, throwT: 0, say: '', sayT: 0 })); balls = []; loot = m.loot || [];
   plow = m.plow ? { x: 20, y: 580, a: 0 } : null;
+  thieves = (m.th || []).map(t => ({ ...t, a: 0, say: '', sayT: 0 }));
   applyLevel(m.n);
 }
 function broadcast(dt) {
@@ -2527,6 +2579,7 @@ function broadcast(dt) {
                           hole: typeof r.hole === 'string' ? r.hole : !!r.hole, esc: r.esc, stun: r.stun, say: r.say, sayT: r.sayT, bo: r.boost, bl: r.boostLock, bz: r.boosting, dk: r.dTier, zp: r.zaps, hp: r.hp, e: r.earn, dr: r.drunk, lg: r.lag, kd: !!r.kid, th: r.throwT, tw: r.towT > 0 ? r.tow : -1 })),
     c: cars.map(c => c.x), fx: outbox.splice(0),
     p: peds.map(p => ({ x: p.x, y: p.y, a: p.a, m: p.mode, k: p.kickT > 0, mv: p.moving, s: p.say, st: p.sayT })),
+    tv: thieves.map(t => ({ x: t.x, y: t.y, a: t.a, c: t.cargo ? 1 : 0, z: t.cd > 0 ? 1 : 0, m: t.mode, s: t.say, st: t.sayT })),
     kd: kids.map(k => ({ a: k.a, th: k.throwT, s: k.say, st: k.sayT, z: k.zapT > 0 })), b: balls, wx: weather,
     pl: plow && { x: plow.x, y: plow.y, a: plow.a }, sa: santa, ig: ice.map(p => p.gone ? 1 : 0).join(''), pg: presents.map(p => p.gone ? 1 : 0).join(''), bxs: BOXES.map(b => b.t ? 1 : 0).join(''), et: eetu && { s: eetu.state, say: eetu.say, sayT: eetu.sayT } };
   for (const c of conns) c.send(m);
@@ -2545,6 +2598,7 @@ function applySnap(m) {
   }
   m.c.forEach((x, i) => cars[i] && (cars[i].tx = x));
   m.p?.forEach((q, i) => peds[i] && Object.assign(peds[i], { tx: q.x, ty: q.y, a: q.a, mode: q.m, kickT: q.k ? .3 : 0, moving: q.mv, say: q.s, sayT: q.st }));
+  m.tv?.forEach((q, i) => thieves[i] && Object.assign(thieves[i], { tx: q.x, ty: q.y, a: q.a, cargo: q.c, cd: q.z, mode: q.m, say: q.s, sayT: q.st }));
   m.kd?.forEach((q, i) => kids[i] && Object.assign(kids[i], { a: q.a, throwT: q.th, say: q.s, sayT: q.st, zapT: q.z ? 1 : 0 }));
   balls = m.b || []; weather = m.wx || weather;
   BOXES.forEach((b, i) => b.t = +(m.bxs?.[i] === '1'));
@@ -2568,7 +2622,7 @@ function guestTick(dt) {
     const d = r.ta - r.a; r.a += Math.atan2(Math.sin(d), Math.cos(d)) * k;
     r.sayT -= dt;
   }
-  for (const p of peds) if (p.tx != null) { p.x += (p.tx - p.x) * k; p.y += (p.ty - p.y) * k; p.kickT -= dt; p.sayT -= dt; }
+  for (const p of [...peds, ...thieves]) if (p.tx != null) { p.x += (p.tx - p.x) * k; p.y += (p.ty - p.y) * k; p.kickT -= dt; p.sayT -= dt; }
   for (const c of cars) if (c.tx != null) c.x = Math.abs(c.tx - c.x) > 400 ? c.tx : c.x + (c.tx - c.x) * k;
   if (santa) santa.x += santa.dir * SANTA_V * dt;
   if (plow?.tx != null) { plow.x += (plow.tx - plow.x) * k; plow.y += (plow.ty - plow.y) * k; }
@@ -2657,6 +2711,7 @@ function sync(dt) {
   for (const b of BOXES) if (b.mesh) { b.mesh.visible = pvp && !b.t; b.mesh.rotation.set(T * .7, T * 1.3, 0); b.mesh.position.y = 1.6 + Math.sin(T * 2.5 + b.x) * .2; }
   boxMat.color.setHSL(T * .15 % 1, .9, .6);
   for (const l of loot) if (l.mesh) { l.mesh.visible = !l.got; l.mesh.rotation.y = T * 1.5; l.mesh.position.y = .7 + Math.sin(T * 3) * .15; }
+  for (const t of thieves) if (t.mesh) { place(t.mesh, t.x, t.y); t.mesh.rotation.y = -t.a + (t.cd > 0 ? T * 12 : 0); } // stunned ones spin
   if (plow?.mesh) { place(plow.mesh, plow.x, plow.y); plow.mesh.rotation.y = -plow.a; plow.beacon.visible = (T * 4 | 0) % 2 === 0; }
   let ropes = 0; // tow ropes, and straps between a sofa and its helper
   for (const r of robots) {
@@ -2800,7 +2855,7 @@ function drawTag(v) { // the player's own order sign at the bottom of their view
 }
 function drawLabels(v) {
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  for (const p of [...peds, ...kids]) {
+  for (const p of [...peds, ...kids, ...thieves]) {
     const q = scr(p.x, p.y, p.dx != null ? 2.4 : 3.3, v);
     if (!q.ok) continue;
     if (p.sayT > 0) bubble(q.x, q.y, p.say, RED);
@@ -2874,6 +2929,7 @@ function drawMinimap(v) {
   ctx.strokeStyle = v.r.color; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x + tx * k, y + tgt.y * k, 7 + Math.sin(T * 6) * 2, 0, 7); ctx.stroke();
   for (const p of peds) dot(p.x, p.y, 2.6, p.mode === 'chase' ? RED : p.kind === 'dog' ? '#8b5a2b' : p.kind === 'wolt' ? WOLT : '#6b7480');
   for (const q of kids) dot(q.x, q.y, 2.2, '#ff9d00');
+  for (const t of thieves) dot(t.x, t.y, 3, t.cargo ? RED : '#0a8f3c');
   if (plow) { ctx.fillStyle = '#f5a200'; ctx.fillRect(x + plow.x * k - 4, y + plow.y * k - 4, 8, 8); }
   if (santa) { ctx.fillStyle = '#e8262d'; ctx.fillRect(x + santa.x * k - 7, y + santa.y * k - 4, 14, 8); }
   for (const r of robots) {
