@@ -137,6 +137,9 @@
   #bNext{align-self:flex-end;margin-top:4px}
 
   /* run over */
+  #story{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(520px,calc(100vw - 40px));padding:28px 30px 24px;box-sizing:border-box}
+  #story h2{margin:0;font-size:36px;font-weight:900;line-height:1.05}
+  #story p{margin:10px 0 18px;font-size:17px;font-weight:600;line-height:1.4;white-space:pre-line}
   #over{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(480px,calc(100vw - 40px));padding:28px 30px 24px;box-sizing:border-box}
   #over svg{width:64px;height:64px;display:block;margin-bottom:10px}
   #over h2{margin:0;font-size:42px;font-weight:900;line-height:1}
@@ -258,6 +261,8 @@
     <input id="pname" placeholder="Name" maxlength="12" autocomplete="off" aria-label="Name for the leaderboard">
     <button class="go" id="bStart">Start shift</button>
     <button class="ghost mode" id="bMode" hidden>Mode: Co-op</button>
+    <button class="go" id="bStory">Story</button>
+    <button class="ghost" id="bNewStory" hidden>New story</button>
     <button class="ghost" id="bHost">Host online game</button>
     <button class="ghost" id="bInvite" hidden>Copy invite link</button>
     <span id="joinBox"><input id="code" placeholder="Code" maxlength="5" autocomplete="off" aria-label="Room code"><button class="ghost" id="bJoin">Join</button></span>
@@ -278,6 +283,13 @@
     <div class="cards" id="cardsStyle"></div>
     <button class="go" id="bNext">Start next shift</button>
   </div>
+</div>
+
+<div class="plate" id="story" hidden>
+  <span class="lbl" id="storyLbl"></span>
+  <h2 id="storyTitle"></h2>
+  <p id="storyText"></p>
+  <div class="actions"><button class="go" id="bStoryGo">Continue</button></div>
 </div>
 
 <div class="plate danger" id="over" hidden>
@@ -1114,6 +1126,7 @@ function buy(k) {
   bump('spent', price); bump('buys');
 }
 function newRun() {
+  campaign = false;
   if (robots.length < 2) pvp = false;
   score = 0; money = 0; up = freshUp();
   for (const k in stats) delete stats[k];
@@ -1138,6 +1151,48 @@ function pickOrder() {
 const helper = r => robots.find(q => q !== r && !q.hole && dist(q, r) < 2 * R + 26);
 const isDuo = r => !!r.cargo && !!ORDERS[r.cargo.o].duo;
 const LEVEL_NAMES = ['Morning flurry', 'Afternoon dusk', 'Kaamos (polar night)', 'Blizzard'];
+// ---------- campaign: one Christmas Eve night, a prologue and 8 chapters ----------
+// S-1 is robots[0]. Dad's spirit is in it; the kids never find out for sure.
+let campaign = false, chapter = 0, storyStart = null;
+const KIDS_HOME = 2; // the house by the lake, paper star in the window
+const urlChapter = Math.min(8, Math.max(0, Math.floor(+new URLSearchParams(location.search).get('chapter') || 0))); // ?chapter=N jumps straight in
+const CHAPTERS = [
+  { title: 'Prologue', intro: 'Christmas Eve, a little after six. Dad is driving home with a boot full of presents. When he turns onto the street he will honk three times, the way he always does: tö-tö-tööt.\nThe road is icier than it looks.\n\nIn the Salepa warehouse, something switches on.' },
+  { title: 'Waking up (Herääminen)', intro: 'Delivery robot S-1 wakes up on its charging pad with the odd feeling that it used to have hands. Salepa has three orders waiting. Start with those.',
+    outro: 'S-1 drove like it had done this a thousand times.' },
+  { title: 'The crash site (Kolaripaikka)', intro: 'Something pulls S-1 to the main road. Presents lie across both lanes, in wrapping paper it somehow remembers buying. Collect every one before the traffic does.',
+    outro: 'Every present found. A few are a bit dented.' },
+  { title: 'The first present (Ensimmäinen lahja)', intro: 'The house with the paper star in the window. Two kids live there, and tonight nobody is coming home with presents. Take them there. The kids do not trust strange robots, and they have snowballs.',
+    outro: 'The door opened. Nobody outside, just presents on the step.' },
+  { title: 'The shift calls (Vuoro kutsuu)', intro: 'The Salepa boss has noticed S-1 wandering off its route. Hit the quota tonight or it goes to the scrapyard. The presents still have to get there in between.',
+    outro: 'The boss is satisfied. For now.' },
+  { title: 'The ice hole (Avanto)', intro: 'Eetu went to look at the ice hole by the sauna, and the ice gave way. He is holding on to the edge. Hook him out and drive him home.',
+    outro: 'Eetu is home. Wet, cold and safe.' },
+  { title: 'The tree (Kuusi)', intro: 'Christmas Eve without a tree is not Christmas Eve. Salepa has one left and it is big. Get a colleague to carry the other end, or drag it home very slowly.',
+    outro: 'The tree stands in the corner. Aino put the star on top.' },
+  { title: 'Blizzard (Myräkkä)', intro: 'The snow is so thick S-1 can barely see its own wheels. The plough is out. The last presents are still at the shops.',
+    outro: 'Through the storm. Almost morning.' },
+  { title: 'Christmas morning (Joulun aamu)', intro: 'The sky is getting lighter. One present is left, the one that was always meant for Eetu: a red sled. Only S-1 can take it.' },
+];
+const ENDING = { title: 'The end', intro: 'S-1 drives back to the warehouse as the sky turns pink.\nIn the window with the paper star, Eetu is still waving.' };
+function storyLoad() {
+  try { const s = JSON.parse(localStorage.getItem('ruokarobo-story')); return s && s.ch >= 1 && s.ch <= 8 ? s : null; } catch (e) { return null; }
+}
+function storySave(ch) { try { localStorage.setItem('ruokarobo-story', JSON.stringify({ ch, money, up })); } catch (e) {} }
+// ch 0 is the prologue card; save carries the team money and upgrades of a continued story
+function startStory(ch, save) {
+  campaign = true; pvp = false; score = 0; money = save?.money || 0; up = { ...freshUp(), ...save?.up };
+  for (const k in stats) delete stats[k];
+  chapter = ch; state = 'story'; stateT = 0;
+}
+// a chapter starts from its card; a retry restarts it with the money and upgrades it began with
+function playChapter() {
+  storyStart = { money, up: { ...up } }; storySave(chapter);
+  startLevel(chapter);
+}
+// dev only (?chapter=N): skip to the end of a chapter for testing
+if (urlChapter) window.__story = { drain: () => { time = .1; }, clear: () => { delivered = quota; }, get: () => ({ state, chapter, level, quota, delivered, money, up, campaign }) };
+function retryChapter() { money = storyStart.money; up = { ...storyStart.up }; playChapter(); }
 const DAY = new THREE.Color('#cfdbe8'), NIGHT = new THREE.Color('#0a1328');
 
 function spot() {
@@ -1212,13 +1267,18 @@ function startLevel(n) {
   mark = { ...stats }; // "clear a shift without X" is measured against this snapshot
   most('players', robots.length);
   state = 'play'; stateT = 0;
-  banner = `Shift ${n} – ${LEVEL_NAMES[Math.min(n, 4) - 1]}`; bannerT = 3;
+  banner = campaign ? CHAPTERS[chapter].title : `Shift ${n} – ${LEVEL_NAMES[Math.min(n, 4) - 1]}`; bannerT = 3;
 }
 function pressStart() {
   if (role === 'guest') return; // the host starts the game
   if (state === 'title') { if (!robots.length) join(touchDev ? { touch: 1 } : { kb: 0 }); newRun(); }
-  else if (state === 'over' && stateT > 1) newRun();
-  else if (state === 'shop' && stateT > 1) startLevel(level + 1);
+  else if (state === 'over' && stateT > 1) campaign ? retryChapter() : newRun();
+  else if (state === 'shop' && stateT > 1) campaign ? (chapter++, state = 'story', stateT = 0) : startLevel(level + 1);
+  else if (state === 'story' && stateT > .5) {
+    if (chapter === 0) { chapter = 1; stateT = 0; }
+    else if (chapter <= 8) playChapter();
+    else { try { localStorage.removeItem('ruokarobo-story'); } catch (e) {} campaign = false; state = 'title'; } // the ending card
+  }
 }
 function say(r, text, t = 1.6) { r.say = text; r.sayT = t; }
 function pop(r, text, color) { fx({ k: 'pop', x: r.x, y: r.y, text, color }); }
@@ -1882,9 +1942,11 @@ function update(dt) {
       if (robots.every(r => (r.hp ?? 1) >= 1)) bump('fullHpShift');
       if (money < 10) bump('poorShop');
       saveTot();
+      if (campaign) { storySave(chapter + 1); if (chapter === 8) { chapter = 9; state = 'story'; } } // after the last chapter: the ending card, no workshop
     } else if (time <= 0) {
       time = 0; state = 'over'; stateT = 0;
-      if (!pvp) { // a pvp match is not a team run: keep it off the best run and the leaderboard
+      if (campaign) {} // story runs stay off the best run and the leaderboard
+      else if (!pvp) { // a pvp match is not a team run: keep it off the best run and the leaderboard
         if (score > best) { best = score; try { localStorage.setItem('ruokarobo-best', best); } catch (e) {} }
         recordRun();
       } else { // pvp: the winner counts only on the machine that drives it
@@ -2416,7 +2478,15 @@ for (const u of SHOP) {
   b.innerHTML = `<span class="pic">${svgIcon(u.k)}</span><b>${u.name.replace(/^\S+\s/, '')}</b><small>${u.desc}</small><span class="row"><span class="lv"></span><span class="price"></span></span>`;
   $(isStyle(u.k) ? 'cardsStyle' : 'cardsUp').append(b);
 }
-$('bNext').onclick = $('bStart').onclick = $('bRetry').onclick = pressStart;
+$('bNext').onclick = $('bStart').onclick = $('bRetry').onclick = $('bStoryGo').onclick = pressStart;
+function storyButton(fresh) {
+  if (role === 'guest' || state !== 'title') return;
+  if (!robots.length) join(touchDev ? { touch: 1 } : { kb: 0 });
+  const sv = !fresh && !urlChapter && storyLoad();
+  startStory(fresh ? 0 : urlChapter || sv?.ch || 0, sv);
+}
+$('bStory').onclick = () => storyButton(false);
+$('bNewStory').onclick = () => storyButton(true);
 $('bMode').onclick = $('bMode2').onclick = () => { if (role !== 'guest') pvp = !pvp; };
 const BOARD_WHERE = { local: 'best runs on this machine', loading: 'loading…', global: 'best runs anywhere', offline: 'offline — showing this machine' };
 const WX_TEXT = { santa: ['Hohoho! 🎅', 'Santa is bowling down the road. Stay off it!'], blizzard: ['Blizzard', 'You can barely see the street'], freeze: ['Freezing rain', 'Every surface is ice for a while'] };
@@ -2440,6 +2510,9 @@ function updateDOM() {
   $('title').hidden = state !== 'title';
   if (state === 'title') {
     $('bStart').hidden = role === 'guest';
+    const sv = storyLoad();
+    $('bStory').hidden = role === 'guest'; $('bNewStory').hidden = role === 'guest' || !sv || !!urlChapter;
+    setText('bStory', urlChapter ? `Story: chapter ${urlChapter}` : sv ? `Continue story: chapter ${sv.ch}` : 'Story');
     $('keys').hidden = touchDev; $('touchNote').hidden = !touchDev;
     const pk = robots.map(r => r.i + nameOf(r)).join();
     if (pk !== playersKey) {
@@ -2495,8 +2568,8 @@ function updateDOM() {
   if (menuOpen) updateMenu();
   // shift sign drops in when a new shift starts
   if (play && bannerT > lastBannerT + .5) {
-    setText('signTitle', pvp ? 'PvP' : `Shift ${level}`);
-    setText('signSub', pvp ? 'Most € when the battery dies wins. Zap rivals to stun them.' : `${LEVEL_NAMES[Math.min(level, 4) - 1]}. Deliver before the battery runs out.`);
+    setText('signTitle', pvp ? 'PvP' : campaign ? `Chapter ${chapter}` : `Shift ${level}`);
+    setText('signSub', pvp ? 'Most € when the battery dies wins. Zap rivals to stun them.' : campaign ? CHAPTERS[chapter].title : `${LEVEL_NAMES[Math.min(level, 4) - 1]}. Deliver before the battery runs out.`);
     setText('signQuota', quota); $('signQuota').parentElement.hidden = pvp;
     $('sign').hidden = false; restartAnim($('sign'));
   }
@@ -2514,7 +2587,7 @@ function updateDOM() {
   const sk = JSON.stringify([state, money, up, role, level]);
   if (state === 'shop' && sk !== shopKey) {
     shopKey = sk;
-    setText('shopSub', `Shift ${level} done. Agree on an upgrade before the next one.`);
+    setText('shopSub', campaign ? `${CHAPTERS[chapter].title} done. ${CHAPTERS[chapter].outro || ''}` : `Shift ${level} done. Agree on an upgrade before the next one.`);
     setText('shopBonus', `+${bonus} €`); setText('shopMoney', `${money} €`);
     for (const b of document.querySelectorAll('.card')) {
       const u = SHOP.find(u => u.k === b.dataset.k), lv = up[u.k], style = isStyle(u.k), price = PRICES[lv];
@@ -2523,15 +2596,24 @@ function updateDOM() {
       b.querySelector('.price').textContent = style ? (lv ? 'On' : 'Free') : lv >= 3 ? 'Maxed' : `${price} €`;
     }
     $('bNext').disabled = role === 'guest';
-    $('bNext').textContent = role === 'guest' ? 'Waiting for the host to start the next shift' : 'Start next shift';
+    $('bNext').textContent = role === 'guest' ? 'Waiting for the host to start the next shift' : campaign ? 'Next chapter' : 'Start next shift';
+  }
+  // story card: prologue, chapter intros, ending
+  $('story').hidden = state !== 'story';
+  if (state === 'story') {
+    const c = CHAPTERS[chapter] || ENDING;
+    setText('storyLbl', chapter >= 1 && chapter <= 8 ? `Chapter ${chapter} of 8` : '');
+    setText('storyTitle', c.title); setText('storyText', c.intro);
+    $('bStoryGo').disabled = role === 'guest' || stateT < .5;
+    setText('bStoryGo', role === 'guest' ? 'Waiting for the host' : chapter > 8 ? 'Back to the title' : chapter === 0 ? 'Continue' : 'Start chapter');
   }
   // run over
   $('over').hidden = state !== 'over';
   if (state === 'over') {
     const tie = ranked.length > 1 && ranked[0].earn === ranked[1].earn;
     setText('overTitle', !pvp ? 'Battery dead' : tie || !ranked[0] ? "It's a tie!" : `${nameOf(ranked[0])} wins!`);
-    setText('overSub', pvp ? ranked.map(r => `${nameOf(r)}: ${r.earn} €`).join(' · ') : `The team missed the quota on shift ${level}.`);
-    $('overStats').hidden = pvp;
+    setText('overSub', pvp ? ranked.map(r => `${nameOf(r)}: ${r.earn} €`).join(' · ') : campaign ? `The battery ran out in ${CHAPTERS[chapter].title}. Try the chapter again.` : `The team missed the quota on shift ${level}.`);
+    $('overStats').hidden = pvp || campaign;
     setText('overEarned', `${score} €`); setText('overBest', `${best} €`);
     setText('overRank', lastRank ? `🏆 #${lastRank} ${boardState === 'global' ? 'worldwide' : 'on this machine'}` : '');
     $('bRetry').disabled = role === 'guest' || stateT < 1;
@@ -2672,6 +2754,13 @@ renderer.setAnimationLoop(now => {
   $('touch').hidden = !touchDev || !(state === 'play' || state === 'title');
   musicTick();
 });
+// campaign data invariants: any failure shows as "Assertion failed" in the console
+function storyCheck() {
+  console.assert(CHAPTERS.length === 9, 'prologue + 8 chapters');
+  console.assert(CHAPTERS.every(c => c.title && c.intro), 'every chapter has title + intro');
+  console.assert(HOUSES[KIDS_HOME] && HOUSES[KIDS_HOME].door.x < BW, 'kids home is in block 0');
+}
+storyCheck();
 </script>
 </body>
 </html>
