@@ -377,8 +377,8 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
-// Simulation runs on a flat 4800x900 map (px): three 1600px blocks along one road. Rendering maps px → 3D units.
-const BW = 1600, BLOCKS = 3, W = BW * BLOCKS, H = 900, R = 7, S = .1, OX = W * S / 2, OZ = H * S / 2;
+// Simulation runs on a flat 8000x900 map (px): five 1600px blocks along one road. Rendering maps px → 3D units.
+const BW = 1600, BLOCKS = 5, W = BW * BLOCKS, H = 900, R = 7, S = .1, OX = W * S / 2, OZ = H * S / 2;
 const inR = (x, y, p) => x >= p[0] && x <= p[0] + p[2] && y >= p[1] && y <= p[1] + p[3];
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
@@ -396,7 +396,7 @@ const CROSS = BX.flatMap(bx => [[bx + 620, 600, 40, 120], [bx + 1300, 600, 40, 1
 const LAKE = { x: 980, y: 400, rx: 210, ry: 95 };
 const AVANTO = { x: 1100, y: 420, r: 20 }; // ice-swimming hole by the sauna pier
 // one shop per block; the lake, avanto and sauna stay in the first block
-const SHOPS = [['SALEPA', '#e8501f', 'A'], ['PUOTI', '#2d6fd6', 'B'], ['KIOSKI', '#2f9e57', 'C']]
+const SHOPS = [['SALEPA', '#e8501f', 'A'], ['PUOTI', '#2d6fd6', 'B'], ['KIOSKI', '#2f9e57', 'C'], ['MARKETTI', '#c02a7a', 'D'], ['KAUPPA', '#7a4fc9', 'E']]
   .map(([name, color, tag], k) => ({ x: BX[k] + 30, y: 330, w: 190, h: 200, door: { x: BX[k] + 125, y: 552 }, name, color, tag }));
 const nearShop = p => SHOPS.reduce((a, b) => dist(p, a.door) <= dist(p, b.door) ? a : b);
 const SAUNA = { x: 1205, y: 420, w: 70, h: 50 };
