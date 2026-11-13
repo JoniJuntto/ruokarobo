@@ -1135,7 +1135,6 @@ function unlock(k) {
   setTimeout(() => el.remove(), 4200);
   SFX.ach(); // local only: an achievement is this machine's, not the whole room's
 }
-globalThis.__dbg = { get robots() { return robots; }, damage: (a) => damage(robots[0], a, 'test') };
 function damage(r, amt, msg) {
   if (r.hitCd > 0) return;
   r.hitCd = .7; say(r, msg, 1); bump('dmg');
