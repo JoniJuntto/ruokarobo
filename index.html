@@ -141,7 +141,7 @@
   #cases h2{margin:0;font-size:36px;font-weight:900;line-height:1}
   #cases .head p{margin:6px 0 0;font-weight:600;max-width:34ch}
   #cases h3{margin:4px 2px -2px;color:#fff;font-size:17px;font-weight:800;text-shadow:0 1px 3px rgba(0,0,0,.6)}
-  #coins{font-size:24px;font-weight:900;font-variant-numeric:tabular-nums}
+  #caseCount{font-size:24px;font-weight:900;font-variant-numeric:tabular-nums}
   #reel{position:relative;overflow:hidden;contain:inline-size;height:122px;padding:0}
   #reel::after{content:'';position:absolute;left:50%;top:0;bottom:0;width:4px;margin-left:-2px;background:var(--orange);box-shadow:0 0 0 2px #fff}
   #strip{display:flex;height:100%;will-change:transform}
@@ -215,7 +215,7 @@
 <canvas id="ui"></canvas>
 
 <div id="hud" hidden>
-  <div class="plate"><span class="lbl">Shift</span><b id="hShift">1</b></div>
+  <div class="plate" id="hShiftPlate"><span class="lbl">Shift</span><b id="hShift">1</b></div>
   <div class="plate bat" id="hBatPlate">
     <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="7" width="18" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="2.2"/><rect x="20" y="10" width="2.6" height="4" fill="currentColor"/></svg>
     <span class="meter"><i id="hBat"></i></span><b id="hTime">80</b><span class="lbl">s</span>
@@ -279,6 +279,7 @@
   <div class="actions" id="menu">
     <input id="pname" placeholder="Name" maxlength="12" autocomplete="off" aria-label="Name for the leaderboard">
     <button class="go" id="bStart">Start shift</button>
+    <button class="ghost" id="bRoam">Free roam</button>
     <button class="ghost mode" id="bMode" hidden>Mode: Co-op</button>
     <button class="ghost" id="bCases">🎁 Skins</button>
     <button class="ghost" id="bHost">Host online game</button>
@@ -306,8 +307,8 @@
 <div id="cases" hidden>
   <div class="wrap">
     <div class="plate head">
-      <div><h2>Skin cases</h2><p>Every € you earn on a shift drops a coin here. Duplicates pay back half.</p></div>
-      <div class="actions"><span id="coins">0 🪙</span><button class="go" id="bOpen">Open case · 150 🪙</button><button class="ghost" id="bCasesX">Close</button></div>
+      <div><h2>Skin cases</h2><p>Cases are hidden around the map on every shift, tucked in beside buildings. Drive into one to grab it.</p></div>
+      <div class="actions"><span id="caseCount">0 🎁</span><button class="go" id="bOpen">Open case</button><button class="ghost" id="bCasesX">Close</button></div>
     </div>
     <div class="plate white" id="reel"><div id="strip"></div></div>
     <p class="note" id="caseMsg"></p>
@@ -421,7 +422,7 @@ const SURF = {
   snow: { acc: 380, kF: 2.6, kL: 3.5, max: 120 },
   ice:  { acc: 110, kF: 0.12, kL: 0.18, max: 270 },
 };
-let ice = [], holes = [], cars = [], peds = [], kids = [], balls = [], plow = null, santa = null, santaIn = Infinity;
+let ice = [], holes = [], cars = [], peds = [], kids = [], balls = [], loot = [], plow = null, santa = null, santaIn = Infinity;
 let weather = { k: null, t: 0 }, weatherIn = Infinity;
 function surf(x, y) { // surface feel with upgrades applied
   const s = SURF[surface(x, y)];
@@ -908,6 +909,11 @@ function buildHazards() {
     const m = p.kind === 'dog' ? buildDog(hazardGroup) : buildPerson(hazardGroup, p.color, p.hat);
     Object.assign(p, { mesh: m.g, body: m.body, legs: m.legs, head: m.head });
   }
+  for (const l of loot) { // a small glowing crate, spinning so it catches the eye once you're close
+    l.mesh = place(new THREE.Group(), l.x, l.y); hazardGroup.add(l.mesh);
+    rbox(l.mesh, 1.5, 1, 1.1, .12, mat('#ffb400', '#8a5200', .3, .4), 0, 0, 0);
+    box(l.mesh, 1.54, .22, 1.14, '#1d232b', 0, 0, 0); box(l.mesh, .24, 1.04, 1.14, '#1d232b', 0, 0, 0);
+  }
   for (const k of kids) { // kid behind a snowdrift, or a bum lounging on cardboard with his bottles
     const m = buildPerson(hazardGroup, k.coat, k.hat, k.bum ? 1 : .62);
     Object.assign(k, { mesh: m.g, arms: m.arms });
@@ -1123,6 +1129,8 @@ let state = 'title', stateT = 0, level = 1, time = 0, quota = 0, delivered = 0, 
 let darkness = 0, banner = '', bannerT = 0, snowCount = 0, wind = 0;
 // pvp: one shift, each robot banks its own € (r.earn), most € when the battery dies wins. no quota, no workshop
 let pvp = false;
+// roam: free roam, a shift with no battery drain and no quota. it never ends; quit from the menu. no score, no leaderboard
+let roam = false;
 let best = 0; try { best = +localStorage.getItem('ruokarobo-best') || 0; } catch (e) {}
 const floats = [];
 // team money buys robot upgrades between shifts; each upgrade has 3 levels
@@ -1148,8 +1156,7 @@ const SHOP = [...UPGRADES, ...COSMETICS];
 const isStyle = k => COSMETICS.some(c => c.k === k);
 const freshUp = () => ({ tires: 0, motor: 0, susp: 0, battery: 0, turbo: 0, tesla: 0, heat: 0, box: 0, pipo: 0, scarf: 0, fiflag: 0, gold: 0 });
 up = freshUp();
-// skin cases: every € this machine's players earn also drops a coin; skins and coins live on this machine
-const CASE_PRICE = 150;
+// skin cases: found hidden on the map during shifts, opened on the title screen; skins live on this machine
 const RARITY = [{ n: 'Common', c: '#9aa5b1', w: 60 }, { n: 'Rare', c: '#2d7cff', w: 28 }, { n: 'Epic', c: '#9b4dff', w: 10 }, { n: 'Legendary', c: '#ffb400', w: 2 }];
 const SKINS = [ // c = shell colour, ro/me = roughness/metalness, e = glow
   { k: '', n: 'Tehdasvalkoinen', r: 0, c: '#f4f4f2' }, // the default, never in a case
@@ -1168,7 +1175,7 @@ const SKINS = [ // c = shell colour, ro/me = roughness/metalness, e = glow
   { k: 'aurora', n: 'Revontuli', r: 3, c: '#3fe0b0', e: '#0d6b55', ro: .25 },
   { k: 'lava', n: 'Laava', r: 3, c: '#ff5a1f', e: '#7a1800', ro: .4 },
 ];
-let skins = { coins: CASE_PRICE, own: [], sel: '' }; // first case is on the house
+let skins = { cases: 0, own: [], sel: '' }; // cases are found on the map, see loot
 try { Object.assign(skins, JSON.parse(localStorage.getItem('ruokarobo-skins') || '{}')); } catch (e) {}
 const saveSkins = () => { try { localStorage.setItem('ruokarobo-skins', JSON.stringify(skins)); } catch (e) {} };
 const skinMat = k => { const s = SKINS.find(s => s.k === k) || SKINS[0]; return mat(s.c, s.e, s.ro ?? .82, s.me ?? 0); };
@@ -1255,6 +1262,15 @@ function setupLevel(n) {
                 hat: bum ? pick(['#6b6b6b', '#7a3b2e']) : pick(['#d33', '#f5c400', '#1f4e9c']) });
     i++;
   }
+  loot = []; // skin cases tucked in beside a building, well off the sidewalks: you have to go looking
+  const rectD = (x, y, p) => Math.hypot(Math.max(p[0] - x, 0, x - p[0] - p[2]), Math.max(p[1] - y, 0, y - p[1] - p[3]));
+  for (let tries = 0; loot.length < 2 && tries < 5000; tries++) {
+    const x = rnd(25, W - 25), y = rnd(25, H - 15), sd = Math.min(...SOLIDS.map(b => rectD(x, y, [b.x, b.y, b.w, b.h])));
+    if (sd < 14 || sd > 45 || [...PATHS, ROAD].some(p => rectD(x, y, p) < 70) || inLake(x, y, 20)
+        || DOORS.some(d => Math.hypot(d.x - x, d.y - y) < 120) || trees.some(t => Math.hypot(t.x - x, t.y - y) < t.r + 15)
+        || loot.some(l => Math.abs(l.x - x) < BW / 2)) continue; // spread out: not both in the same block
+    loot.push({ x, y, got: 0 });
+  }
   plow = n >= 2 ? { x: 20, y: 580, a: 0, wi: 1, dir: 1 } : null;
   applyLevel(n);
   if (role === 'host') for (const c of conns) c.send(levelMsg());
@@ -1290,7 +1306,7 @@ function startLevel(n) {
 }
 function pressStart() {
   if (role === 'guest') return; // the host starts the game
-  if (state === 'title') { if (!robots.length) join(touchDev ? { touch: 1 } : { kb: 0 }); newRun(); }
+  if (state === 'title') { roam = false; if (!robots.length) join(touchDev ? { touch: 1 } : { kb: 0 }); newRun(); }
   else if (state === 'over' && stateT > 1) newRun();
   else if (state === 'shop' && stateT > 1) startLevel(level + 1);
 }
@@ -1327,6 +1343,10 @@ function fx(e) { // play locally; the host also forwards it to guests
   else if (e.k === 'zap') bolts.push({ ...e, t: .2 });
   else if (e.k === 'wx') { wxKind = e.w; wxMsgT = 3.5; }
   else if (e.k === 'bowl' && cars[e.i]) cars[e.i].fly = 1.4;
+  else if (e.k === 'loot' && loot[e.i]) {
+    loot[e.i].got = 1; burst(e.x, e.y, 20);
+    if (e.o === myOwner) { skins.cases++; saveSkins(); achToast({ i: '🎁', n: 'Skin case found!', d: 'Open it from 🎁 Skins on the title screen' }); }
+  }
   if (role === 'host') outbox.push(e);
 }
 // ---------- achievements ----------
@@ -1946,9 +1966,13 @@ function update(dt) {
   updPlow(dt);
   updSanta(dt);
   updKids(dt);
+  if (state === 'play') for (const [i, l] of loot.entries()) {
+    const r = !l.got && robots.find(r => !r.hole && Math.hypot(r.x - l.x, r.y - l.y) < 22);
+    if (r) { say(r, '🎁 Skin case!', 2); fx({ k: 'loot', i, o: r.owner, x: l.x, y: l.y }); }
+  }
   updWeather(dt);
   broadcast(dt);
-  if (state === 'play') {
+  if (state === 'play' && !roam) {
     time -= dt;
     if (!pvp && delivered >= quota) {
       bonus = Math.ceil(time); money += bonus; score += bonus; state = 'shop'; stateT = 0;
@@ -2123,19 +2147,19 @@ function levelMsg() {
   return { type: 'lvl', n: level, ice: ice.map(({ x, y, rx, ry, gone }) => ({ x, y, rx, ry, gone })), holes,
            cars: cars.map(({ x, y, dir, base, v, color }) => ({ x, y, dir, base, v, color })),
            peds: peds.map(({ x, y, side, kind, color, hat }) => ({ x, y, side, kind, color, hat })),
-           kids: kids.map(({ x, y, a, dx, dy, coat, hat, bum }) => ({ x, y, a, dx, dy, coat, hat, bum })), plow: !!plow };
+           kids: kids.map(({ x, y, a, dx, dy, coat, hat, bum }) => ({ x, y, a, dx, dy, coat, hat, bum })), loot: loot.map(({ x, y, got }) => ({ x, y, got })), plow: !!plow };
 }
 function applyLevelMsg(m) {
   level = m.n; ice = m.ice; holes = m.holes; cars = m.cars;
   peds = m.peds.map(p => ({ ...p, a: 0, mode: 'walk', kickT: 0, say: '', sayT: 0 }));
-  kids = m.kids.map(k => ({ ...k, throwT: 0, say: '', sayT: 0 })); balls = [];
+  kids = m.kids.map(k => ({ ...k, throwT: 0, say: '', sayT: 0 })); balls = []; loot = m.loot || [];
   plow = m.plow ? { x: 20, y: 580, a: 0 } : null;
   applyLevel(m.n);
 }
 function broadcast(dt) {
   if (role !== 'host' || (netT += dt) < .05) return;
   netT = 0;
-  const m = { type: 's', st: state, pvp, pz: paused, level, time, quota, delivered, score, bonus, money, up, banner, bannerT, best,
+  const m = { type: 's', st: state, pvp, roam, pz: paused, level, time, quota, delivered, score, bonus, money, up, banner, bannerT, best,
     r: robots.map(r => ({ id: r.id, i: r.i, n: nameOf(r), sk: skinOf(r), owner: r.owner, x: r.x, y: r.y, a: r.a, vx: r.vx, vy: r.vy, cargo: r.cargo,
                           hole: typeof r.hole === 'string' ? r.hole : !!r.hole, esc: r.esc, stun: r.stun, say: r.say, sayT: r.sayT, bo: r.boost, bl: r.boostLock, bz: r.boosting, dk: r.dTier, zp: r.zaps, hp: r.hp, e: r.earn, dr: r.drunk, tw: r.towT > 0 ? r.tow : -1 })),
     c: cars.map(c => c.x), fx: outbox.splice(0),
@@ -2145,7 +2169,7 @@ function broadcast(dt) {
   for (const c of conns) c.send(m);
 }
 function applySnap(m) {
-  ({ st: state, pvp, level, time, quota, delivered, score, bonus, money, up, banner, bannerT, best } = m);
+  ({ st: state, pvp, roam, level, time, quota, delivered, score, bonus, money, up, banner, bannerT, best } = m);
   hostPaused = !!m.pz; net.snaps++; net.lastSnap = performance.now();
   const ids = new Set(m.r.map(s => s.id));
   robots.filter(r => !ids.has(r.id)).forEach(removeRobot);
@@ -2252,6 +2276,7 @@ function sync(dt) {
   const fly = balls.filter(b => b.age < b.ft), sb = fly.filter(b => !b.bot), bt = fly.filter(b => b.bot);
   ballPool.forEach((m, i) => { const b = sb[i]; m.visible = !!b; if (b) place(m, b.x, b.y, Math.max(.2, ballH(b))); });
   bottlePool.forEach((m, i) => { const b = bt[i]; m.visible = !!b; if (b) { place(m, b.x, b.y, Math.max(.2, ballH(b))); m.rotation.z = b.age * 14; } });
+  for (const l of loot) if (l.mesh) { l.mesh.visible = !l.got; l.mesh.rotation.y = T * 1.5; l.mesh.position.y = .7 + Math.sin(T * 3) * .15; }
   if (plow?.mesh) { place(plow.mesh, plow.x, plow.y); plow.mesh.rotation.y = -plow.a; plow.beacon.visible = (T * 4 | 0) % 2 === 0; }
   let ropes = 0; // tow ropes, and straps between a sofa and its helper
   for (const r of robots) {
@@ -2501,14 +2526,16 @@ for (const u of SHOP) {
 }
 $('bNext').onclick = $('bStart').onclick = $('bRetry').onclick = pressStart;
 $('bMode').onclick = $('bMode2').onclick = () => { if (role !== 'guest') pvp = !pvp; };
+$('bRoam').onclick = () => { if (state !== 'title' || role === 'guest') return; pvp = false; pressStart(); roam = true; };
 // skin cases: a reel of random skins slides under a marker and stops on the one already rolled
 const TILE = 104, WIN_AT = 40;
-let lastEarned = 0, spinning = false, unrevealed = ''; // unrevealed: already saved as owned, but the reel hasn't stopped on it yet
+let spinning = false, unrevealed = ''; // unrevealed: already saved as owned, but the reel hasn't stopped on it yet
 const skinTile = (s, tag = 'div', mine = true) =>
   `<${tag} class="sk r${s.r}${s.k === skins.sel && tag === 'button' ? ' on' : ''}" data-k="${s.k}" style="--sc:${s.c};--rc:${RARITY[s.r].c}"${mine ? '' : ' disabled'}><i></i>${mine ? s.n : '???'}</${tag}>`;
 function renderSkins() {
-  setText('coins', `${skins.coins} 🪙`);
-  $('bOpen').disabled = spinning || skins.coins < CASE_PRICE;
+  setText('caseCount', `${skins.cases} 🎁`);
+  $('bOpen').disabled = spinning || !skins.cases;
+  setText('bOpen', skins.cases ? 'Open case' : 'No cases yet');
   $('skinGrid').innerHTML = [...SKINS].sort((a, b) => a.r - b.r).map(s => skinTile(s, 'button', !s.k || (skins.own.includes(s.k) && s.k !== unrevealed))).join('');
 }
 function equipSkin(k) {
@@ -2521,9 +2548,9 @@ function openCases() {
 }
 function closeCases() { $('cases').hidden = true; }
 function openCase() {
-  if (spinning || skins.coins < CASE_PRICE) return;
+  if (spinning || !skins.cases) return;
   const win = rollSkin(), dup = skins.own.includes(win.k);
-  skins.coins -= CASE_PRICE - (dup ? CASE_PRICE / 2 : 0);
+  skins.cases--;
   if (!dup) skins.own.push(unrevealed = win.k);
   saveSkins(); // ponytail: saved before the reel stops, so reloading mid-spin can't reroll
   spinning = true; setText('caseMsg', ''); renderSkins();
@@ -2542,7 +2569,7 @@ function openCase() {
     if (!spinning) return;
     spinning = false; unrevealed = '';
     (win.r >= 2 ? SFX.ach : SFX.pickup)();
-    setText('caseMsg', `${RARITY[win.r].n}: ${win.n}! ` + (dup ? `You had it already, +${CASE_PRICE / 2} 🪙 back.` : 'Your robots wear it now.'));
+    setText('caseMsg', `${RARITY[win.r].n}: ${win.n}! ` + (dup ? 'You had it already.' : 'Your robots wear it now.'));
     if (!dup) equipSkin(win.k); else renderSkins();
   };
 }
@@ -2568,15 +2595,11 @@ function updateDOM() {
       : 'PvP: 2nd player, press a key');
   }
   const ranked = [...robots].sort((a, b) => b.earn - a.earn);
-  // coins: co-op shares the team's €, pvp only counts this machine's robots. only while driving, so mode toggles can't mint coins
-  const earned = pvp ? robots.reduce((s, r) => s + (r.owner === myOwner ? r.earn : 0), 0) : score;
-  if (play && earned > lastEarned) { skins.coins += earned - lastEarned; saveSkins(); }
-  lastEarned = earned;
   if (state !== 'title') closeCases();
   // title
   $('title').hidden = state !== 'title';
   if (state === 'title') {
-    $('bStart').hidden = role === 'guest';
+    $('bStart').hidden = $('bRoam').hidden = role === 'guest';
     $('keys').hidden = touchDev; $('touchNote').hidden = !touchDev;
     const pk = robots.map(r => r.i + nameOf(r)).join();
     if (pk !== playersKey) {
@@ -2610,6 +2633,7 @@ function updateDOM() {
     const pk = `${delivered}/${quota}`;
     if (pk !== pipsKey) { pipsKey = pk; $('hPips').innerHTML = quota <= 12 ? Array.from({ length: quota }, (_, i) => `<i class="${i < delivered ? 'on' : ''}"></i>`).join('') : ''; }
     $('hDelPlate').hidden = $('hMoneyPlate').hidden = pvp; $('hScores').hidden = !pvp;
+    $('hShiftPlate').hidden = $('hBatPlate').hidden = $('hPips').hidden = roam; if (roam) setText('hDel', delivered); // no quota to count towards
     const sc = pvp ? ranked.map(r => `<i style="background:${r.color}"></i><b>${r.earn}</b>`).join('') + '<span class="lbl">€</span>' : '';
     if (sc !== scoresKey) $('hScores').innerHTML = scoresKey = sc;
     $('hWx').hidden = !weather.k;
@@ -2632,9 +2656,9 @@ function updateDOM() {
   if (menuOpen) updateMenu();
   // shift sign drops in when a new shift starts
   if (play && bannerT > lastBannerT + .5) {
-    setText('signTitle', pvp ? 'PvP' : `Shift ${level}`);
-    setText('signSub', pvp ? 'Most € when the battery dies wins. Zap rivals to stun them.' : `${LEVEL_NAMES[Math.min(level, 4) - 1]}. Deliver before the battery runs out.`);
-    setText('signQuota', quota); $('signQuota').parentElement.hidden = pvp;
+    setText('signTitle', roam ? 'Free roam' : pvp ? 'PvP' : `Shift ${level}`);
+    setText('signSub', roam ? 'No battery, no quota. Drive anywhere. Esc to quit.' : pvp ? 'Most € when the battery dies wins. Zap rivals to stun them.' : `${LEVEL_NAMES[Math.min(level, 4) - 1]}. Deliver before the battery runs out.`);
+    setText('signQuota', quota); $('signQuota').parentElement.hidden = pvp || roam;
     $('sign').hidden = false; restartAnim($('sign'));
   }
   lastBannerT = bannerT;
