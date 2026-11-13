@@ -1357,7 +1357,7 @@ function newRun() {
   if (robots.length < 2) pvp = false;
   score = 0; money = 0; up = freshUp();
   for (const k in stats) delete stats[k];
-  bump('runs'); lastRank = 0;
+  bump('runs'); lastRank = 0; startRun();
   startLevel(1);
 }
 // order types: dmg = damage multiplier, time = deadline multiplier, tipX = speed-tip multiplier
@@ -1749,8 +1749,8 @@ function achToast(a, sound = true) { // also announces players joining (sound of
 // The board is served by server/board.js next to the game: GET returns the top ten, POST adds
 // a run. It keeps the top 50 in one JSON file — a database would be more moving parts than a
 // score list is worth.
-// ponytail: anyone can POST a score straight from the console. The server clamps the numbers
-// and rate-limits each address, which is as far as a page with no login can get.
+// A score only counts for a run the server saw start: newRun() asks for a run token, the score
+// goes back with it, and the server throws out scores the game could not have produced in that time.
 // Absolute URL so every copy of the game (ruokarobo.com, the old huikaton host, a local dev
 // server, the file opened straight from disk) shares the one global board; board.js answers CORS
 // for any origin. Where nothing answers (no network) the fetch fails and the local board shows.
@@ -1776,10 +1776,12 @@ async function loadBoard() {
   } catch (e) { board = localBoard; boardState = 'offline'; } // a dead network just shows the local board
   rankRow();
 }
+let runTok = null; // promise of this run's token
+const startRun = () => { runTok = boardOn() ? fetch(BOARD.url + '?start', { method: 'POST' }).then(r => r.json()).then(o => o.run).catch(() => null) : null; };
 async function postScore(row) {
   try {
     await fetch(BOARD.url, { method: 'POST', headers: { 'Content-Type': 'application/json' },
-                             body: JSON.stringify({ name: row.n, score: row.s, shift: row.lv, robots: row.p }) });
+                             body: JSON.stringify({ run: await runTok, name: row.n, score: row.s, shift: row.lv, robots: row.p }) });
   } catch (e) { /* the run is still on the local board */ }
   await loadBoard();
 }
