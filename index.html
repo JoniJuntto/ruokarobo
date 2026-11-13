@@ -1427,6 +1427,7 @@ const chap = () => campaign ? CHAPTERS[chapter] : null;
 const cv = (k, v) => chap()?.[k] ?? v;
 // co-op (endless, 2+ robots): each extra robot means +50% hazards (max 2x) and -20% battery (min 60%). story and pvp keep their own balance
 const coopX = () => campaign || pvp ? 0 : Math.max(0, robots.length - 1);
+const WOLT = '#00c2e8', woltN = n => campaign || pvp || roam || n < 9 ? 0 : 1 + ((n - 9) / 3 | 0); // endless only: one courier from shift 9, one more every 3 shifts
 const hz = v => Math.round(v * Math.min(2, 1 + coopX() * .5)); // hazard count, scaled for co-op
 function storyLoad() {
   try { const s = JSON.parse(localStorage.getItem('ruokarobo-story')); return s && s.ch >= 1 && s.ch <= 8 ? s : null; } catch (e) { return null; }
@@ -1436,7 +1437,6 @@ function storySave(ch) { try { localStorage.setItem('ruokarobo-story', JSON.stri
 function startStory(ch, save) {
   campaign = true; pvp = false; roam = false; score = 0; money = save?.money || 0; up = { ...freshUp(), ...save?.up };
   for (const k in stats) delete stats[k];
-const WOLT = '#00c2e8', woltN = n => campaign || pvp || roam || n < 9 ? 0 : 1 + ((n - 9) / 3 | 0); // endless only: one courier from shift 9, one more every 3 shifts
   chapter = ch; state = 'story'; stateT = 0;
 }
 // a chapter starts from its card; a retry restarts it with the money and upgrades it began with
@@ -1485,6 +1485,10 @@ function setupLevel(n) {
     const side = Math.random() < .7 ? 0 : 1, pos = pathPoint(side);
     peds.push({ ...pos, ...waypoint(side), side, kind: 'dog', a: 0, vx: 0, vy: 0, mode: 'walk', t: 0, cool: 3, kickT: 0, say: '', sayT: 0 });
   }
+  for (let i = 0; i < hz(woltN(n)); i++) { // Woltti couriers on e-mopeds: they hunt a robot down from anywhere and only a zap shakes them off
+    const side = i % 2, pos = pathPoint(side);
+    peds.push({ ...pos, ...waypoint(side), side, kind: 'wolt', a: 0, vx: 0, vy: 0, mode: 'walk', t: 0, cool: 4, kickT: 0, say: '', sayT: 0, color: WOLT, hat: WOLT });
+  }
   kids = []; balls = [];
   const nKids = hz(cv('kids', Math.min(4, n))) * BLOCKS, nBums = campaign && !nKids ? 0 : BLOCKS; // no bottles in story chapters without kids
   const home = chap()?.kidsNearHome && HOUSES[KIDS_HOME].door; // ch 3: the kids guard their own house
@@ -1494,10 +1498,6 @@ function setupLevel(n) {
     if (x < 20 || x > W - 20 || y < 20 || y > H - 20 || [...PATHS, ROAD].some(p => inR(x, y, p)) || inLake(x, y, 10) || insideSolid(x, y)
         || DOORS.some(d => Math.hypot(d.x - x, d.y - y) < 90) || home && i < nKids && Math.hypot(home.x - x, home.y - y) > 250) continue;
     const bum = i >= nKids;
-  for (let i = 0; i < hz(woltN(n)); i++) { // Woltti couriers on e-mopeds: they hunt a robot down from anywhere and only a zap shakes them off
-    const side = i % 2, pos = pathPoint(side);
-    peds.push({ ...pos, ...waypoint(side), side, kind: 'wolt', a: 0, vx: 0, vy: 0, mode: 'walk', t: 0, cool: 4, kickT: 0, say: '', sayT: 0, color: WOLT, hat: WOLT });
-  }
     kids.push({ x, y, dx: -dx, dy: -dy, a: Math.atan2(-dy, -dx), cool: rnd(1, 3), throwT: 0, say: '', sayT: 0, bum,
                 coat: bum ? pick(['#5a4d3a', '#4a4f3a', '#3d3a36']) : pick(['#ff7b00', '#2d9cff', '#e84393', '#2fbf6a']),
                 hat: bum ? pick(['#6b6b6b', '#7a3b2e']) : pick(['#d33', '#f5c400', '#1f4e9c']) });
@@ -2156,6 +2156,7 @@ function updCars(dt) {
   }
 }
 // ---------- angry pedestrians ----------
+const WOLT_SHOUTS = ['Tää on mun keikka!', 'Robotit vie meidän keikat!', 'Pois mun reitiltä!', 'Viis tähteä, kiitos!'];
 const PED_SHOUTS = ['Senkin romu!', 'Pois tieltä!', 'Robotit vie meidän työt!', 'Hitto sentään!', 'Mene pois!'];
 function pathPoint(side) { // a point on a sidewalk on this side of the road
   for (;;) {
@@ -2172,11 +2173,11 @@ function kick(p, r) { // people kick, dogs jump on you
   p.kickT = .35; say(p, dog ? pick(['Hau hau!', 'Murr!', 'Vuh vuh!']) : pick(p.kind === 'wolt' ? WOLT_SHOUTS : PED_SHOUTS), 1.8); sfx(dog ? 'bark' : 'kick');
   fx({ k: 'burst', x: r.x, y: r.y, n: 8 });
   Object.assign(p, { mode: 'walk', cool: p.kind === 'wolt' ? 1.5 : dog ? 3 : 4 }, waypoint(p.side)); // satisfied, walks off (a courier just circles back)
-const WOLT_SHOUTS = ['Tää on mun keikka!', 'Robotit vie meidän keikat!', 'Pois mun reitiltä!', 'Viis tähteä, kiitos!'];
 }
 function updPeds(dt) {
   for (const p of peds) {
     p.t -= dt; p.cool -= dt; p.kickT -= dt; p.sayT -= dt;
+    const wolt = p.kind === 'wolt';
     if (p.mode === 'fall') { if (p.t <= 0) { p.mode = 'walk'; p.cool = 2; } continue; }
     if (p.mode === 'zapped') { if ((p.zapT -= dt) <= 0) { p.mode = 'walk'; p.cool = wolt ? 20 : 3; } continue; } // a zapped courier leaves you alone for 20 s
     const dog = p.kind === 'dog';
@@ -2193,7 +2194,6 @@ function updPeds(dt) {
       if (!robots.includes(r) || r.hole || !wolt && dist(p, r) > 260 || state !== 'play') { p.mode = 'walk'; p.cool = 2; }
       else {
         gx = r.x; gy = r.y; sp = wolt ? 160 : dog ? 150 : 100; // moped: outruns a robot in snow, loses it on a clear path
-    const wolt = p.kind === 'wolt';
         if (dist(p, r) < R + (dog ? 10 : 16) && p.kickT < -.5) kick(p, r);
         if (surface(p.x, p.y) === 'ice' && Math.random() < dt * (dog ? 1.2 : .8)) { fall(p, 'Hups!'); continue; }
       }
@@ -3264,6 +3264,7 @@ function storyCheck() {
   console.assert(RARITY.slice(0, 5).every((_, r) => HORNS.some(h => h.k && h.r === r && !h.story)), 'every case rarity has a horn');
   console.assert(Array.from({ length: 2000 }, rollSkin).some(s => s.play), 'cases roll horns');
   console.assert(hornOf('nope') === HORNS[0] && hornOf(1) === HORNS[0], 'unknown horn falls back to the default');
+  console.assert(woltN(8) === 0 && woltN(9) === 1 && woltN(12) === 2, 'Woltti couriers start on shift 9');
   console.assert(CHAPTERS.length === 9, 'prologue + 8 chapters');
   console.assert(CHAPTERS.every(c => c.title && c.intro), 'every chapter has title + intro');
   console.assert(HOUSES[KIDS_HOME] && HOUSES[KIDS_HOME].door.x < BW, 'kids home is in block 0');
@@ -3282,4 +3283,3 @@ storyCheck();
 </script>
 </body>
 </html>
-  console.assert(woltN(8) === 0 && woltN(9) === 1 && woltN(12) === 2, 'Woltti couriers start on shift 9');
