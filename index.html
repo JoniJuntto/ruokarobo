@@ -814,6 +814,8 @@ const KB = [
   { name: 'IJKL', u: 'KeyI', d: 'KeyK', l: 'KeyJ', r: 'KeyL', b: 'KeyU', h: 'KeyO', z: 'KeyP' },
   { name: 'TFGH', u: 'KeyT', d: 'KeyG', l: 'KeyF', r: 'KeyH', b: 'KeyR', h: 'KeyY', z: 'KeyV' },
 ];
+// ponytail: the street is sized for 4; grow the map before raising this
+const MAX_PLAYERS = 4;
 const keys = new Set(), robots = [];
 const spawn = i => ({ x: 70 + (i % 4) * 42, y: i < 4 ? 582 : 550 });
 const arrowGeo = (() => { const s = new THREE.Shape(); s.moveTo(1.3, 0); s.lineTo(-.6, .8); s.lineTo(-.6, -.8); s.closePath(); const g = new THREE.ShapeGeometry(s); g.rotateX(-Math.PI / 2); return g; })();
@@ -884,7 +886,7 @@ function join(ctrl) {
     localCtrls.push(ctrl); hostConn.send({ type: 'add', lid: localCtrls.length - 1 });
     return;
   }
-  if (robots.length >= 8) return;
+  if (robots.length >= MAX_PLAYERS) return;
   const r = addRobot({ ctrl }); say(r, 'Moi!'); sfx('join');
 }
 const ZERO = { t: 0, s: 0 };
@@ -954,22 +956,24 @@ const UPGRADES = [
   { k: 'battery', key: '4', name: '🔋 Bigger battery', desc: '+12 s per shift' },
 ];
 const COSMETICS = [
-  { k: 'pipo', key: '5', name: '🧶 Pipo hats', desc: 'Warm heads for every robot', price: 40 },
-  { k: 'scarf', key: '6', name: '🧣 Scarves', desc: 'Very stylish', price: 40 },
-  { k: 'fiflag', key: '7', name: '🇫🇮 Finnish flags', desc: 'Swap the orange flags', price: 30 },
-  { k: 'gold', key: '8', name: '✨ Gold paint', desc: 'Pure bling', price: 120 },
+  { k: 'pipo', key: '5', name: '🧶 Pipo hats', desc: 'Warm heads for every robot' },
+  { k: 'scarf', key: '6', name: '🧣 Scarves', desc: 'Very stylish' },
+  { k: 'fiflag', key: '7', name: '🇫🇮 Finnish flags', desc: 'Swap the orange flags' },
+  { k: 'gold', key: '8', name: '✨ Gold paint', desc: 'Pure bling' },
 ];
 const SHOP = [...UPGRADES, ...COSMETICS];
+const isStyle = k => COSMETICS.some(c => c.k === k);
 const freshUp = () => ({ tires: 0, motor: 0, susp: 0, battery: 0, pipo: 0, scarf: 0, fiflag: 0, gold: 0 });
 up = freshUp();
 function buy(k) {
   if (state !== 'shop') return;
   if (role === 'guest') return hostConn.send({ type: 'buy', k });
-  const c = COSMETICS.find(c => c.k === k), lv = up[k], price = c ? c.price : PRICES[lv];
-  if ((c ? lv >= 1 : lv >= 3) || money < price) return;
+  // style is a free toggle, so the team's money only ever goes to upgrades
+  if (isStyle(k)) { up[k] ^= 1; sfx('pickup'); if (k === 'gold' && up.gold) unlock('gold'); return; }
+  const lv = up[k], price = PRICES[lv];
+  if (lv >= 3 || money < price) return;
   money -= price; up[k]++; sfx('pickup');
-  if (k === 'gold') unlock('gold');
-  if (!c && up[k] >= 3) unlock('maxed');
+  if (up[k] >= 3) unlock('maxed');
 }
 function newRun() { score = 0; money = 0; up = freshUp(); for (const k in stats) delete stats[k]; startLevel(1); }
 // order types: dmg = damage multiplier, time = deadline multiplier, tipX = speed-tip multiplier
@@ -979,11 +983,16 @@ const ORDERS = [
   { icon: '🍦', name: 'Ice cream – hurry!', time: .6, bonus: 10, w: 2 },
   { icon: '🍉', name: 'Heavy order', heavy: true, bonus: 15, w: 2 },
   { icon: '🍕', name: 'Hot pizza – tip cools fast', time: .8, tipX: 2, w: 2 },
+  { icon: '🛋️', name: 'Sofa – needs two robots', duo: true, time: 1.6, bonus: 30, w: 3 }, // counts as 2 orders
 ];
 function pickOrder() {
-  let x = Math.random() * ORDERS.reduce((a, o) => a + o.w, 0);
-  return ORDERS.findIndex(o => (x -= o.w) < 0);
+  const ws = ORDERS.map(o => o.duo && robots.length < 2 ? 0 : o.w);
+  let x = Math.random() * ws.reduce((a, w) => a + w, 0);
+  return ws.findIndex(w => (x -= w) < 0);
 }
+// a sofa only moves at a crawl unless a teammate drives right next to it
+const helper = r => robots.find(q => q !== r && !q.hole && dist(q, r) < 2 * R + 26);
+const isDuo = r => !!r.cargo && !!ORDERS[r.cargo.o].duo;
 const LEVEL_NAMES = ['Morning flurry', 'Afternoon dusk', 'Kaamos (polar night)', 'Blizzard'];
 const DAY = new THREE.Color('#cfdbe8'), NIGHT = new THREE.Color('#0a1328');
 
@@ -1111,13 +1120,14 @@ const ACH = [
   { k: 'pothole',  i: '🕳️', n: 'Kuoppaekspertti',   d: 'Climb out of 5 potholes yourself' },
   { k: 'rescue',   i: '💛', n: 'Hyvä kaveri',       d: 'Tow a teammate out of a pothole' },
   { k: 'handoff',  i: '🤝', n: 'Saumaton vaihto',   d: 'Hand a package to a teammate' },
+  { k: 'sofa',     i: '🛋️', n: 'Muuttomiehet',      d: 'Deliver a sofa together' },
   { k: 'blizzard', i: '🌨️', n: 'Myrskyn läpi',      d: 'Deliver during a blizzard' },
   { k: 'pulla',    i: '🥐', n: 'Mummon pulla',      d: 'Get pulla from a grandma' },
   { k: 'kaamos',   i: '🌃', n: 'Kaamos',            d: 'Reach shift 3' },
   { k: 'shift5',   i: '🏁', n: 'Yötyöläinen',       d: 'Reach shift 5' },
   { k: 'rich',     i: '💰', n: 'Rahakas',           d: 'Earn 500 € in one run' },
   { k: 'maxed',    i: '🔧', n: 'Täysin viritetty',  d: 'Max out any upgrade' },
-  { k: 'gold',     i: '👑', n: 'Bling',             d: 'Buy the gold paint' },
+  { k: 'gold',     i: '👑', n: 'Bling',             d: 'Paint the team gold' },
   { k: 'snowball', i: '❄️', n: 'Lumisota',          d: 'Take 5 snowballs in one run' },
 ];
 let achDone = new Set();
@@ -1145,6 +1155,7 @@ function damage(r, amt, msg) {
   if (r.hp <= 0) { // out cold: a few seconds of sparks, then back up on half a battery
     r.hp = .5; r.stun = Math.max(r.stun, 2.5); r.immune = 3; r.vx = r.vy = 0;
     say(r, 'Rikki! 🔧', 2.5); fx({ k: 'burst', x: r.x, y: r.y, n: 26 });
+    if (r.cargo) { r.cargo = null; pop(r, '📦 Tilaus meni!', '#ff9b9b'); } // order is lost: back to Salepa
   }
 }
 function zap(r) {
@@ -1200,7 +1211,8 @@ function updRobot(r, dt) {
     }
   }
   const Sf = { ...surf(r.x, r.y) }, control = r.stun > 0 ? 0 : 1;
-  if (r.cargo && ORDERS[r.cargo.o].heavy) { Sf.acc *= .65; Sf.max *= .8; Sf.kL *= .6; } // watermelons slide
+  if (r.cargo && ORDERS[r.cargo.o].heavy || isDuo(r)) { Sf.acc *= .65; Sf.max *= .8; Sf.kL *= .6; } // watermelons slide
+  if (isDuo(r) && !helper(r)) { Sf.acc *= .3; Sf.max *= .15; }
   if (weather.k === 'blizzard') r.vx += Math.sign(wind || 1) * 30 * dt;
   // boost: ~2 s of turbo, recharges in ~7 s. handbrake: wheels lock, back end swings out
   const boosting = !!(inp.b && inp.t > 0 && r.boost > .02 && control);
@@ -1243,10 +1255,11 @@ function updRobot(r, dt) {
     // each order has a deadline: arrive in time for the speed tip
     r.cargo = { dest, o, cond: 1, t0: T, t: Math.round((8 + dist(SALEPA.door, HOUSES[dest].door) / 60) * (O.time || 1)) };
     say(r, `${O.icon} → ${dest + 1}`); pop(r, O.name, '#fff'); sfx('pickup');
-  } else if (r.cargo && dist(r, HOUSES[r.cargo.dest].door) < 45) {
+  } else if (r.cargo && dist(r, HOUSES[r.cargo.dest].door) < 45 && (!isDuo(r) || helper(r))) {
     const c = r.cargo, O = ORDERS[c.o], late = c.t <= 0, tipX = O.tipX || 1;
     const pay = (late ? 10 : 20) + (O.bonus || 0) + Math.round(15 * c.cond) + (late ? 0 : Math.min(20 * tipX, Math.round(c.t * tipX)));
-    money += pay; score += pay; delivered++;
+    money += pay; score += pay; delivered += O.duo ? 2 : 1;
+    if (O.duo) { const h = helper(r); say(h, 'Hyvä tiimi! 🛋️'); pop(h, '🛋️ Teamwork', '#9fd3ff'); unlock('sofa'); }
     pop(r, `+${pay} €${late ? ' (late)' : ''}`, late ? '#ff9b9b' : r.color);
     say(r, late ? 'Anteeksi, myöhässä…' : c.cond > .8 ? pick(['Kiitos!', 'Ole hyvä!', 'Hyvää ruokahalua!']) : 'Vähän kolhuja…');
     fx({ k: 'cust', i: c.dest });
@@ -1271,7 +1284,7 @@ function robotPairs(dt) {
     const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy);
     // handoff: park next to a teammate for a moment and the package changes robots
     const key = a.id + '-' + b.id;
-    if (state === 'play' && d < 2 * R + 8 && !a.hole && !b.hole && !a.cargo !== !b.cargo && Math.hypot(a.vx, a.vy) < 50 && Math.hypot(b.vx, b.vy) < 50
+    if (state === 'play' && d < 2 * R + 8 && !a.hole && !b.hole && !a.cargo !== !b.cargo && !isDuo(a) && !isDuo(b) && Math.hypot(a.vx, a.vy) < 50 && Math.hypot(b.vx, b.vy) < 50
         && dist(a, SALEPA.door) > 80) {
       handT[key] = (handT[key] || 0) + dt;
       if (handT[key] > .8) {
@@ -1528,7 +1541,7 @@ function hostRoom() {
   peer.on('connection', c => {
     c.on('open', () => { conns.add(c); c.send(levelMsg()); sfx('join'); });
     c.on('data', m => {
-      if (m.type === 'add' && robots.length < 8 && !robots.some(r => r.owner === c.peer && r.lid === m.lid)) {
+      if (m.type === 'add' && robots.length < MAX_PLAYERS && !robots.some(r => r.owner === c.peer && r.lid === m.lid)) {
         const r = addRobot({ owner: c.peer, lid: m.lid }); say(r, 'Moi!'); sfx('join');
       } else if (m.type === 'buy') buy(m.k);
       else if (m.type === 'in') {
@@ -1690,9 +1703,9 @@ function sync(dt) {
   boltGeo.setDrawRange(0, nb * BOLT_SEG * 2); boltGeo.attributes.position.needsUpdate = true;
   ballPool.forEach((m, i) => { const b = balls[i]; m.visible = !!b && b.age < b.ft; if (m.visible) place(m, b.x, b.y, Math.max(.2, ballH(b))); });
   if (plow?.mesh) { place(plow.mesh, plow.x, plow.y); plow.mesh.rotation.y = -plow.a; plow.beacon.visible = (T * 4 | 0) % 2 === 0; }
-  let ropes = 0; // tow ropes
+  let ropes = 0; // tow ropes, and straps between a sofa and its helper
   for (const r of robots) {
-    const t = r.towT > 0 && robots.find(q => q.id === r.tow);
+    const t = r.towT > 0 ? robots.find(q => q.id === r.tow) : isDuo(r) && helper(r);
     if (!t || ropes >= 8) continue;
     ropePos.set([r.x * S - OX, .45, r.y * S - OZ, t.x * S - OX, .45, t.y * S - OZ], ropes++ * 6);
   }
@@ -1771,7 +1784,8 @@ function drawTag(v) { // the player's own order sign at the bottom of their view
   if (r.hole) { title = 'Stuck in a pothole'; sub = 'Wiggle out, or wait for a friend to tow you'; }
   else if (r.cargo) {
     const O = ORDERS[r.cargo.o];
-    title = `${O.icon} ${O.name}`; sub = `Deliver to house ${r.cargo.dest + 1}`; num = r.cargo.dest + 1;
+    title = `${O.icon} ${O.name}`; num = r.cargo.dest + 1;
+    sub = O.duo && !helper(r) ? 'Too heavy alone: get a teammate right next to you' : `Deliver to house ${num}${O.duo ? ' together' : ''}`;
     late = r.cargo.t <= 0; right = late ? 'Late' : Math.ceil(r.cargo.t) + ' s';
   } else { title = 'Pick up at Salepa'; sub = 'Follow the green marker'; num = 'A'; numFill = '#2f9e57'; }
   ctx.font = F(800, 17); const tw = ctx.measureText(title).width;
@@ -1914,7 +1928,7 @@ for (const u of SHOP) {
   const b = document.createElement('button');
   b.className = 'card'; b.dataset.k = u.k; b.onclick = () => buy(u.k);
   b.innerHTML = `<span class="pic">${svgIcon(u.k)}</span><b>${u.name.replace(/^\S+\s/, '')}</b><small>${u.desc}</small><span class="row"><span class="lv"></span><span class="price"></span></span>`;
-  $(u.price ? 'cardsStyle' : 'cardsUp').append(b);
+  $(isStyle(u.k) ? 'cardsStyle' : 'cardsUp').append(b);
 }
 $('bNext').onclick = $('bStart').onclick = $('bRetry').onclick = pressStart;
 const WX_TEXT = { blizzard: ['Blizzard', 'You can barely see the street'], freeze: ['Freezing rain', 'Every surface is ice for a while'] };
@@ -1953,7 +1967,7 @@ function updateDOM() {
     if (weather.k) setText('hWxText', `${WX_TEXT[weather.k][0]} ${Math.ceil(weather.t)} s`);
     $('hRoom').hidden = !roomCode; setText('hRoomCode', roomCode);
     const free = KB.filter((k, i) => !myCtrls().some(c => c.kb === i)).map(k => k.name);
-    $('joinHint').hidden = robots.length >= 8 || vw < 900 || touchDev;
+    $('joinHint').hidden = robots.length >= MAX_PLAYERS || vw < 900 || touchDev;
     setText('joinHint', `More players can join with ${free.length ? free.join(', ') + ' or ' : ''}a gamepad`);
   } else $('joinHint').hidden = true;
   // shift sign drops in when a new shift starts
@@ -1977,13 +1991,13 @@ function updateDOM() {
   const sk = JSON.stringify([state, money, up, role, level]);
   if (state === 'shop' && sk !== shopKey) {
     shopKey = sk;
-    setText('shopSub', `Shift ${level} done. Spend the team's money before the next one.`);
+    setText('shopSub', `Shift ${level} done. Agree on an upgrade before the next one.`);
     setText('shopBonus', `+${bonus} €`); setText('shopMoney', `${money} €`);
     for (const b of document.querySelectorAll('.card')) {
-      const u = SHOP.find(u => u.k === b.dataset.k), lv = up[u.k], max = u.price ? 1 : 3, price = u.price || PRICES[lv];
-      b.disabled = lv >= max || money < price; b.classList.toggle('owned', lv >= max);
-      b.querySelector('.lv').innerHTML = u.price ? `<kbd>${u.key}</kbd>` : `<kbd>${u.key}</kbd>` + Array.from({ length: 3 }, (_, i) => `<i class="${i < lv ? 'on' : ''}"></i>`).join('');
-      b.querySelector('.price').textContent = lv >= max ? (u.price ? 'Owned' : 'Maxed') : `${price} €`;
+      const u = SHOP.find(u => u.k === b.dataset.k), lv = up[u.k], style = isStyle(u.k), price = PRICES[lv];
+      b.disabled = !style && (lv >= 3 || money < price); b.classList.toggle('owned', style ? !!lv : lv >= 3);
+      b.querySelector('.lv').innerHTML = `<kbd>${u.key}</kbd>` + (style ? '' : Array.from({ length: 3 }, (_, i) => `<i class="${i < lv ? 'on' : ''}"></i>`).join(''));
+      b.querySelector('.price').textContent = style ? (lv ? 'On' : 'Free') : lv >= 3 ? 'Maxed' : `${price} €`;
     }
     $('bNext').disabled = role === 'guest';
     $('bNext').textContent = role === 'guest' ? 'Waiting for the host to start the next shift' : 'Start next shift';
