@@ -1307,7 +1307,7 @@ const ORDERS = [
   { icon: '🍦', name: 'Ice cream – hurry!', time: .6, bonus: 10, w: 2 },
   { icon: '🍉', name: 'Heavy order', heavy: true, bonus: 15, w: 2 },
   { icon: '🍕', name: 'Hot pizza – tip cools fast', time: .8, tipX: 2, w: 2 },
-  { icon: '🛋️', name: 'Sofa – needs two robots', duo: true, time: 1.6, bonus: 30, w: 3 }, // counts as 2 orders
+  { icon: '🛋️', name: 'Sofa – needs two robots', duo: true, time: 1.6, bonus: 30, w: .25 }, // counts as 2 orders; .25 of 12.25 ≈ 2 % of orders (was 3 → 20 %)
   // campaign only (story: true): home = always to the kids' house, keep = survives a breakdown, s1 = only S-1 (robots[0]) carries it
   { icon: '🎁', name: 'Present for the kids', story: true, home: true, bonus: 10, w: 0 },
   { icon: '🎄', name: 'Christmas tree – needs two robots', story: true, home: true, duo: true, time: 1.6, bonus: 30, w: 0 },
