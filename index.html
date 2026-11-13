@@ -231,7 +231,7 @@
       <circle cx="21" cy="54" r="6" fill="#fff"/><circle cx="41" cy="54" r="6" fill="#fff"/><circle cx="61" cy="54" r="6" fill="#fff"/>
     </svg>
     <h1>Ruokarobo</h1>
-    <p>Deliver groceries from Salepa to every door on the street, through ice, potholes and very grumpy neighbours.</p>
+    <p>Deliver groceries from the corner shops to every door on the street, through ice, potholes and very grumpy neighbours.</p>
   </div>
   <div class="plate white" id="keys">
     <table>
@@ -321,8 +321,8 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
-// Simulation runs on a flat 1600x900 map (px). Rendering maps px → 3D units.
-const W = 1600, H = 900, R = 7, S = .1, OX = W * S / 2, OZ = H * S / 2;
+// Simulation runs on a flat 4800x900 map (px): three 1600px blocks along one road. Rendering maps px → 3D units.
+const BW = 1600, BLOCKS = 3, W = BW * BLOCKS, H = 900, R = 7, S = .1, OX = W * S / 2, OZ = H * S / 2;
 const inR = (x, y, p) => x >= p[0] && x <= p[0] + p[2] && y >= p[1] && y <= p[1] + p[3];
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
@@ -330,28 +330,35 @@ const rnd = (a, b) => a + Math.random() * (b - a);
 const pick = a => a[Math.random() * a.length | 0];
 
 // ---------- map ----------
-const PATHS = [[0, 560, W, 40], [0, 720, W, 40], [620, 256, 40, 304], [400, 220, 950, 36], [1300, 256, 40, 304]];
+const BX = Array.from({ length: BLOCKS }, (_, k) => k * BW); // left edge of each block
+const PATHS = [[0, 560, W, 40], [0, 720, W, 40], ...BX.flatMap(bx => [[bx + 620, 256, 40, 304], [bx + 400, 220, 950, 36], [bx + 1300, 256, 40, 304]])];
 const ROAD = [0, 600, W, 120];
-const CROSS = [[620, 600, 40, 120], [1300, 600, 40, 120]];
+const CROSS = BX.flatMap(bx => [[bx + 620, 600, 40, 120], [bx + 1300, 600, 40, 120]]);
 const LAKE = { x: 980, y: 400, rx: 210, ry: 95 };
 const AVANTO = { x: 1100, y: 420, r: 20 }; // ice-swimming hole by the sauna pier
-const SALEPA = { x: 30, y: 330, w: 190, h: 200, door: { x: 125, y: 552 } };
+// one shop per block; the lake, avanto and sauna stay in the first block
+const SHOPS = [['SALEPA', '#e8501f', 'A'], ['PUOTI', '#2d6fd6', 'B'], ['KIOSKI', '#2f9e57', 'C']]
+  .map(([name, color, tag], k) => ({ x: BX[k] + 30, y: 330, w: 190, h: 200, door: { x: BX[k] + 125, y: 552 }, name, color, tag }));
+const nearShop = p => SHOPS.reduce((a, b) => dist(p, a.door) <= dist(p, b.door) ? a : b);
 const SAUNA = { x: 1205, y: 420, w: 70, h: 50 };
-const HOUSES = [
-  { x: 420, y: 90, w: 150, h: 110, door: { x: 495, y: 222 }, wall: '#b3261e' },
-  { x: 780, y: 80, w: 160, h: 120, door: { x: 860, y: 222 }, wall: '#b3261e' },
-  { x: 1120, y: 90, w: 150, h: 110, door: { x: 1195, y: 222 }, wall: '#e2b13c' },
+const WALLS = ['#b3261e', '#e2b13c', '#3d6e9e', '#2e6b4f'];
+const HOUSES = BX.flatMap((bx, k) => [
+  { x: 420, y: 90, w: 150, h: 110, door: { x: 495, y: 222 }, wall: 0 },
+  { x: 780, y: 80, w: 160, h: 120, door: { x: 860, y: 222 }, wall: 0 },
+  { x: 1120, y: 90, w: 150, h: 110, door: { x: 1195, y: 222 }, wall: 1 },
   { x: 1390, y: 300, w: 170, h: 220, door: { x: 1475, y: 552 }, tall: true },
-  { x: 250, y: 790, w: 160, h: 90, door: { x: 330, y: 776 }, wall: '#b3261e' },
-  { x: 760, y: 790, w: 160, h: 90, door: { x: 840, y: 776 }, wall: '#3d6e9e' },
-  { x: 1250, y: 790, w: 160, h: 90, door: { x: 1330, y: 776 }, wall: '#b3261e' },
-];
+  { x: 250, y: 790, w: 160, h: 90, door: { x: 330, y: 776 }, wall: 0 },
+  { x: 760, y: 790, w: 160, h: 90, door: { x: 840, y: 776 }, wall: 2 },
+  { x: 1250, y: 790, w: 160, h: 90, door: { x: 1330, y: 776 }, wall: 0 },
+].map(h => ({ ...h, x: h.x + bx, door: { x: h.door.x + bx, y: h.door.y }, wall: WALLS[(h.wall + k) % WALLS.length] })));
 HOUSES.forEach((h, i) => h.n = i + 1);
-const SOLIDS = [SALEPA, SAUNA, ...HOUSES];
-const DOORS = [SALEPA.door, ...HOUSES.map(h => h.door)];
+const SOLIDS = [...SHOPS, SAUNA, ...HOUSES];
+const DOORS = [...SHOPS.map(b => b.door), ...HOUSES.map(h => h.door)];
 const LAMPS = [];
-for (const x of [180, 450, 760, 1060, 1420]) LAMPS.push({ x, y: 548 }, { x: x + 60, y: 772 });
-for (const x of [470, 760, 1040, 1260]) LAMPS.push({ x, y: 270 });
+for (const bx of BX) {
+  for (const x of [180, 450, 760, 1060, 1420]) LAMPS.push({ x: bx + x, y: 548 }, { x: bx + x + 60, y: 772 });
+  for (const x of [470, 760, 1040, 1260]) LAMPS.push({ x: bx + x, y: 270 });
+}
 const inLake = (x, y, m = 0) => ((x - LAKE.x) / (LAKE.rx + m)) ** 2 + ((y - LAKE.y) / (LAKE.ry + m)) ** 2 < 1;
 
 const trees = [{ x: 300, y: 150, r: 5, kind: 'flag' }];
@@ -363,7 +370,7 @@ function freeAt(x, y, m) {
   if (DOORS.some(d => Math.hypot(d.x - x, d.y - y) < 70)) return false;
   return !trees.some(t => Math.hypot(t.x - x, t.y - y) < m * 2);
 }
-for (let tries = 0; trees.length < 45 && tries < 4000; tries++) {
+for (let tries = 0; trees.length < 45 * BLOCKS && tries < 4000 * BLOCKS; tries++) {
   const x = rnd(0, W), y = rnd(0, H);
   if (freeAt(x, y, 24)) {
     const kind = trees.length < 4 ? 'snowman' : Math.random() < .55 ? 'spruce' : 'birch';
@@ -542,17 +549,17 @@ function plateMesh(n) {
 
 // ---------- static scene ----------
 {
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(600, 400), groundMat);
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(W * S + 120, 400), groundMat);
   ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
-  for (let i = 0; i < 50; i++) { // snowdrifts in the yards
+  for (let i = 0; i < 50 * BLOCKS; i++) { // snowdrifts in the yards
     const x = rnd(0, W), y = rnd(0, H);
     if (!freeAt(x, y, 30)) continue;
     const d = mesh(sphGeo(1), snowMat, scene); place(d, x, y, 0); d.scale.set(rnd(2, 5), rnd(.5, 1.1), rnd(1.5, 3)); d.rotation.y = rnd(0, 3);
   }
   // plowed snowbanks along the outer edges of the sidewalks
-  const gap = x => DOORS.some(d => Math.abs(d.x - x) < 40) || [620, 1300].some(px => x > px - 30 && x < px + 70);
+  const gap = x => DOORS.some(d => Math.abs(d.x - x) < 40) || CROSS.some(c => x > c[0] - 30 && x < c[0] + 70);
   for (const [y, side] of [[553, -1], [767, 1]]) for (let x = 10; x < W; x += rnd(26, 40)) {
-    if (gap(x) || (side < 0 && x > SALEPA.x - 10 && x < SALEPA.x + SALEPA.w + 10)) continue;
+    if (gap(x) || (side < 0 && SHOPS.some(b => x > b.x - 10 && x < b.x + b.w + 10))) continue;
     const b = mesh(sphGeo(1), snowMat, scene); place(b, x, y + side * rnd(0, 3), 0);
     b.scale.set(rnd(1.8, 2.8), rnd(.45, .8), rnd(.7, 1)); b.rotation.y = rnd(-.2, .2);
   }
@@ -567,9 +574,9 @@ function plateMesh(n) {
   for (const p of PATHS) tiled(p, walkMat, .03, 10);
   for (let x = 10; x < W; x += 60) rect([x, 658, 32, 4], '#e9c84a', .045);
   for (const c of CROSS) for (let y = c[1] + 6; y < c[1] + c[3] - 4; y += 16) rect([c[0], y, c[2], 9], '#eef0f2', .045);
-  for (const d of DOORS) flat(new THREE.PlaneGeometry(3.6, 1.6), mat(d === SALEPA.door ? '#2f7d4a' : '#7a5230', null, .95), d.x, d.y, .05);
+  for (const d of DOORS) flat(new THREE.PlaneGeometry(3.6, 1.6), mat(SHOPS.some(b => b.door === d) ? '#2f7d4a' : '#7a5230', null, .95), d.x, d.y, .05);
 }
-const lampLights = LAMPS.map(l => { // modern street lamp with an arm
+LAMPS.forEach(l => { // modern street lamp with an arm
   const g = group(l.x, l.y);
   const pole = mat('#2b2f36', null, .5, .5);
   mesh(cylGeo(.12, .18, 6.4, 12), pole, g, 0, 3.2, 0);
@@ -577,8 +584,13 @@ const lampLights = LAMPS.map(l => { // modern street lamp with an arm
   rbox(g, 1.6, .14, .14, .05, pole, .7, 6.35, 0);
   rbox(g, .9, .22, .5, .08, pole, 1.45, 6.3, 0);
   box(g, .7, .04, .34, mat('#fff3c4', '#ffd877'), 1.45, 6.18, 0);
-  const pl = new THREE.PointLight('#ffd9a0', 0, 28, 1); pl.position.set(1.45, 6, 0); g.add(pl); return pl;
 });
+// ponytail: 14 real lights follow the players around 42 lamps; more lights = slower shaders and a recompile per change
+const lampLights = Array.from({ length: 14 }, () => { const pl = new THREE.PointLight('#ffd9a0', 0, 28, 1); scene.add(pl); return pl; });
+function moveLamps(fx) {
+  const near = [...LAMPS].sort((a, b) => Math.abs(a.x - fx) - Math.abs(b.x - fx));
+  lampLights.forEach((pl, i) => place(pl, near[i].x + 14.5, near[i].y, 6));
+}
 function windowAt(g, x, y, z, s, w = 2.1, h = 2.3) { // framed window with crossbars and a sill, facing +Z*s
   rbox(g, w + .4, h + .4, .16, .05, white, x, y, z);
   box(g, w, h, .18, glass, x, y, z + s * .02);
@@ -643,12 +655,12 @@ function buildBlock(b) {
   rbox(g, 4.6, .3, 2.4, .08, '#4a4f57', dx, 3.6, d / 2 + 1.1);
   const p = plateMesh(b.n); p.position.set(dx + 2.4, 3.1, d / 2 + .12); g.add(p);
 }
-function buildSalepa() {
-  const b = SALEPA, g = group(b.x + b.w / 2, b.y + b.h / 2), w = b.w * S, d = b.h * S, hh = 7;
+function buildShop(b) {
+  const g = group(b.x + b.w / 2, b.y + b.h / 2), w = b.w * S, d = b.h * S, hh = 7;
   const front = tex(512, 192, (c) => {
     c.fillStyle = '#262b32'; c.fillRect(0, 0, 512, 192);
-    c.fillStyle = '#e8501f'; c.fillRect(0, 0, 512, 72);
-    c.fillStyle = '#fff'; c.font = '900 58px Overpass, system-ui'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('SALEPA', 256, 40);
+    c.fillStyle = b.color; c.fillRect(0, 0, 512, 72);
+    c.fillStyle = '#fff'; c.font = '900 58px Overpass, system-ui'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(b.name, 256, 40);
     for (const x of [16, 324]) { // shop windows with shelves
       c.fillStyle = '#fff1c9'; c.fillRect(x, 88, 172, 96);
       c.fillStyle = 'rgba(80,60,40,.25)'; for (let y = 112; y < 184; y += 24) c.fillRect(x, y, 172, 4);
@@ -773,7 +785,7 @@ function buildDog(parent) {
   });
   return { g, body, legs, arms: null, head: null };
 }
-buildSalepa(); buildSauna();
+SHOPS.forEach(buildShop); buildSauna();
 HOUSES.forEach(h => h.tall ? buildBlock(h) : buildHouse(h));
 trees.forEach(buildTree);
 // a customer waits at every door; shown when their order is on its way
@@ -897,7 +909,7 @@ function beam(color) {
   box(g.userData.pkg, 1.42, .25, .3, '#e9d3a8', 0, 0, 0);
   return g;
 }
-const salepaBeam = beam('#2fbf6a');
+const shopBeams = SHOPS.map(b => place(beam('#2fbf6a'), b.door.x, b.door.y));
 
 function buildRobot(r) {
   const g = new THREE.Group(); scene.add(g);
@@ -1116,30 +1128,30 @@ function spot() {
 }
 function setupLevel(n) {
   ice = []; holes = []; cars = [];
-  for (let i = 0; i < 2 + n * 2; i++) ice.push({ ...spot(), rx: rnd(40, 90), ry: rnd(18, 36) });
-  for (let i = 0; i < 2 + n * 2; i++) {
+  for (let i = 0; i < (2 + n * 2) * BLOCKS; i++) ice.push({ ...spot(), rx: rnd(40, 90), ry: rnd(18, 36) });
+  for (let i = 0; i < (2 + n * 2) * BLOCKS; i++) {
     const s = spot();
     if (!holes.some(h => Math.hypot(h.x - s.x, h.y - s.y) < 60)) holes.push({ ...s, r: rnd(15, 21) });
   }
   for (let lane = 0; lane < 2; lane++) {
-    const count = n > 3 ? 2 : 1, base = 130 + n * 15 + lane * 20;
+    const count = (n > 3 ? 2 : 1) * BLOCKS, base = 130 + n * 15 + lane * 20;
     for (let k = 0; k < count; k++)
       cars.push({ x: (k + Math.random() * .4) * (W + 200) / count, y: lane ? 690 : 630, dir: lane ? -1 : 1, base, v: base,
                   color: pick(['#c0392b', '#2c3e50', '#f1f1f1', '#2e86de', '#7f8c8d', '#16a085']) });
   }
   peds = [];
-  for (let i = 0; i < Math.min(8, 1 + n); i++) {
+  for (let i = 0; i < Math.min(8, 1 + n) * BLOCKS; i++) {
     const side = Math.random() < .75 ? 0 : 1;
-    let pos; do pos = pathPoint(side); while (dist(pos, SALEPA.door) < 160);
+    let pos; do pos = pathPoint(side); while (dist(pos, nearShop(pos).door) < 160);
     peds.push({ ...pos, ...waypoint(side), side, kind: 'person', a: 0, vx: 0, vy: 0, mode: 'walk', t: 0, cool: 2, kickT: 0, say: '', sayT: 0,
                 color: pick(['#3b6ea5', '#7a2e3a', '#2e6b4f', '#5b4a8a', '#a0522d', '#333a44']), hat: pick(['#d33', '#f5c400', '#1f4e9c', '#2fbf6a', '#e84393']) });
   }
-  for (let i = 0; n >= 2 && i < (n >= 4 ? 2 : 1); i++) { // dogs from shift 2
+  for (let i = 0; n >= 2 && i < (n >= 4 ? 2 : 1) * BLOCKS; i++) { // dogs from shift 2
     const side = Math.random() < .7 ? 0 : 1, pos = pathPoint(side);
     peds.push({ ...pos, ...waypoint(side), side, kind: 'dog', a: 0, vx: 0, vy: 0, mode: 'walk', t: 0, cool: 3, kickT: 0, say: '', sayT: 0 });
   }
   kids = []; balls = [];
-  for (let i = 0, tries = 0; i < Math.min(4, n) && tries < 400; tries++) { // kids hide in the snow next to sidewalks
+  for (let i = 0, tries = 0; i < Math.min(4, n) * BLOCKS && tries < 400 * BLOCKS; tries++) { // kids hide in the snow next to sidewalks
     const q = pathPoint(Math.random() < .7 ? 0 : 1), [dx, dy] = pick([[0, 1], [0, -1], [1, 0], [-1, 0]]), off = rnd(45, 70);
     const x = q.x + dx * off, y = q.y + dy * off;
     if (x < 20 || x > W - 20 || y < 20 || y > H - 20 || [...PATHS, ROAD].some(p => inR(x, y, p)) || inLake(x, y, 10) || insideSolid(x, y)
@@ -1500,10 +1512,12 @@ function updRobot(r, dt) {
   if (r.cargo && ORDERS[r.cargo.o].heavy || isDuo(r)) { Sf.acc *= .65; Sf.max *= .8; Sf.kL *= .6; } // watermelons slide
   if (isDuo(r) && !helper(r)) { Sf.acc *= .3; Sf.max *= .15; }
   if (weather.k === 'blizzard') r.vx += Math.sign(wind || 1) * 30 * dt;
-  // boost: ~2 s of turbo, recharges in ~7 s. handbrake: wheels lock, back end swings out
-  const boosting = !!(inp.b && inp.t > 0 && r.boost > .02 && control);
+  // boost: ~2 s of turbo, recharges in ~7 s; drain it empty and it stays locked until full again. handbrake: wheels lock, back end swings out
+  if (r.boost >= 1) r.boostLock = false;
+  const boosting = !!(inp.b && inp.t > 0 && r.boost > .02 && !r.boostLock && control);
   if (boosting && !r.boosting) sfx('boost');
   r.boosting = boosting; r.boost = clamp(r.boost + (boosting ? -dt / (2 + .7 * up.turbo) : dt / (7 - 1.5 * up.turbo)), 0, 1);
+  if (r.boost <= 0) r.boostLock = true;
   // stun gun: 3 charges, one recharges every 6 s; zaps the nearest local, dog or kid in front
   r.zaps = Math.min(3 + up.tesla, r.zaps + dt / 6); r.zapCd -= dt;
   if (inp.z && !r.zPrev && control && r.zapCd <= 0 && r.zaps >= 1 && state === 'play') zap(r);
@@ -1563,10 +1577,13 @@ function updRobot(r, dt) {
 
   if (state !== 'play') return;
   if (r.cargo) r.cargo.t -= dt;
-  if (!r.cargo && dist(r, SALEPA.door) < 45) {
-    const dest = Math.random() * HOUSES.length | 0, o = pickOrder(), O = ORDERS[o];
+  const shop = nearShop(r);
+  if (!r.cargo && dist(r, shop.door) < 45) {
+    // orders go to this block or the next one over, never across the whole map
+    const near = HOUSES.flatMap((h, i) => Math.abs(h.door.x - shop.door.x) < BW * 1.2 ? [i] : []);
+    const dest = pick(near), o = pickOrder(), O = ORDERS[o];
     // each order has a deadline: arrive in time for the speed tip
-    r.cargo = { dest, o, cond: 1, t0: T, t: Math.round((8 + dist(SALEPA.door, HOUSES[dest].door) / 60) * (O.time || 1) * (1 + .15 * up.box)) };
+    r.cargo = { dest, o, cond: 1, t0: T, t: Math.round((8 + dist(shop.door, HOUSES[dest].door) / 60) * (O.time || 1) * (1 + .15 * up.box)) };
     say(r, `${O.icon} → ${dest + 1}`); pop(r, O.name, '#fff'); sfx('pickup');
   } else if (r.cargo && dist(r, HOUSES[r.cargo.dest].door) < 45 && (!isDuo(r) || helper(r))) {
     const c = r.cargo, O = ORDERS[c.o], late = c.t <= 0, tipX = O.tipX || 1;
@@ -1603,7 +1620,7 @@ function robotPairs(dt) {
     // handoff: park next to a teammate for a moment and the package changes robots
     const key = a.id + '-' + b.id;
     if (state === 'play' && !pvp && d < 2 * R + 8 && !a.hole && !b.hole && !a.cargo !== !b.cargo && !isDuo(a) && !isDuo(b) && Math.hypot(a.vx, a.vy) < 50 && Math.hypot(b.vx, b.vy) < 50
-        && dist(a, SALEPA.door) > 80) {
+        && dist(a, nearShop(a).door) > 80) {
       handT[key] = (handT[key] || 0) + dt;
       if (handT[key] > .8) {
         const [from, to] = a.cargo ? [a, b] : [b, a];
@@ -1710,7 +1727,7 @@ function updPeds(dt) {
   }
 }
 // ---------- snowplow, snowball kids ----------
-const PLOW_ROUTE = [[20, 580], [640, 580], [640, 238], [1320, 238], [1320, 580], [1580, 580]];
+const PLOW_ROUTE = [[20, 580], ...BX.flatMap(bx => [[bx + 640, 580], [bx + 640, 238], [bx + 1320, 238], [bx + 1320, 580]]), [W - 20, 580]];
 function updPlow(dt) {
   if (!plow) return;
   const [tx, ty] = PLOW_ROUTE[plow.wi], d = Math.hypot(tx - plow.x, ty - plow.y);
@@ -1832,7 +1849,13 @@ const insideSolid = (x, y) => SOLIDS.some(b => x > b.x - 10 && x < b.x + b.w + 1
 function updCameras(dt) {
   // title screen: slow orbit over the village
   const a = T * .08;
-  camera.position.set(Math.sin(a) * 110, 75, Math.cos(a) * 80); camera.lookAt(0, 0, 0);
+  const tx = BW / 2 * S - OX; // title shot orbits the first block
+  camera.position.set(tx + Math.sin(a) * 110, 75, Math.cos(a) * 80); camera.lookAt(tx, 0, 0);
+  // shadows, snowfall and lamp lights cover one block's worth, so they follow the local players
+  const mine = robots.filter(r => r.owner === myOwner), fx = state === 'title' || !mine.length ? BW / 2 : mine.reduce((t, r) => t + r.x, 0) / mine.length;
+  const wx = fx * S - OX;
+  sun.position.set(wx - 60, 70, 55); sun.target.position.set(wx, 0, 0); sun.target.updateMatrixWorld();
+  snow.position.x = wx; moveLamps(fx);
   // third-person chase cam per robot; yaw lags behind so ice slides feel like slides
   for (const r of robots) {
     let d = r.a - r.camYaw; d = Math.atan2(Math.sin(d), Math.cos(d));
@@ -1966,7 +1989,7 @@ function broadcast(dt) {
   netT = 0;
   const m = { type: 's', st: state, pvp, pz: paused, level, time, quota, delivered, score, bonus, money, up, banner, bannerT, best,
     r: robots.map(r => ({ id: r.id, i: r.i, n: nameOf(r), owner: r.owner, x: r.x, y: r.y, a: r.a, vx: r.vx, vy: r.vy, cargo: r.cargo,
-                          hole: typeof r.hole === 'string' ? r.hole : !!r.hole, esc: r.esc, stun: r.stun, say: r.say, sayT: r.sayT, bo: r.boost, bz: r.boosting, zp: r.zaps, hp: r.hp, e: r.earn, tw: r.towT > 0 ? r.tow : -1 })),
+                          hole: typeof r.hole === 'string' ? r.hole : !!r.hole, esc: r.esc, stun: r.stun, say: r.say, sayT: r.sayT, bo: r.boost, bl: r.boostLock, bz: r.boosting, zp: r.zaps, hp: r.hp, e: r.earn, tw: r.towT > 0 ? r.tow : -1 })),
     c: cars.map(c => c.x), fx: outbox.splice(0),
     p: peds.map(p => ({ x: p.x, y: p.y, a: p.a, m: p.mode, k: p.kickT > 0, mv: p.moving, s: p.say, st: p.sayT })),
     kd: kids.map(k => ({ a: k.a, th: k.throwT, s: k.say, st: k.sayT, z: k.zapT > 0 })), b: balls, wx: weather,
@@ -1982,7 +2005,7 @@ function applySnap(m) {
     let r = robots.find(q => q.id === s.id);
     if (!r) r = Object.assign(addRobot({ id: s.id, owner: s.owner, i: s.i, n: s.n }), { x: s.x, y: s.y, a: s.a });
     Object.assign(r, { owner: s.owner, n: s.n, tx: s.x, ty: s.y, ta: s.a, vx: s.vx, vy: s.vy, cargo: s.cargo, hole: s.hole || null,
-                       esc: s.esc, stun: s.stun, say: s.say, sayT: s.sayT, boost: s.bo, boosting: s.bz, zaps: s.zp, hp: s.hp ?? 1, earn: s.e ?? 0, tow: s.tw, towT: s.tw >= 0 ? 1 : 0 });
+                       esc: s.esc, stun: s.stun, say: s.say, sayT: s.sayT, boost: s.bo, boostLock: s.bl, boosting: s.bz, zaps: s.zp, hp: s.hp ?? 1, earn: s.e ?? 0, tow: s.tw, towT: s.tw >= 0 ? 1 : 0 });
   }
   m.c.forEach((x, i) => cars[i] && (cars[i].tx = x));
   m.p?.forEach((q, i) => peds[i] && Object.assign(peds[i], { tx: q.x, ty: q.y, a: q.a, mode: q.m, kickT: q.k ? .3 : 0, moving: q.mv, say: q.s, sayT: q.st }));
@@ -2028,16 +2051,16 @@ function sync(dt) {
     if (!r.hole && (slip > 45 || r.boosting)) for (let k = 0; k < 2; k++)
       puff(r.x - Math.cos(r.a) * 6, r.y - Math.sin(r.a) * 6, .15, -Math.cos(r.a) * 2 + rnd(-1.5, 1.5), -Math.sin(r.a) * 2 + rnd(-1.5, 1.5), rnd(1, 3));
     r.flag.rotation.y = Math.PI + Math.sin(T * 8 + r.i) * .35 + clamp(Math.hypot(r.vx, r.vy) / 400, 0, .3);
-    const tgt = r.cargo ? HOUSES[r.cargo.dest].door : SALEPA.door, a = Math.atan2(tgt.y - r.y, tgt.x - r.x);
+    const tgt = r.cargo ? HOUSES[r.cargo.dest].door : nearShop(r).door, a = Math.atan2(tgt.y - r.y, tgt.x - r.x);
     const mine = r.owner === myOwner;
     r.arrow.visible = mine && state === 'play' && dist(r, tgt) > 90;
     place(r.arrow, r.x + Math.cos(a) * 22, r.y + Math.sin(a) * 22, .3); r.arrow.rotation.y = -a;
     r.beam.visible = mine && state === 'play' && !!r.cargo;
     if (r.cargo) place(r.beam, tgt.x, tgt.y);
   }
-  salepaBeam.visible = state === 'play' && robots.some(r => r.owner === myOwner && !r.cargo);
-  place(salepaBeam, SALEPA.door.x, SALEPA.door.y);
-  for (const g of [salepaBeam, ...robots.map(r => r.beam)]) {
+  const want = state === 'play' && robots.some(r => r.owner === myOwner && !r.cargo);
+  for (const g of shopBeams) g.visible = want;
+  for (const g of [...shopBeams, ...robots.map(r => r.beam)]) {
     g.userData.pkg.rotation.y = T * 1.5; g.userData.pkg.position.y = 8 + Math.sin(T * 3) * .6;
   }
   for (const p of peds) {
@@ -2159,7 +2182,7 @@ function drawTag(v) { // the player's own order sign at the bottom of their view
     title = `${O.icon} ${O.name}`; num = r.cargo.dest + 1;
     sub = O.duo && !helper(r) ? 'Too heavy alone: get a teammate right next to you' : `Deliver to house ${num}${O.duo ? ' together' : ''}`;
     late = r.cargo.t <= 0; right = late ? 'Late' : Math.ceil(r.cargo.t) + ' s';
-  } else { title = 'Pick up at Salepa'; sub = 'Follow the green marker'; num = 'A'; numFill = '#2f9e57'; }
+  } else { const b = nearShop(r); title = `Pick up at ${b.name[0] + b.name.slice(1).toLowerCase()}`; sub = 'Follow the green marker'; num = b.tag; numFill = b.color; }
   ctx.font = F(800, 17); const tw = ctx.measureText(title).width;
   ctx.font = F(600, 13); const sw = ctx.measureText(sub).width;
   ctx.font = F(900, 24); const rw = right ? ctx.measureText(right).width + 34 : 0;
@@ -2195,7 +2218,7 @@ function drawTag(v) { // the player's own order sign at the bottom of their view
   ctx.fillStyle = INK; ctx.font = F(700, 11); ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
   ctx.fillText('Boost', px + 11, py + 13); ctx.fillText('Zap', px + 146, py + 13);
   ctx.fillStyle = '#d8e0e8'; rr(px + 50, py + 8, 84, 8, 2); ctx.fill();
-  ctx.fillStyle = r.boost > .02 ? BLUE : '#9aa5b1'; rr(px + 50, py + 8, 84 * r.boost, 8, 2); ctx.fill();
+  ctx.fillStyle = r.boost > .02 && !r.boostLock ? BLUE : '#9aa5b1'; rr(px + 50, py + 8, 84 * r.boost, 8, 2); ctx.fill();
   const nz = 3 + up.tesla, zs = 51 / nz, zw = zs - (nz > 3 ? 2 : 5); // tesla coil adds pips, squeeze them in
   for (let k = 0; k < nz; k++) {
     const f = clamp((r.zaps ?? 3) - k, 0, 1), zx = px + 172 + k * zs;
@@ -2243,33 +2266,34 @@ function drawLabels(v) {
   }
   if (v.r && state === 'play') { drawTag(v); drawMinimap(v); }
 }
-const miniBg = document.createElement('canvas'); miniBg.width = 480; miniBg.height = 270;
+const MINI = .3, miniBg = document.createElement('canvas'); miniBg.width = W * MINI; miniBg.height = H * MINI;
 {
-  const g = miniBg.getContext('2d'); g.scale(480 / W, 270 / H);
+  const g = miniBg.getContext('2d'); g.scale(MINI, MINI);
   g.fillStyle = '#eef3f8'; g.fillRect(0, 0, W, H);
   g.fillStyle = '#b9dcf0'; g.beginPath(); g.ellipse(LAKE.x, LAKE.y, LAKE.rx, LAKE.ry, 0, 0, 7); g.fill();
   g.fillStyle = '#0f3a55'; g.beginPath(); g.arc(AVANTO.x, AVANTO.y, AVANTO.r, 0, 7); g.fill();
   g.fillStyle = '#4d525a'; g.fillRect(...ROAD);
   g.fillStyle = '#b3bac4'; PATHS.forEach(p => g.fillRect(...p));
-  g.fillStyle = '#2f9e57'; g.fillRect(SALEPA.x, SALEPA.y, SALEPA.w, SALEPA.h);
+  for (const b of SHOPS) { g.fillStyle = b.color; g.fillRect(b.x, b.y, b.w, b.h); }
   g.fillStyle = '#6b4226'; g.fillRect(SAUNA.x, SAUNA.y, SAUNA.w, SAUNA.h);
   g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = '900 72px Overpass, system-ui, sans-serif';
   for (const h of HOUSES) { g.fillStyle = BLUE; g.fillRect(h.x, h.y, h.w, h.h); g.fillStyle = '#fff'; g.fillText(h.n, h.x + h.w / 2, h.y + h.h / 2 + 6); }
-  g.fillStyle = '#fff'; g.fillText('A', SALEPA.x + SALEPA.w / 2, SALEPA.y + SALEPA.h / 2 + 6);
+  g.fillStyle = '#fff'; for (const b of SHOPS) g.fillText(b.tag, b.x + b.w / 2, b.y + b.h / 2 + 6);
 }
 function drawMinimap(v) {
-  const mw = Math.min(232, v.w * .3), mh = mw * H / W, x = v.x + v.w - mw - 18, y = v.y + (v.y < 1 ? 60 : 18), k = mw / W;
-  plate(x - 7, y - 7, mw + 14, mh + 14, '#fff', INK);
+  const mw = Math.min(232, v.w * .3), mh = mw * H / BW, x0 = v.x + v.w - mw - 18, y = v.y + (v.y < 1 ? 60 : 18), k = mw / BW;
+  const ox = clamp(v.r.x - BW / 2, 0, W - BW), x = x0 - ox * k; // shows one block's width around the robot
+  plate(x0 - 7, y - 7, mw + 14, mh + 14, '#fff', INK);
   ctx.save();
-  ctx.beginPath(); ctx.rect(x, y, mw, mh); ctx.clip();
-  ctx.drawImage(miniBg, x, y, mw, mh);
+  ctx.beginPath(); ctx.rect(x0, y, mw, mh); ctx.clip();
+  ctx.drawImage(miniBg, ox * MINI, 0, BW * MINI, H * MINI, x0, y, mw, mh);
   const dot = (px, py, rad, color) => { ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x + px * k, y + py * k, rad, 0, 7); ctx.fill(); };
   ctx.fillStyle = 'rgba(150,210,245,.95)';
   for (const p of ice) if (!p.gone) { ctx.beginPath(); ctx.ellipse(x + p.x * k, y + p.y * k, p.rx * k, p.ry * k, 0, 0, 7); ctx.fill(); }
   for (const h of holes) dot(h.x, h.y, 2.2, INK);
   for (const c of cars) { ctx.fillStyle = '#26303b'; ctx.fillRect(x + (c.x - 40) * k, y + (c.y - 18) * k, 80 * k, 36 * k); }
-  const tgt = v.r.cargo ? HOUSES[v.r.cargo.dest].door : SALEPA.door;
-  ctx.strokeStyle = v.r.color; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x + tgt.x * k, y + tgt.y * k, 7 + Math.sin(T * 6) * 2, 0, 7); ctx.stroke();
+  const tgt = v.r.cargo ? HOUSES[v.r.cargo.dest].door : nearShop(v.r).door, tx = clamp(tgt.x, ox + 30, ox + BW - 30); // off-window targets pin to the edge
+  ctx.strokeStyle = v.r.color; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x + tx * k, y + tgt.y * k, 7 + Math.sin(T * 6) * 2, 0, 7); ctx.stroke();
   for (const p of peds) dot(p.x, p.y, 2.6, p.mode === 'chase' ? RED : p.kind === 'dog' ? '#8b5a2b' : '#6b7480');
   for (const q of kids) dot(q.x, q.y, 2.2, '#ff9d00');
   if (plow) { ctx.fillStyle = '#f5a200'; ctx.fillRect(x + plow.x * k - 4, y + plow.y * k - 4, 8, 8); }
