@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
+<script src="https://analytics.huikaton.online/api/script.js" data-site-id="2d0719c58b53" defer></script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>Ruokarobo</title>
@@ -128,6 +129,23 @@
   #over .stats b{display:block;font-size:32px;font-weight:900;line-height:1;font-variant-numeric:tabular-nums}
   #over .stats span{font-size:13px;font-weight:600;color:#5a6470}
 
+  /* achievements */
+  #achBox{padding:12px 14px 10px}
+  .achHead{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
+  .achHead b{font-size:15px;font-weight:800}
+  .achHead span{font-weight:700;color:#5a6470;font-size:13px;font-variant-numeric:tabular-nums}
+  .achGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(152px,1fr));gap:5px}
+  .achIt{display:flex;align-items:center;gap:7px;padding:5px 8px 3px;border-radius:5px;background:#eef2f7;font-weight:700;font-size:12.5px;opacity:.45;filter:grayscale(1)}
+  .achIt.on{opacity:1;filter:none;background:var(--yellow)}
+  .achIt i{font-style:normal;font-size:15px}
+  #achs{position:fixed;right:14px;top:58px;display:flex;flex-direction:column;gap:8px;align-items:flex-end;pointer-events:none;z-index:5}
+  .ach{display:flex;align-items:center;gap:10px;padding:10px 14px 8px;animation:achIn .35s both,achOut .45s 3.5s both}
+  .ach .ic{font-size:26px;line-height:1}
+  .ach b{display:block;font-size:16px;font-weight:900;line-height:1.1}
+  .ach small{font-size:12px;font-weight:600}
+  @keyframes achIn{from{transform:translateX(125%);opacity:0}}
+  @keyframes achOut{to{transform:translateX(125%);opacity:0}}
+
   /* touch */
   #stick{position:fixed;left:20px;bottom:84px;width:150px;height:150px;border-radius:50%;background:rgba(255,255,255,.16);box-shadow:inset 0 0 0 3px rgba(255,255,255,.6);touch-action:none}
   #knob{position:absolute;left:50%;top:50%;width:60px;height:60px;margin:-30px 0 0 -30px;border-radius:50%;background:#fff;opacity:.85;pointer-events:none}
@@ -137,7 +155,7 @@
   #tZap{right:112px;bottom:131px;background:#0a8fa8}
 
   @media (max-width:640px){#sign h2{font-size:34px}#shop h2{font-size:32px}#hud .plate{font-size:18px;padding:8px 11px 5px}#hud{max-width:calc(100vw - 28px)}}
-  @media (prefers-reduced-motion:reduce){#sign.show,#alert.show{animation:none}}
+  @media (prefers-reduced-motion:reduce){#sign.show,#alert.show,.ach{animation:none}}
 </style>
 </head>
 <body>
@@ -181,7 +199,7 @@
       <circle cx="21" cy="54" r="6" fill="#fff"/><circle cx="41" cy="54" r="6" fill="#fff"/><circle cx="61" cy="54" r="6" fill="#fff"/>
     </svg>
     <h1>Ruokarobo</h1>
-    <p>Deliver groceries from Alepa to every door on the street, through ice, potholes and very grumpy neighbours.</p>
+    <p>Deliver groceries from Salepa to every door on the street, through ice, potholes and very grumpy neighbours.</p>
   </div>
   <div class="plate white" id="keys">
     <table>
@@ -194,6 +212,10 @@
     </table>
   </div>
   <div class="plate white" id="touchNote" hidden>Steer with the stick on the left. Boost, brake and zap are on the right.</div>
+  <div class="plate white" id="achBox">
+    <div class="achHead"><b>Achievements</b><span id="achCount"></span></div>
+    <div class="achGrid" id="achGrid"></div>
+  </div>
   <div id="players" class="note"></div>
   <div class="actions" id="menu">
     <button class="go" id="bStart">Start shift</button>
@@ -226,6 +248,7 @@
   <button class="go" id="bRetry">Try again</button>
 </div>
 
+<div id="achs"></div>
 <div id="touch" hidden><div id="stick"><div id="knob"></div></div><button id="tBoost" class="tbtn">Boost</button><button id="tBrake" class="tbtn">Brake</button><button id="tZap" class="tbtn">Zap</button></div>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
@@ -247,7 +270,7 @@ const PATHS = [[0, 560, W, 40], [0, 720, W, 40], [620, 256, 40, 304], [400, 220,
 const ROAD = [0, 600, W, 120];
 const CROSS = [[620, 600, 40, 120], [1300, 600, 40, 120]];
 const LAKE = { x: 980, y: 400, rx: 210, ry: 95 };
-const ALEPA = { x: 30, y: 330, w: 190, h: 200, door: { x: 125, y: 552 } };
+const SALEPA = { x: 30, y: 330, w: 190, h: 200, door: { x: 125, y: 552 } };
 const SAUNA = { x: 1205, y: 420, w: 70, h: 50 };
 const HOUSES = [
   { x: 420, y: 90, w: 150, h: 110, door: { x: 495, y: 222 }, wall: '#b3261e' },
@@ -259,8 +282,8 @@ const HOUSES = [
   { x: 1250, y: 790, w: 160, h: 90, door: { x: 1330, y: 776 }, wall: '#b3261e' },
 ];
 HOUSES.forEach((h, i) => h.n = i + 1);
-const SOLIDS = [ALEPA, SAUNA, ...HOUSES];
-const DOORS = [ALEPA.door, ...HOUSES.map(h => h.door)];
+const SOLIDS = [SALEPA, SAUNA, ...HOUSES];
+const DOORS = [SALEPA.door, ...HOUSES.map(h => h.door)];
 const LAMPS = [];
 for (const x of [180, 450, 760, 1060, 1420]) LAMPS.push({ x, y: 548 }, { x: x + 60, y: 772 });
 for (const x of [470, 760, 1040, 1260]) LAMPS.push({ x, y: 270 });
@@ -464,7 +487,7 @@ function plateMesh(n) {
   // plowed snowbanks along the outer edges of the sidewalks
   const gap = x => DOORS.some(d => Math.abs(d.x - x) < 40) || [620, 1300].some(px => x > px - 30 && x < px + 70);
   for (const [y, side] of [[553, -1], [767, 1]]) for (let x = 10; x < W; x += rnd(26, 40)) {
-    if (gap(x) || (side < 0 && x > ALEPA.x - 10 && x < ALEPA.x + ALEPA.w + 10)) continue;
+    if (gap(x) || (side < 0 && x > SALEPA.x - 10 && x < SALEPA.x + SALEPA.w + 10)) continue;
     const b = mesh(sphGeo(1), snowMat, scene); place(b, x, y + side * rnd(0, 3), 0);
     b.scale.set(rnd(1.8, 2.8), rnd(.45, .8), rnd(.7, 1)); b.rotation.y = rnd(-.2, .2);
   }
@@ -477,7 +500,7 @@ function plateMesh(n) {
   for (const p of PATHS) tiled(p, walkMat, .03, 10);
   for (let x = 10; x < W; x += 60) rect([x, 658, 32, 4], '#e9c84a', .045);
   for (const c of CROSS) for (let y = c[1] + 6; y < c[1] + c[3] - 4; y += 16) rect([c[0], y, c[2], 9], '#eef0f2', .045);
-  for (const d of DOORS) flat(new THREE.PlaneGeometry(3.6, 1.6), mat(d === ALEPA.door ? '#2f7d4a' : '#7a5230', null, .95), d.x, d.y, .05);
+  for (const d of DOORS) flat(new THREE.PlaneGeometry(3.6, 1.6), mat(d === SALEPA.door ? '#2f7d4a' : '#7a5230', null, .95), d.x, d.y, .05);
 }
 const lampLights = LAMPS.map(l => { // modern street lamp with an arm
   const g = group(l.x, l.y);
@@ -553,12 +576,12 @@ function buildBlock(b) {
   rbox(g, 4.6, .3, 2.4, .08, '#4a4f57', dx, 3.6, d / 2 + 1.1);
   const p = plateMesh(b.n); p.position.set(dx + 2.4, 3.1, d / 2 + .12); g.add(p);
 }
-function buildAlepa() {
-  const b = ALEPA, g = group(b.x + b.w / 2, b.y + b.h / 2), w = b.w * S, d = b.h * S, hh = 7;
+function buildSalepa() {
+  const b = SALEPA, g = group(b.x + b.w / 2, b.y + b.h / 2), w = b.w * S, d = b.h * S, hh = 7;
   const front = tex(512, 192, (c) => {
     c.fillStyle = '#262b32'; c.fillRect(0, 0, 512, 192);
     c.fillStyle = '#e8501f'; c.fillRect(0, 0, 512, 72);
-    c.fillStyle = '#fff'; c.font = '900 58px Overpass, system-ui'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('ALEPA', 256, 40);
+    c.fillStyle = '#fff'; c.font = '900 58px Overpass, system-ui'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('SALEPA', 256, 40);
     for (const x of [16, 324]) { // shop windows with shelves
       c.fillStyle = '#fff1c9'; c.fillRect(x, 88, 172, 96);
       c.fillStyle = 'rgba(80,60,40,.25)'; for (let y = 112; y < 184; y += 24) c.fillRect(x, y, 172, 4);
@@ -683,7 +706,7 @@ function buildDog(parent) {
   });
   return { g, body, legs, arms: null, head: null };
 }
-buildAlepa(); buildSauna();
+buildSalepa(); buildSauna();
 HOUSES.forEach(h => h.tall ? buildBlock(h) : buildHouse(h));
 trees.forEach(buildTree);
 // a customer waits at every door; shown when their order is on its way
@@ -805,7 +828,7 @@ function beam(color) {
   box(g.userData.pkg, 1.42, .25, .3, '#e9d3a8', 0, 0, 0);
   return g;
 }
-const alepaBeam = beam('#2fbf6a');
+const salepaBeam = beam('#2fbf6a');
 
 function buildRobot(r) {
   const g = new THREE.Group(); scene.add(g);
@@ -847,7 +870,7 @@ function buildRobot(r) {
 function addRobot({ owner = 'H', ctrl = null, lid = 0, id = nextId++, i }) {
   i ??= COLORS.findIndex((_, k) => !robots.some(r => r.i === k));
   const r = { id, owner, ctrl, lid, i, color: COLORS[i], ...spawn(i), a: 0, vx: 0, vy: 0, cargo: null, hole: null, esc: 0,
-              immune: 1, hitCd: 0, stun: 0, say: '', sayT: 0, boost: 1, boosting: false, zaps: 3, zapCd: 0 };
+              immune: 1, hitCd: 0, stun: 0, say: '', sayT: 0, boost: 1, boosting: false, zaps: 3, zapCd: 0, hp: 1 };
   buildRobot(r); robots.push(r); return r;
 }
 function removeRobot(r) {
@@ -945,8 +968,10 @@ function buy(k) {
   const c = COSMETICS.find(c => c.k === k), lv = up[k], price = c ? c.price : PRICES[lv];
   if ((c ? lv >= 1 : lv >= 3) || money < price) return;
   money -= price; up[k]++; sfx('pickup');
+  if (k === 'gold') unlock('gold');
+  if (!c && up[k] >= 3) unlock('maxed');
 }
-function newRun() { score = 0; money = 0; up = freshUp(); startLevel(1); }
+function newRun() { score = 0; money = 0; up = freshUp(); for (const k in stats) delete stats[k]; startLevel(1); }
 // order types: dmg = damage multiplier, time = deadline multiplier, tipX = speed-tip multiplier
 const ORDERS = [
   { icon: '🛍️', name: 'Groceries', w: 4 },
@@ -977,7 +1002,7 @@ function setupLevel(n) {
     if (!holes.some(h => Math.hypot(h.x - s.x, h.y - s.y) < 60)) holes.push({ ...s, r: rnd(15, 21) });
   }
   for (let lane = 0; lane < 2; lane++) {
-    const count = n > 3 ? 3 : 2, base = 130 + n * 15 + lane * 20;
+    const count = n > 3 ? 2 : 1, base = 130 + n * 15 + lane * 20;
     for (let k = 0; k < count; k++)
       cars.push({ x: (k + Math.random() * .4) * (W + 200) / count, y: lane ? 690 : 630, dir: lane ? -1 : 1, base, v: base,
                   color: pick(['#c0392b', '#2c3e50', '#f1f1f1', '#2e86de', '#7f8c8d', '#16a085']) });
@@ -985,7 +1010,7 @@ function setupLevel(n) {
   peds = [];
   for (let i = 0; i < Math.min(8, 1 + n); i++) {
     const side = Math.random() < .75 ? 0 : 1;
-    let pos; do pos = pathPoint(side); while (dist(pos, ALEPA.door) < 160);
+    let pos; do pos = pathPoint(side); while (dist(pos, SALEPA.door) < 160);
     peds.push({ ...pos, ...waypoint(side), side, kind: 'person', a: 0, vx: 0, vy: 0, mode: 'walk', t: 0, cool: 2, kickT: 0, say: '', sayT: 0,
                 color: pick(['#3b6ea5', '#7a2e3a', '#2e6b4f', '#5b4a8a', '#a0522d', '#333a44']), hat: pick(['#d33', '#f5c400', '#1f4e9c', '#2fbf6a', '#e84393']) });
   }
@@ -1028,8 +1053,11 @@ function startLevel(n) {
   level = n; setupLevel(n);
   time = 75 + n * 5 + up.battery * 12; delivered = 0;
   quota = 2 + n + (robots.length - 1) * 2;
-  robots.forEach(r => Object.assign(r, spawn(r.i), { vx: 0, vy: 0, a: 0, camYaw: 0, boost: 1, zaps: 3, cargo: null, hole: null, stun: 0, immune: 1 }));
+  robots.forEach(r => Object.assign(r, spawn(r.i), { vx: 0, vy: 0, a: 0, camYaw: 0, boost: 1, zaps: 3, cargo: null, hole: null, stun: 0, immune: 1, hp: 1 }));
   weather = { k: null, t: 0 }; weatherIn = n >= 2 ? rnd(15, 35) : Infinity;
+  stats.dmg = 0;
+  if (n >= 3) unlock('kaamos');
+  if (n >= 5) unlock('shift5');
   state = 'play'; stateT = 0;
   banner = `Shift ${n} – ${LEVEL_NAMES[Math.min(n, 4) - 1]}`; bannerT = 3;
 }
@@ -1056,6 +1084,7 @@ const SFX = {
   boost: () => { beep(160, .3, 0, 'sawtooth', .04); beep(320, .25, .05, 'sawtooth', .03); },
   clear: () => [523, 659, 784, 1047].forEach((f, i) => beep(f, .15, i * .12)),
   over: () => { beep(300, .2); beep(200, .4, .2); },
+  ach: () => [784, 1047, 1319, 1568].forEach((f, i) => beep(f, .12, i * .07, 'triangle', .05)),
 };
 const sfx = n => fx({ k: 'sfx', n });
 let wxKind = '', wxMsgT = 0;
@@ -1068,11 +1097,56 @@ function fx(e) { // play locally; the host also forwards it to guests
   else if (e.k === 'wx') { wxKind = e.w; wxMsgT = 3.5; }
   if (role === 'host') outbox.push(e);
 }
+// ---------- achievements ----------
+// ponytail: unlocks live in localStorage per machine, counters per run. Online guests only
+// see what their own client computes; the host tracks the rest.
+const ACH = [
+  { k: 'first',    i: '📦', n: 'Ensimmäinen',       d: 'Deliver your first order' },
+  { k: 'ten',      i: '🛍️', n: 'Kymppi',            d: 'Deliver 10 orders in one run' },
+  { k: 'speedy',   i: '⚡', n: 'Pikatoimitus',      d: 'Deliver within 3 s of pickup' },
+  { k: 'pristine', i: '🥚', n: 'Ei kolhuja',        d: 'Deliver eggs in perfect condition' },
+  { k: 'perfect',  i: '✨', n: 'Täydellinen vuoro', d: 'Clear a shift without taking damage' },
+  { k: 'dogs',     i: '🐕', n: 'Koiranulkoiluttaja', d: 'Zap 5 dogs in one run' },
+  { k: 'zap25',    i: '🔌', n: 'Sähköshokki',       d: 'Zap 25 locals in one run' },
+  { k: 'pothole',  i: '🕳️', n: 'Kuoppaekspertti',   d: 'Climb out of 5 potholes yourself' },
+  { k: 'rescue',   i: '💛', n: 'Hyvä kaveri',       d: 'Tow a teammate out of a pothole' },
+  { k: 'handoff',  i: '🤝', n: 'Saumaton vaihto',   d: 'Hand a package to a teammate' },
+  { k: 'blizzard', i: '🌨️', n: 'Myrskyn läpi',      d: 'Deliver during a blizzard' },
+  { k: 'pulla',    i: '🥐', n: 'Mummon pulla',      d: 'Get pulla from a grandma' },
+  { k: 'kaamos',   i: '🌃', n: 'Kaamos',            d: 'Reach shift 3' },
+  { k: 'shift5',   i: '🏁', n: 'Yötyöläinen',       d: 'Reach shift 5' },
+  { k: 'rich',     i: '💰', n: 'Rahakas',           d: 'Earn 500 € in one run' },
+  { k: 'maxed',    i: '🔧', n: 'Täysin viritetty',  d: 'Max out any upgrade' },
+  { k: 'gold',     i: '👑', n: 'Bling',             d: 'Buy the gold paint' },
+  { k: 'snowball', i: '❄️', n: 'Lumisota',          d: 'Take 5 snowballs in one run' },
+];
+let achDone = new Set();
+try { achDone = new Set(JSON.parse(localStorage.getItem('ruokarobo-ach') || '[]')); } catch (e) {}
+const stats = {}; // per-run counters, reset by newRun()
+const bump = (k, n = 1) => (stats[k] = (stats[k] || 0) + n);
+function unlock(k) {
+  if (achDone.has(k)) return;
+  achDone.add(k);
+  try { localStorage.setItem('ruokarobo-ach', JSON.stringify([...achDone])); } catch (e) {}
+  const a = ACH.find(a => a.k === k), el = document.createElement('div');
+  el.className = 'plate yellow ach';
+  el.innerHTML = `<span class="ic">${a.i}</span><span><b>${a.n}</b><small>${a.d}</small></span>`;
+  document.getElementById('achs').append(el);
+  setTimeout(() => el.remove(), 4200);
+  SFX.ach(); // local only: an achievement is this machine's, not the whole room's
+}
+globalThis.__dbg = { get robots() { return robots; }, damage: (a) => damage(robots[0], a, 'test') };
 function damage(r, amt, msg) {
   if (r.hitCd > 0) return;
-  r.hitCd = .7; say(r, msg, 1);
+  r.hitCd = .7; say(r, msg, 1); bump('dmg');
   if (r.cargo) r.cargo.cond = Math.max(0, r.cargo.cond - amt * (1 - .22 * up.susp) * (ORDERS[r.cargo.o].dmg || 1));
   sfx('crash');
+  if (r.immune > 0) return;
+  r.hp = Math.max(0, r.hp - amt * (1 - .22 * up.susp));
+  if (r.hp <= 0) { // out cold: a few seconds of sparks, then back up on half a battery
+    r.hp = .5; r.stun = Math.max(r.stun, 2.5); r.immune = 3; r.vx = r.vy = 0;
+    say(r, 'Rikki! 🔧', 2.5); fx({ k: 'burst', x: r.x, y: r.y, n: 26 });
+  }
 }
 function zap(r) {
   r.zaps -= 1; r.zapCd = .4; sfx('zap');
@@ -1086,6 +1160,8 @@ function zap(r) {
   fx({ k: 'zap', x1: r.x, y1: r.y, x2: best ? best.x : r.x + fx_ * 70, y2: best ? best.y : r.y + fy * 70 });
   if (!best) return;
   best.zapT = 3; say(best, best.kind === 'dog' ? 'Vuh?' : pick(['Bzzzt!', 'Aijai!', 'Auh!']), 1.4);
+  if (bump('zaps') >= 25) unlock('zap25');
+  if (best.kind === 'dog' && bump('dogs') >= 5) unlock('dogs');
   if (best.mode) { best.mode = 'zapped'; best.moving = false; }
 }
 function escape(r, msg, nx = Math.cos(r.a), ny = Math.sin(r.a)) {
@@ -1106,10 +1182,11 @@ function pushOut(r, cx, cy, minD) {
 }
 function updRobot(r, dt) {
   r.hitCd -= dt; r.immune -= dt; r.sayT -= dt; r.stun -= dt;
+  if (r.stun <= 0 && r.hitCd <= 0) r.hp = Math.min(1, r.hp + dt * .012); // ponytail: flat self-repair, no repair stations
   const inp = input(r);
   if (r.hole) {
     if (inp.t || inp.s) r.esc += dt * .35 * (1 + .5 * up.susp);
-    if (r.esc >= 1) escape(r, 'Ylös! 💪');
+    if (r.esc >= 1) { escape(r, 'Ylös! 💪'); if (bump('holes') >= 5) unlock('pothole'); }
     return;
   }
   if (r.towT > 0) { // being towed out by a friend: follow on a rope
@@ -1162,10 +1239,10 @@ function updRobot(r, dt) {
 
   if (state !== 'play') return;
   if (r.cargo) r.cargo.t -= dt;
-  if (!r.cargo && dist(r, ALEPA.door) < 45) {
+  if (!r.cargo && dist(r, SALEPA.door) < 45) {
     const dest = Math.random() * HOUSES.length | 0, o = pickOrder(), O = ORDERS[o];
     // each order has a deadline: arrive in time for the speed tip
-    r.cargo = { dest, o, cond: 1, t: Math.round((8 + dist(ALEPA.door, HOUSES[dest].door) / 60) * (O.time || 1)) };
+    r.cargo = { dest, o, cond: 1, t0: T, t: Math.round((8 + dist(SALEPA.door, HOUSES[dest].door) / 60) * (O.time || 1)) };
     say(r, `${O.icon} → ${dest + 1}`); pop(r, O.name, '#fff'); sfx('pickup');
   } else if (r.cargo && dist(r, HOUSES[r.cargo.dest].door) < 45) {
     const c = r.cargo, O = ORDERS[c.o], late = c.t <= 0, tipX = O.tipX || 1;
@@ -1176,8 +1253,15 @@ function updRobot(r, dt) {
     fx({ k: 'cust', i: c.dest });
     if (!late && Math.random() < .25) { // mummo at the door hands over a pulla: full boost
       r.boost = 1; fx({ k: 'pop', x: r.x, y: r.y - 20, text: '🥐 Mummo gave you pulla! Boost full', color: '#ffd84a' });
+      unlock('pulla');
     }
     sfx('deliver');
+    unlock('first');
+    if (bump('del') >= 10) unlock('ten');
+    if (T - c.t0 < 3) unlock('speedy');
+    if (c.cond >= 1 && O.icon === '🥚') unlock('pristine');
+    if (weather.k === 'blizzard') unlock('blizzard');
+    if (score >= 500) unlock('rich');
     r.cargo = null;
   }
 }
@@ -1189,19 +1273,19 @@ function robotPairs(dt) {
     // handoff: park next to a teammate for a moment and the package changes robots
     const key = a.id + '-' + b.id;
     if (state === 'play' && d < 2 * R + 8 && !a.hole && !b.hole && !a.cargo !== !b.cargo && Math.hypot(a.vx, a.vy) < 50 && Math.hypot(b.vx, b.vy) < 50
-        && dist(a, ALEPA.door) > 80) {
+        && dist(a, SALEPA.door) > 80) {
       handT[key] = (handT[key] || 0) + dt;
       if (handT[key] > .8) {
         const [from, to] = a.cargo ? [a, b] : [b, a];
         to.cargo = from.cargo; from.cargo = null; handT[key] = -3;
-        say(from, 'Ota tästä! 📦'); say(to, 'Selvä!'); pop(to, '🤝 Handoff', '#9fd3ff'); sfx('pickup');
+        say(from, 'Ota tästä! 📦'); say(to, 'Selvä!'); pop(to, '🤝 Handoff', '#9fd3ff'); sfx('pickup'); unlock('handoff');
       }
     } else handT[key] = Math.min(0, (handT[key] || 0) + dt);
     if (d >= 2 * R || d < .001) continue;
     const nx = dx / d, ny = dy / d;
     // friend to the rescue: bumping a stuck robot hooks a tow rope and pulls it out
-    if (a.hole && !b.hole) { escape(a, 'Kiitos kaveri! 💛', -nx, -ny); Object.assign(a, { tow: b.id, towT: 1.5 }); money += 5; score += 5; pop(a, 'Rescue +5 €', '#ffd84a'); continue; }
-    if (b.hole && !a.hole) { escape(b, 'Kiitos kaveri! 💛', nx, ny); Object.assign(b, { tow: a.id, towT: 1.5 }); money += 5; score += 5; pop(b, 'Rescue +5 €', '#ffd84a'); continue; }
+    if (a.hole && !b.hole) { escape(a, 'Kiitos kaveri! 💛', -nx, -ny); Object.assign(a, { tow: b.id, towT: 1.5 }); money += 5; score += 5; pop(a, 'Rescue +5 €', '#ffd84a'); unlock('rescue'); continue; }
+    if (b.hole && !a.hole) { escape(b, 'Kiitos kaveri! 💛', nx, ny); Object.assign(b, { tow: a.id, towT: 1.5 }); money += 5; score += 5; pop(b, 'Rescue +5 €', '#ffd84a'); unlock('rescue'); continue; }
     if (a.hole || b.hole) continue;
     const o = (2 * R - d) / 2;
     a.x -= nx * o; a.y -= ny * o; b.x += nx * o; b.y += ny * o;
@@ -1338,6 +1422,7 @@ function updKids(dt) {
       const s = Math.hypot(b.vx, b.vy) || 1;
       r.vx += b.vx / s * 170; r.vy += b.vy / s * 170; r.stun = Math.max(r.stun, .3);
       damage(r, .06, 'Läts! ❄️'); sfx('splat');
+      if (bump('balls') >= 5) unlock('snowball');
     }
   }
   balls = balls.filter(b => !b.done);
@@ -1370,6 +1455,8 @@ function update(dt) {
     if (delivered >= quota) {
       bonus = Math.ceil(time); money += bonus; score += bonus; state = 'shop'; stateT = 0;
       sfx('clear');
+      if (!stats.dmg) unlock('perfect');
+      if (score >= 500) unlock('rich');
     } else if (time <= 0) {
       time = 0; state = 'over'; stateT = 0;
       if (score > best) { best = score; try { localStorage.setItem('ruokarobo-best', best); } catch (e) {} }
@@ -1496,7 +1583,7 @@ function broadcast(dt) {
   netT = 0;
   const m = { type: 's', st: state, level, time, quota, delivered, score, bonus, money, up, banner, bannerT, best,
     r: robots.map(r => ({ id: r.id, i: r.i, owner: r.owner, x: r.x, y: r.y, a: r.a, vx: r.vx, vy: r.vy, cargo: r.cargo,
-                          hole: !!r.hole, esc: r.esc, stun: r.stun, say: r.say, sayT: r.sayT, bo: r.boost, bz: r.boosting, zp: r.zaps, tw: r.towT > 0 ? r.tow : -1 })),
+                          hole: !!r.hole, esc: r.esc, stun: r.stun, say: r.say, sayT: r.sayT, bo: r.boost, bz: r.boosting, zp: r.zaps, hp: r.hp, tw: r.towT > 0 ? r.tow : -1 })),
     c: cars.map(c => c.x), fx: outbox.splice(0),
     p: peds.map(p => ({ x: p.x, y: p.y, a: p.a, m: p.mode, k: p.kickT > 0, mv: p.moving, s: p.say, st: p.sayT })),
     kd: kids.map(k => ({ a: k.a, th: k.throwT, s: k.say, st: k.sayT, z: k.zapT > 0 })), b: balls, wx: weather,
@@ -1511,7 +1598,7 @@ function applySnap(m) {
     let r = robots.find(q => q.id === s.id);
     if (!r) r = Object.assign(addRobot({ id: s.id, owner: s.owner, i: s.i }), { x: s.x, y: s.y, a: s.a });
     Object.assign(r, { owner: s.owner, tx: s.x, ty: s.y, ta: s.a, vx: s.vx, vy: s.vy, cargo: s.cargo, hole: s.hole || null,
-                       esc: s.esc, stun: s.stun, say: s.say, sayT: s.sayT, boost: s.bo, boosting: s.bz, zaps: s.zp, tow: s.tw, towT: s.tw >= 0 ? 1 : 0 });
+                       esc: s.esc, stun: s.stun, say: s.say, sayT: s.sayT, boost: s.bo, boosting: s.bz, zaps: s.zp, hp: s.hp ?? 1, tow: s.tw, towT: s.tw >= 0 ? 1 : 0 });
   }
   m.c.forEach((x, i) => cars[i] && (cars[i].tx = x));
   m.p?.forEach((q, i) => peds[i] && Object.assign(peds[i], { tx: q.x, ty: q.y, a: q.a, mode: q.m, kickT: q.k ? .3 : 0, moving: q.mv, say: q.s, sayT: q.st }));
@@ -1557,16 +1644,16 @@ function sync(dt) {
     if (!r.hole && (slip > 45 || r.boosting)) for (let k = 0; k < 2; k++)
       puff(r.x - Math.cos(r.a) * 6, r.y - Math.sin(r.a) * 6, .15, -Math.cos(r.a) * 2 + rnd(-1.5, 1.5), -Math.sin(r.a) * 2 + rnd(-1.5, 1.5), rnd(1, 3));
     r.flag.rotation.y = Math.PI + Math.sin(T * 8 + r.i) * .35 + clamp(Math.hypot(r.vx, r.vy) / 400, 0, .3);
-    const tgt = r.cargo ? HOUSES[r.cargo.dest].door : ALEPA.door, a = Math.atan2(tgt.y - r.y, tgt.x - r.x);
+    const tgt = r.cargo ? HOUSES[r.cargo.dest].door : SALEPA.door, a = Math.atan2(tgt.y - r.y, tgt.x - r.x);
     const mine = r.owner === myOwner;
     r.arrow.visible = mine && state === 'play' && dist(r, tgt) > 90;
     place(r.arrow, r.x + Math.cos(a) * 22, r.y + Math.sin(a) * 22, .3); r.arrow.rotation.y = -a;
     r.beam.visible = mine && state === 'play' && !!r.cargo;
     if (r.cargo) place(r.beam, tgt.x, tgt.y);
   }
-  alepaBeam.visible = state === 'play' && robots.some(r => r.owner === myOwner && !r.cargo);
-  place(alepaBeam, ALEPA.door.x, ALEPA.door.y);
-  for (const g of [alepaBeam, ...robots.map(r => r.beam)]) {
+  salepaBeam.visible = state === 'play' && robots.some(r => r.owner === myOwner && !r.cargo);
+  place(salepaBeam, SALEPA.door.x, SALEPA.door.y);
+  for (const g of [salepaBeam, ...robots.map(r => r.beam)]) {
     g.userData.pkg.rotation.y = T * 1.5; g.userData.pkg.position.y = 8 + Math.sin(T * 3) * .6;
   }
   for (const p of peds) {
@@ -1687,7 +1774,7 @@ function drawTag(v) { // the player's own order sign at the bottom of their view
     const O = ORDERS[r.cargo.o];
     title = `${O.icon} ${O.name}`; sub = `Deliver to house ${r.cargo.dest + 1}`; num = r.cargo.dest + 1;
     late = r.cargo.t <= 0; right = late ? 'Late' : Math.ceil(r.cargo.t) + ' s';
-  } else { title = 'Pick up at Alepa'; sub = 'Follow the green marker'; num = 'A'; numFill = '#2f9e57'; }
+  } else { title = 'Pick up at Salepa'; sub = 'Follow the green marker'; num = 'A'; numFill = '#2f9e57'; }
   ctx.font = F(800, 17); const tw = ctx.measureText(title).width;
   ctx.font = F(600, 13); const sw = ctx.measureText(sub).width;
   ctx.font = F(900, 24); const rw = right ? ctx.measureText(right).width + 34 : 0;
@@ -1711,6 +1798,14 @@ function drawTag(v) { // the player's own order sign at the bottom of their view
   }
   // boost meter and stun-gun charges on a small supplementary panel above
   const pw = 230, px = cx - pw / 2, py = y - 30;
+  const hp = r.hp ?? 1, hy = py - 28; // robo health
+  const low = hp < .3 && (performance.now() / 300 | 0) % 2 === 0; // blink when nearly broken
+  plate(px, hy, pw, 24, low ? RED : '#fff', low ? '#fff' : INK);
+  ctx.fillStyle = low ? '#fff' : INK;
+  ctx.font = F(700, 11); ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.fillText('Robo', px + 11, hy + 13);
+  ctx.fillStyle = '#d8e0e8'; rr(px + 50, hy + 7, 168, 10, 2); ctx.fill();
+  ctx.fillStyle = `hsl(${hp * 120},75%,45%)`; rr(px + 50, hy + 7, 168 * hp, 10, 2); ctx.fill();
   plate(px, py, pw, 24, '#fff', INK);
   ctx.fillStyle = INK; ctx.font = F(700, 11); ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
   ctx.fillText('Boost', px + 11, py + 13); ctx.fillText('Zap', px + 146, py + 13);
@@ -1737,6 +1832,11 @@ function drawLabels(v) {
     ctx.fillStyle = r.color; rr(p.x - lw / 2, p.y + 15, lw, 16, 4); ctx.fill();
     ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('P' + (r.i + 1), p.x, p.y + 24);
     let y = top.y;
+    if ((r.hp ?? 1) < 1) { // robot health
+      ctx.fillStyle = 'rgba(29,35,43,.75)'; rr(top.x - 22, y - 5, 44, 10, 3); ctx.fill();
+      ctx.fillStyle = `hsl(${r.hp * 120},80%,50%)`; rr(top.x - 20, y - 3, 40 * r.hp, 6, 2); ctx.fill();
+      y -= 12;
+    }
     if (r.cargo) { // package condition
       ctx.fillStyle = 'rgba(29,35,43,.75)'; rr(top.x - 22, y - 5, 44, 10, 3); ctx.fill();
       ctx.fillStyle = `hsl(${r.cargo.cond * 120},75%,48%)`; rr(top.x - 20, y - 3, 40 * r.cargo.cond, 6, 2); ctx.fill();
@@ -1764,11 +1864,11 @@ const miniBg = document.createElement('canvas'); miniBg.width = 480; miniBg.heig
   g.fillStyle = '#b9dcf0'; g.beginPath(); g.ellipse(LAKE.x, LAKE.y, LAKE.rx, LAKE.ry, 0, 0, 7); g.fill();
   g.fillStyle = '#4d525a'; g.fillRect(...ROAD);
   g.fillStyle = '#b3bac4'; PATHS.forEach(p => g.fillRect(...p));
-  g.fillStyle = '#2f9e57'; g.fillRect(ALEPA.x, ALEPA.y, ALEPA.w, ALEPA.h);
+  g.fillStyle = '#2f9e57'; g.fillRect(SALEPA.x, SALEPA.y, SALEPA.w, SALEPA.h);
   g.fillStyle = '#6b4226'; g.fillRect(SAUNA.x, SAUNA.y, SAUNA.w, SAUNA.h);
   g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = '900 72px Overpass, system-ui, sans-serif';
   for (const h of HOUSES) { g.fillStyle = BLUE; g.fillRect(h.x, h.y, h.w, h.h); g.fillStyle = '#fff'; g.fillText(h.n, h.x + h.w / 2, h.y + h.h / 2 + 6); }
-  g.fillStyle = '#fff'; g.fillText('A', ALEPA.x + ALEPA.w / 2, ALEPA.y + ALEPA.h / 2 + 6);
+  g.fillStyle = '#fff'; g.fillText('A', SALEPA.x + SALEPA.w / 2, SALEPA.y + SALEPA.h / 2 + 6);
 }
 function drawMinimap(v) {
   const mw = Math.min(232, v.w * .3), mh = mw * H / W, x = v.x + v.w - mw - 18, y = v.y + (v.y < 1 ? 60 : 18), k = mw / W;
@@ -1781,7 +1881,7 @@ function drawMinimap(v) {
   for (const p of ice) if (!p.gone) { ctx.beginPath(); ctx.ellipse(x + p.x * k, y + p.y * k, p.rx * k, p.ry * k, 0, 0, 7); ctx.fill(); }
   for (const h of holes) dot(h.x, h.y, 2.2, INK);
   for (const c of cars) { ctx.fillStyle = '#26303b'; ctx.fillRect(x + (c.x - 40) * k, y + (c.y - 18) * k, 80 * k, 36 * k); }
-  const tgt = v.r.cargo ? HOUSES[v.r.cargo.dest].door : ALEPA.door;
+  const tgt = v.r.cargo ? HOUSES[v.r.cargo.dest].door : SALEPA.door;
   ctx.strokeStyle = v.r.color; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x + tgt.x * k, y + tgt.y * k, 7 + Math.sin(T * 6) * 2, 0, 7); ctx.stroke();
   for (const p of peds) dot(p.x, p.y, 2.6, p.mode === 'chase' ? RED : p.kind === 'dog' ? '#8b5a2b' : '#6b7480');
   for (const q of kids) dot(q.x, q.y, 2.2, '#ff9d00');
@@ -1798,6 +1898,7 @@ function drawMinimap(v) {
 
 // ---------- DOM screens: title, HUD, shift sign, weather warning, workshop, run over ----------
 const $ = id => document.getElementById(id);
+let achKey = -1;
 const setText = (id, v) => { const el = $(id); v = String(v); if (el.textContent !== v) el.textContent = v; };
 const ICONS = { // white pictograms for the workshop cards
   tires: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4L7 17M17 7l1.4-1.4"/>',
@@ -1835,6 +1936,11 @@ function updateDOM() {
         : (touchDev ? 'Touch the stick to join.' : 'Press any key from the table to join. Each row is one player.');
     }
     setText('bestLine', best ? `Best run ${best} €` : '');
+    if (achKey !== achDone.size) {
+      achKey = achDone.size;
+      setText('achCount', `${achDone.size} / ${ACH.length}`);
+      $('achGrid').innerHTML = ACH.map(a => `<span class="achIt${achDone.has(a.k) ? ' on' : ''}" title="${a.d}"><i>${a.i}</i>${achDone.has(a.k) ? a.n : '???'}</span>`).join('');
+    }
   }
   // HUD
   $('hud').hidden = !play;
