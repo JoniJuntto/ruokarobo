@@ -385,7 +385,7 @@ const SURF = {
   snow: { acc: 380, kF: 2.6, kL: 3.5, max: 120 },
   ice:  { acc: 110, kF: 0.12, kL: 0.18, max: 270 },
 };
-let ice = [], holes = [], cars = [], peds = [], kids = [], balls = [], plow = null;
+let ice = [], holes = [], cars = [], peds = [], kids = [], balls = [], plow = null, santa = null, santaIn = Infinity;
 let weather = { k: null, t: 0 }, weatherIn = Infinity;
 function surf(x, y) { // surface feel with upgrades applied
   const s = SURF[surface(x, y)];
@@ -885,6 +885,25 @@ function buildHazards() {
   }
 }
 
+// Santa's sleigh: built once, shown while he bowls down a lane. Local +x is forward.
+const SANTA_V = 650;
+const sleigh = new THREE.Group(); scene.add(sleigh); sleigh.visible = false;
+{
+  const red = mat('#c0262d', null, .35, .2), gold = mat('#f5c400', null, .3, .7);
+  rbox(sleigh, 4.4, 1.4, 3, .4, red, -3.2, 1.3, 0); rbox(sleigh, 1.3, 2.2, 3, .4, red, -5, 1.9, 0);
+  for (const z of [-1.35, 1.35]) { box(sleigh, 6, .18, .2, gold, -3.3, .3, z); const c = box(sleigh, 1, .18, .2, gold, .1, .6, z); c.rotation.z = .8; }
+  const s = buildPerson(sleigh, '#c0262d', '#c0262d', 1.25); s.g.position.set(-3.6, .6, 0);
+  const beard = mesh(sphGeo(.24), white, s.body, .2, 2.12, 0); beard.scale.set(.8, 1.2, 1.3);
+  mesh(sphGeo(1), '#6b4a2b', sleigh, -5.3, 3.3, 0).scale.set(.8, .9, .9); // sack of presents
+  sleigh.deer = [];
+  for (const x of [1.6, 4.6]) for (const z of [-.9, .9]) {
+    const d = buildDog(sleigh); d.g.position.set(x, .2, z); d.g.scale.setScalar(1.7); sleigh.deer.push(d);
+    for (const az of [-.08, .08]) { const a = box(d.body, .05, .45, .05, '#e9dcc3', .62, 1.25, az); a.rotation.x = az * 6; }
+    if (x > 4 && z > 0) mesh(sphGeo(.07), mat('#ff2020', '#ff2020'), d.body, 1.05, .86, 0); // Rudolf
+  }
+  for (const z of [-.9, .9]) box(sleigh, 6.2, .06, .06, '#3a2412', 2, 1.4, z); // reins
+}
+
 // ---------- players & input ----------
 const COLORS = ['#ff7a1a', '#2d9cff', '#2fbf6a', '#e84393', '#f5c400', '#9b59b6', '#00c2c7', '#e74c3c'];
 const KB = [
@@ -1189,6 +1208,7 @@ function startLevel(n) {
   quota = 2 + n + (robots.length - 1) * 2;
   robots.forEach(r => Object.assign(r, spawn(r.i), { vx: 0, vy: 0, a: 0, camYaw: 0, boost: 1, zaps: 3 + up.tesla, cargo: null, hole: null, stun: 0, immune: 1, hp: 1, earn: 0, towT: 0, hookCd: 0, dDir: 0, dCh: 0, dTier: 0, mt: 0 }));
   weather = { k: null, t: 0 }; weatherIn = n >= 2 ? rnd(15, 35) : Infinity;
+  santa = null; santaIn = rnd(20, 45);
   mark = { ...stats }; // "clear a shift without X" is measured against this snapshot
   most('players', robots.length);
   state = 'play'; stateT = 0;
@@ -1214,6 +1234,7 @@ const SFX = {
   splat: () => beep(300, .08, 0, 'triangle', .07),
   zap: () => { beep(1400, .07, 0, 'sawtooth', .05); beep(700, .14, .05, 'square', .04); beep(1800, .05, .1, 'sawtooth', .03); },
   hook: () => { beep(900, .05, 0, 'triangle', .06); beep(300, .12, .05, 'sawtooth', .05); },
+  jingle: () => [1568, 1568, 1568, 0, 1568, 1568, 1568, 0, 1568, 1865, 1245, 1397, 1568].forEach((f, i) => f && beep(f, .1, i * .11, 'triangle', .05)),
   bark: () => { beep(420, .07, 0, 'square', .06); beep(380, .09, .12, 'square', .06); },
   spark: () => beep(1250, .06, 0, 'triangle', .04),
   boost: () => { beep(160, .3, 0, 'sawtooth', .04); beep(320, .25, .05, 'sawtooth', .03); },
@@ -1230,6 +1251,7 @@ function fx(e) { // play locally; the host also forwards it to guests
   else if (e.k === 'burst') burst(e.x, e.y, e.n);
   else if (e.k === 'zap') bolts.push({ ...e, t: .2 });
   else if (e.k === 'wx') { wxKind = e.w; wxMsgT = 3.5; }
+  else if (e.k === 'bowl' && cars[e.i]) cars[e.i].fly = 1.4;
   if (role === 'host') outbox.push(e);
 }
 // ---------- achievements ----------
@@ -1304,6 +1326,7 @@ const ACH = [
   { k: 'ball25',   i: '⛄', n: 'Lumisodan uhri',   d: 'Take 25 snowballs in one run',          w: s => s.balls >= 25 },
   { k: 'car',      i: '🚗', n: 'Auts',             d: 'Get hit by a car',                      w: (s, t) => t.carHit >= 1 },
   { k: 'car10',    i: '🚑', n: 'Liikenneturva',    d: 'Get hit by cars 10 times in one run',   w: s => s.carHit >= 10 },
+  { k: 'santa',    i: '🎅', n: 'Hohoho',           d: 'Get bowled over by Santa',              w: (s, t) => t.santaHit >= 1 },
   { k: 'plow',     i: '🚜', n: 'Aurauskone',       d: 'Get shoved by the snowplow',            w: (s, t) => t.plowHit >= 1 },
   { k: 'kick',     i: '👢', n: 'Potkittu',         d: 'Get kicked by a local',                 w: (s, t) => t.kick >= 1 },
   { k: 'bite',     i: '🐶', n: 'Purtu',            d: 'Get jumped on by a dog',                w: (s, t) => t.bite >= 1 },
@@ -1663,6 +1686,7 @@ function robotPairs(dt) {
 }
 function updCars(dt) {
   for (const c of cars) {
+    if (c.fly > 0) { c.v = 0; continue; } // bowled over by Santa
     let target = c.base;
     for (const cr of CROSS) {
       const ahead = (cr[0] + 20 - c.x) * c.dir;
@@ -1767,6 +1791,28 @@ function updPlow(dt) {
     }
   }
 }
+// Santa sweeps a whole lane now and then: cars tumble like pins, robots get flung
+function updSanta(dt) {
+  if (!santa) {
+    if (state !== 'play' || (santaIn -= dt) > 0) return;
+    santaIn = rnd(35, 70);
+    const dir = pick([1, -1]);
+    santa = { x: dir > 0 ? -250 : W + 250, y: pick([630, 690]), dir };
+    fx({ k: 'wx', w: 'santa' }); sfx('jingle');
+    return;
+  }
+  santa.x += santa.dir * SANTA_V * dt;
+  if (santa.x < -300 || santa.x > W + 300) { santa = null; return; }
+  cars.forEach((c, i) => {
+    if (c.fly > 0 || c.y !== santa.y || Math.abs(c.x - santa.x) > 100) return;
+    fx({ k: 'bowl', i }); fx({ k: 'burst', x: c.x, y: c.y, n: 24 }); sfx('crash');
+  });
+  for (const r of robots) {
+    if (r.hole || r.hitCd > 0 || Math.abs(r.x - santa.x) > 70 + R || Math.abs(r.y - santa.y) > 28 + R) continue;
+    r.vx = santa.dir * 650; r.vy = Math.sign(r.y - santa.y || 1) * 320; r.stun = 1;
+    damage(r, .2, 'Hohoho! 🎅'); fx({ k: 'burst', x: r.x, y: r.y, n: 20 }); bump('santaHit');
+  }
+}
 const G = 20; // snowball gravity, units/s²
 const ballH = b => b.h0 + b.vh * b.age - .5 * G * b.age * b.age;
 function updKids(dt) {
@@ -1819,6 +1865,7 @@ function update(dt) {
   updCars(dt);
   updPeds(dt);
   updPlow(dt);
+  updSanta(dt);
   updKids(dt);
   updWeather(dt);
   broadcast(dt);
@@ -2013,7 +2060,7 @@ function broadcast(dt) {
     c: cars.map(c => c.x), fx: outbox.splice(0),
     p: peds.map(p => ({ x: p.x, y: p.y, a: p.a, m: p.mode, k: p.kickT > 0, mv: p.moving, s: p.say, st: p.sayT })),
     kd: kids.map(k => ({ a: k.a, th: k.throwT, s: k.say, st: k.sayT, z: k.zapT > 0 })), b: balls, wx: weather,
-    pl: plow && { x: plow.x, y: plow.y, a: plow.a }, ig: ice.map(p => p.gone ? 1 : 0).join('') };
+    pl: plow && { x: plow.x, y: plow.y, a: plow.a }, sa: santa, ig: ice.map(p => p.gone ? 1 : 0).join('') };
   for (const c of conns) c.send(m);
 }
 function applySnap(m) {
@@ -2032,6 +2079,7 @@ function applySnap(m) {
   m.kd?.forEach((q, i) => kids[i] && Object.assign(kids[i], { a: q.a, throwT: q.th, say: q.s, sayT: q.st, zapT: q.z ? 1 : 0 }));
   balls = m.b || []; weather = m.wx || weather;
   if (plow && m.pl) Object.assign(plow, { tx: m.pl.x, ty: m.pl.y, a: m.pl.a });
+  if (!m.sa) santa = null; else if (!santa || Math.abs(santa.x - m.sa.x) > 150) santa = m.sa; // guests run him ahead between snaps
   [...(m.ig || '')].forEach((g, i) => { if (ice[i] && g === '1' && !ice[i].gone) { ice[i].gone = true; if (ice[i].mesh) ice[i].mesh.visible = false; } });
   m.fx.forEach(fx);
 }
@@ -2050,6 +2098,7 @@ function guestTick(dt) {
   }
   for (const p of peds) if (p.tx != null) { p.x += (p.tx - p.x) * k; p.y += (p.ty - p.y) * k; p.kickT -= dt; p.sayT -= dt; }
   for (const c of cars) if (c.tx != null) c.x = Math.abs(c.tx - c.x) > 400 ? c.tx : c.x + (c.tx - c.x) * k;
+  if (santa) santa.x += santa.dir * SANTA_V * dt;
   if (plow?.tx != null) { plow.x += (plow.tx - plow.x) * k; plow.y += (plow.ty - plow.y) * k; }
   for (const b of balls) { b.age += dt; b.x += b.vx * dt; b.y += b.vy * dt; }
   for (const q of kids) { q.throwT -= dt; q.sayT -= dt; }
@@ -2147,7 +2196,15 @@ function sync(dt) {
   }
   sprayGeo.attributes.position.needsUpdate = true;
   applyWeatherLook(dt);
-  for (const c of cars) { place(c.mesh, c.x, c.y); c.mesh.rotation.y = c.dir > 0 ? 0 : Math.PI; }
+  for (const c of cars) {
+    const f = c.fly > 0 ? (c.fly -= dt) : 0; // tumbling arc after Santa bowls it
+    place(c.mesh, c.x, c.y, f > 0 ? f * (1.4 - f) * 14 : 0); c.mesh.rotation.y = c.dir > 0 ? 0 : Math.PI; c.mesh.rotation.x = f > 0 ? f * 9 : 0;
+  }
+  sleigh.visible = !!santa;
+  if (santa) {
+    place(sleigh, santa.x, santa.y, .6 + Math.sin(T * 7) * .25); sleigh.rotation.y = santa.dir > 0 ? 0 : Math.PI;
+    sleigh.deer.forEach((d, i) => d.legs.forEach((l, j) => l.rotation.z = Math.sin(T * 22 + i + j * 3) * .7));
+  }
   if (flagMesh) flagMesh.rotation.y = Math.sin(T * 1.3) * .5;
   for (let i = 0; i < snowCount; i++) {
     snowPos[i * 3 + 1] -= (4 + (i % 7)) * dt;
@@ -2320,6 +2377,7 @@ function drawMinimap(v) {
   for (const p of peds) dot(p.x, p.y, 2.6, p.mode === 'chase' ? RED : p.kind === 'dog' ? '#8b5a2b' : '#6b7480');
   for (const q of kids) dot(q.x, q.y, 2.2, '#ff9d00');
   if (plow) { ctx.fillStyle = '#f5a200'; ctx.fillRect(x + plow.x * k - 4, y + plow.y * k - 4, 8, 8); }
+  if (santa) { ctx.fillStyle = '#e8262d'; ctx.fillRect(x + santa.x * k - 7, y + santa.y * k - 4, 14, 8); }
   for (const r of robots) {
     ctx.save(); ctx.translate(x + r.x * k, y + r.y * k); ctx.rotate(r.a);
     const sz = r === v.r ? 6.5 : 4.5;
@@ -2361,7 +2419,7 @@ for (const u of SHOP) {
 $('bNext').onclick = $('bStart').onclick = $('bRetry').onclick = pressStart;
 $('bMode').onclick = $('bMode2').onclick = () => { if (role !== 'guest') pvp = !pvp; };
 const BOARD_WHERE = { local: 'best runs on this machine', loading: 'loading…', global: 'best runs anywhere', offline: 'offline — showing this machine' };
-const WX_TEXT = { blizzard: ['Blizzard', 'You can barely see the street'], freeze: ['Freezing rain', 'Every surface is ice for a while'] };
+const WX_TEXT = { santa: ['Hohoho! 🎅', 'Santa is bowling down the road. Stay off it!'], blizzard: ['Blizzard', 'You can barely see the street'], freeze: ['Freezing rain', 'Every surface is ice for a while'] };
 let lastBannerT = 0, lastWxT = 0, playersKey = null, shopKey = '', pipsKey = '', scoresKey = '';
 function restartAnim(el) { el.classList.remove('show'); void el.offsetWidth; el.classList.add('show'); }
 function updateDOM() {
