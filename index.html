@@ -133,6 +133,28 @@
   .card.owned .price{background:#e3ebf3}
   .card:disabled{cursor:default}
   .card:disabled:not(.owned){opacity:.5}
+
+  /* skin cases */
+  #cases{position:fixed;inset:0;display:grid;place-items:center;background:rgba(13,27,42,.6);overflow:auto;padding:20px;box-sizing:border-box;z-index:9;grid-template-columns:minmax(0,1fr);justify-items:center}
+  #cases .wrap{width:min(760px,100%);display:flex;flex-direction:column;gap:12px}
+  #cases .head{padding:18px 22px 14px;display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap}
+  #cases h2{margin:0;font-size:36px;font-weight:900;line-height:1}
+  #cases .head p{margin:6px 0 0;font-weight:600;max-width:34ch}
+  #cases h3{margin:4px 2px -2px;color:#fff;font-size:17px;font-weight:800;text-shadow:0 1px 3px rgba(0,0,0,.6)}
+  #coins{font-size:24px;font-weight:900;font-variant-numeric:tabular-nums}
+  #reel{position:relative;overflow:hidden;contain:inline-size;height:122px;padding:0}
+  #reel::after{content:'';position:absolute;left:50%;top:0;bottom:0;width:4px;margin-left:-2px;background:var(--orange);box-shadow:0 0 0 2px #fff}
+  #strip{display:flex;height:100%;will-change:transform}
+  .sk{flex:0 0 104px;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;padding:0 4px;
+      border-right:2px solid #e3ebf3;border-bottom:7px solid var(--rc);font:800 13px var(--font);color:var(--ink);text-align:center;line-height:1.1}
+  .sk i{width:48px;height:48px;border-radius:50%;background:var(--sc);box-shadow:inset -6px -8px 0 rgba(0,0,0,.18),0 0 0 2px var(--ink)}
+  .sk.r3 i{box-shadow:inset -6px -8px 0 rgba(0,0,0,.18),0 0 0 2px var(--ink),0 0 16px 4px var(--sc)}
+  #caseMsg:empty{display:none}
+  #skinGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px}
+  #skinGrid .sk{height:108px;border:0;border-bottom:7px solid var(--rc);border-radius:8px;background:#fff;box-shadow:0 4px 0 rgba(0,0,0,.22)}
+  #skinGrid .sk.on{outline:4px solid var(--orange);outline-offset:-4px}
+  #skinGrid .sk:disabled{background:#e9eef3;color:#8a96a3;cursor:default}
+  #skinGrid .sk:disabled i{background:#c9d1da}
   .card:not(:disabled):hover{box-shadow:inset 0 0 0 3px #fff,inset 0 0 0 5px var(--blue),0 4px 0 rgba(0,0,0,.22)}
   #bNext{align-self:flex-end;margin-top:4px}
 
@@ -258,6 +280,7 @@
     <input id="pname" placeholder="Name" maxlength="12" autocomplete="off" aria-label="Name for the leaderboard">
     <button class="go" id="bStart">Start shift</button>
     <button class="ghost mode" id="bMode" hidden>Mode: Co-op</button>
+    <button class="ghost" id="bCases">🎁 Skins</button>
     <button class="ghost" id="bHost">Host online game</button>
     <button class="ghost" id="bInvite" hidden>Copy invite link</button>
     <span id="joinBox"><input id="code" placeholder="Code" maxlength="5" autocomplete="off" aria-label="Room code"><button class="ghost" id="bJoin">Join</button></span>
@@ -277,6 +300,19 @@
     <h3>Robot style</h3>
     <div class="cards" id="cardsStyle"></div>
     <button class="go" id="bNext">Start next shift</button>
+  </div>
+</div>
+
+<div id="cases" hidden>
+  <div class="wrap">
+    <div class="plate head">
+      <div><h2>Skin cases</h2><p>Every € you earn on a shift drops a coin here. Duplicates pay back half.</p></div>
+      <div class="actions"><span id="coins">0 🪙</span><button class="go" id="bOpen">Open case · 150 🪙</button><button class="ghost" id="bCasesX">Close</button></div>
+    </div>
+    <div class="plate white" id="reel"><div id="strip"></div></div>
+    <p class="note" id="caseMsg"></p>
+    <h3>Your skins</h3>
+    <div id="skinGrid"></div>
   </div>
 </div>
 
@@ -979,9 +1015,9 @@ function buildRobot(r) {
 // owner 'H' = this machine when local/hosting; a guest's robots are owned by its peer id
 // online every robot shows its player's nickname; couch play keeps Player N
 function nameOf(r) { return (role !== 'local' && (r.n || (r.owner === 'H' && pname))) || `Player ${r.i + 1}`; }
-function addRobot({ owner = 'H', ctrl = null, lid = 0, id = nextId++, i, n = '' }) {
+function addRobot({ owner = 'H', ctrl = null, lid = 0, id = nextId++, i, n = '', skin = '' }) {
   i ??= COLORS.findIndex((_, k) => !robots.some(r => r.i === k));
-  const r = { id, owner, ctrl, lid, i, n, color: COLORS[i], ...spawn(i), a: 0, vx: 0, vy: 0, cargo: null, hole: null, esc: 0,
+  const r = { id, owner, ctrl, lid, i, n, skin, color: COLORS[i], ...spawn(i), a: 0, vx: 0, vy: 0, cargo: null, hole: null, esc: 0,
               immune: 1, hitCd: 0, stun: 0, say: '', sayT: 0, boost: 1, boosting: false, zaps: 3, zapCd: 0, hookCd: 0, hp: 1, earn: 0 };
   buildRobot(r); robots.push(r);
   achToast({ i: `<i style="display:block;width:24px;height:24px;border-radius:5px;background:${r.color}"></i>`, n: `${esc(nameOf(r))} joined`,
@@ -996,7 +1032,7 @@ const myCtrls = () => role === 'guest' ? localCtrls : robots.filter(r => r.owner
 function join(ctrl) {
   if (role === 'guest') {
     if (localCtrls.length >= 4) return;
-    localCtrls.push(ctrl); hostConn.send({ type: 'add', lid: localCtrls.length - 1, n: pname });
+    localCtrls.push(ctrl); hostConn.send({ type: 'add', lid: localCtrls.length - 1, n: pname, sk: skins.sel });
     return;
   }
   if (robots.length >= MAX_PLAYERS) return;
@@ -1033,6 +1069,7 @@ function ctrlInput(ctrl) {
   return { t, s, b: b(0) || b(5), h: b(1) || b(4), z: b(2), g: b(3) };
 }
 addEventListener('keydown', e => {
+  if (!document.getElementById('cases').hidden) { if (e.code === 'Escape') closeCases(); return; } // skins screen eats keys, so Enter can't start a shift under it
   if (e.code === 'Escape' && !e.repeat) { if (e.target.tagName === 'INPUT') e.target.blur(); return setMenu(!menuOpen); }
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') { if (e.code === 'Enter' && e.target === codeIn) joinRoom(codeIn.value); return; }
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
@@ -1111,6 +1148,32 @@ const SHOP = [...UPGRADES, ...COSMETICS];
 const isStyle = k => COSMETICS.some(c => c.k === k);
 const freshUp = () => ({ tires: 0, motor: 0, susp: 0, battery: 0, turbo: 0, tesla: 0, heat: 0, box: 0, pipo: 0, scarf: 0, fiflag: 0, gold: 0 });
 up = freshUp();
+// skin cases: every € this machine's players earn also drops a coin; skins and coins live on this machine
+const CASE_PRICE = 150;
+const RARITY = [{ n: 'Common', c: '#9aa5b1', w: 60 }, { n: 'Rare', c: '#2d7cff', w: 28 }, { n: 'Epic', c: '#9b4dff', w: 10 }, { n: 'Legendary', c: '#ffb400', w: 2 }];
+const SKINS = [ // c = shell colour, ro/me = roughness/metalness, e = glow
+  { k: '', n: 'Tehdasvalkoinen', r: 0, c: '#f4f4f2' }, // the default, never in a case
+  { k: 'mint', n: 'Minttu', r: 0, c: '#9be3c4' },
+  { k: 'peach', n: 'Persikka', r: 0, c: '#ffb38a' },
+  { k: 'sky', n: 'Taivas', r: 0, c: '#8cc8ff' },
+  { k: 'sand', n: 'Hiekka', r: 0, c: '#d9c49a' },
+  { k: 'lilac', n: 'Syreeni', r: 0, c: '#c9b3f0' },
+  { k: 'navy', n: 'Yönsininen', r: 1, c: '#1f3a68', ro: .35 },
+  { k: 'ruby', n: 'Rubiini', r: 1, c: '#c0263a', ro: .3 },
+  { k: 'forest', n: 'Kuusikko', r: 1, c: '#2f6b3a', ro: .5 },
+  { k: 'lemon', n: 'Sitruuna', r: 1, c: '#f5d90a', ro: .35 },
+  { k: 'chrome', n: 'Kromi', r: 2, c: '#dfe4ea', ro: .12, me: 1 },
+  { k: 'bubble', n: 'Purkka', r: 2, c: '#ff5fb0', ro: .2, me: .3 },
+  { k: 'onyx', n: 'Onyx', r: 2, c: '#15171b', ro: .18, me: .6 },
+  { k: 'aurora', n: 'Revontuli', r: 3, c: '#3fe0b0', e: '#0d6b55', ro: .25 },
+  { k: 'lava', n: 'Laava', r: 3, c: '#ff5a1f', e: '#7a1800', ro: .4 },
+];
+let skins = { coins: CASE_PRICE, own: [], sel: '' }; // first case is on the house
+try { Object.assign(skins, JSON.parse(localStorage.getItem('ruokarobo-skins') || '{}')); } catch (e) {}
+const saveSkins = () => { try { localStorage.setItem('ruokarobo-skins', JSON.stringify(skins)); } catch (e) {} };
+const skinMat = k => { const s = SKINS.find(s => s.k === k) || SKINS[0]; return mat(s.c, s.e, s.ro ?? .82, s.me ?? 0); };
+const skinOf = r => r.owner === myOwner ? skins.sel : r.skin || '';
+function rollSkin() { let x = Math.random() * 100; const r = RARITY.findIndex(q => (x -= q.w) < 0); return pick(SKINS.filter(s => s.k && s.r === r)); }
 function buy(k) {
   if (state !== 'shop') return;
   if (role === 'guest') return hostConn.send({ type: 'buy', k });
@@ -2012,8 +2075,9 @@ function hostRoom() {
     c.on('data', m => {
       if (onNet(c, c.peer, m)) return;
       if (m.type === 'add' && robots.length < MAX_PLAYERS && !robots.some(r => r.owner === c.peer && r.lid === m.lid)) {
-        const r = addRobot({ owner: c.peer, lid: m.lid, n: String(m.n || '').trim().slice(0, 12) }); say(r, 'Moi!'); sfx('join');
+        const r = addRobot({ owner: c.peer, lid: m.lid, n: String(m.n || '').trim().slice(0, 12), skin: String(m.sk || '') }); say(r, 'Moi!'); sfx('join');
       } else if (m.type === 'buy') buy(m.k);
+      else if (m.type === 'skin') robots.forEach(r => r.owner === c.peer && (r.skin = String(m.k || '')));
       else if (m.type === 'in') {
         for (const r of robots) if (r.owner === c.peer && m.in[r.lid]) remoteIn[r.id] = m.in[r.lid];
       }
@@ -2038,7 +2102,7 @@ function joinRoom(code) {
       localCtrls.push(...robots.map(r => r.ctrl)); [...robots].forEach(removeRobot);
       // nobody on this machine yet: give them a robot now, joining should be enough to play
       if (!localCtrls.length) localCtrls.push(touchDev ? { touch: 1 } : { kb: 0 });
-      localCtrls.forEach((_, lid) => hostConn.send({ type: 'add', lid, n: pname }));
+      localCtrls.forEach((_, lid) => hostConn.send({ type: 'add', lid, n: pname, sk: skins.sel }));
       status(`Joined room ${code}. ${touchDev ? 'Touch the stick to drive' : 'You drive with WASD'}. Waiting for the host to start…`);
     });
     hostConn.on('data', m => onNet(hostConn, 'host', m) || (m.type === 'lvl' ? applyLevelMsg(m) : applySnap(m)));
@@ -2072,7 +2136,7 @@ function broadcast(dt) {
   if (role !== 'host' || (netT += dt) < .05) return;
   netT = 0;
   const m = { type: 's', st: state, pvp, pz: paused, level, time, quota, delivered, score, bonus, money, up, banner, bannerT, best,
-    r: robots.map(r => ({ id: r.id, i: r.i, n: nameOf(r), owner: r.owner, x: r.x, y: r.y, a: r.a, vx: r.vx, vy: r.vy, cargo: r.cargo,
+    r: robots.map(r => ({ id: r.id, i: r.i, n: nameOf(r), sk: skinOf(r), owner: r.owner, x: r.x, y: r.y, a: r.a, vx: r.vx, vy: r.vy, cargo: r.cargo,
                           hole: typeof r.hole === 'string' ? r.hole : !!r.hole, esc: r.esc, stun: r.stun, say: r.say, sayT: r.sayT, bo: r.boost, bl: r.boostLock, bz: r.boosting, dk: r.dTier, zp: r.zaps, hp: r.hp, e: r.earn, dr: r.drunk, tw: r.towT > 0 ? r.tow : -1 })),
     c: cars.map(c => c.x), fx: outbox.splice(0),
     p: peds.map(p => ({ x: p.x, y: p.y, a: p.a, m: p.mode, k: p.kickT > 0, mv: p.moving, s: p.say, st: p.sayT })),
@@ -2088,7 +2152,7 @@ function applySnap(m) {
   for (const s of m.r) {
     let r = robots.find(q => q.id === s.id);
     if (!r) r = Object.assign(addRobot({ id: s.id, owner: s.owner, i: s.i, n: s.n }), { x: s.x, y: s.y, a: s.a });
-    Object.assign(r, { owner: s.owner, n: s.n, tx: s.x, ty: s.y, ta: s.a, vx: s.vx, vy: s.vy, cargo: s.cargo, hole: s.hole || null,
+    Object.assign(r, { owner: s.owner, n: s.n, skin: s.sk || '', tx: s.x, ty: s.y, ta: s.a, vx: s.vx, vy: s.vy, cargo: s.cargo, hole: s.hole || null,
                        esc: s.esc, stun: s.stun, say: s.say, sayT: s.sayT, boost: s.bo, boostLock: s.bl, boosting: s.bz, dTier: s.dk || 0, zaps: s.zp, hp: s.hp ?? 1, earn: s.e ?? 0, drunk: s.dr || 0, tow: s.tw, towT: s.tw >= 0 ? 1 : 0 });
   }
   m.c.forEach((x, i) => cars[i] && (cars[i].tx = x));
@@ -2131,7 +2195,7 @@ function sync(dt) {
     r.sparks.visible = !!r.dTier && !r.hole;
     if (r.dTier) { r.sparkMat.color.set(SPARK[r.dTier]); r.sparks.scale.setScalar(.7 + Math.random() * .6 + .2 * r.dTier); }
     r.pipo.visible = !!up.pipo; r.scarf.visible = !!up.scarf; r.fiFlag.visible = !!up.fiflag; r.fl.visible = !up.fiflag;
-    r.shell.material = up.gold ? goldMat : mat('#f4f4f2');
+    r.shell.material = up.gold ? goldMat : skinMat(skinOf(r));
     if (!r.hole && (!r.lt || Math.hypot(r.x - r.lt.x, r.y - r.lt.y) > 5)) { // wheel tracks in the snow
       if (surface(r.x, r.y) !== 'ice') { const px = -Math.sin(r.a) * 3, py = Math.cos(r.a) * 3; addTrack(r.x + px, r.y + py, r.a); addTrack(r.x - px, r.y - py, r.a); }
       r.lt = { x: r.x, y: r.y };
@@ -2437,6 +2501,55 @@ for (const u of SHOP) {
 }
 $('bNext').onclick = $('bStart').onclick = $('bRetry').onclick = pressStart;
 $('bMode').onclick = $('bMode2').onclick = () => { if (role !== 'guest') pvp = !pvp; };
+// skin cases: a reel of random skins slides under a marker and stops on the one already rolled
+const TILE = 104, WIN_AT = 40;
+let lastEarned = 0, spinning = false, unrevealed = ''; // unrevealed: already saved as owned, but the reel hasn't stopped on it yet
+const skinTile = (s, tag = 'div', mine = true) =>
+  `<${tag} class="sk r${s.r}${s.k === skins.sel && tag === 'button' ? ' on' : ''}" data-k="${s.k}" style="--sc:${s.c};--rc:${RARITY[s.r].c}"${mine ? '' : ' disabled'}><i></i>${mine ? s.n : '???'}</${tag}>`;
+function renderSkins() {
+  setText('coins', `${skins.coins} 🪙`);
+  $('bOpen').disabled = spinning || skins.coins < CASE_PRICE;
+  $('skinGrid').innerHTML = [...SKINS].sort((a, b) => a.r - b.r).map(s => skinTile(s, 'button', !s.k || (skins.own.includes(s.k) && s.k !== unrevealed))).join('');
+}
+function equipSkin(k) {
+  skins.sel = k; saveSkins(); renderSkins();
+  if (role === 'guest') hostConn.send({ type: 'skin', k });
+}
+function openCases() {
+  if (!$('strip').childElementCount) $('strip').innerHTML = Array.from({ length: 12 }, rollSkin).map(s => skinTile(s)).join('');
+  $('cases').hidden = false; renderSkins();
+}
+function closeCases() { $('cases').hidden = true; }
+function openCase() {
+  if (spinning || skins.coins < CASE_PRICE) return;
+  const win = rollSkin(), dup = skins.own.includes(win.k);
+  skins.coins -= CASE_PRICE - (dup ? CASE_PRICE / 2 : 0);
+  if (!dup) skins.own.push(unrevealed = win.k);
+  saveSkins(); // ponytail: saved before the reel stops, so reloading mid-spin can't reroll
+  spinning = true; setText('caseMsg', ''); renderSkins();
+  const strip = $('strip'), w = $('reel').clientWidth;
+  strip.innerHTML = Array.from({ length: WIN_AT + 6 }, (_, i) => i === WIN_AT ? win : rollSkin()).map(s => skinTile(s)).join('');
+  strip.style.transition = 'none'; strip.style.transform = 'translateX(0)'; void strip.offsetWidth;
+  strip.style.transition = 'transform 5.5s cubic-bezier(.1,.7,.12,1)';
+  strip.style.transform = `translateX(${-(WIN_AT * TILE + TILE / 2 - w / 2 + rnd(-40, 40))}px)`;
+  let last = 0;
+  (function tick() { // a click each time a tile passes the marker
+    const n = Math.floor((w / 2 - new DOMMatrix(getComputedStyle(strip).transform).m41) / TILE);
+    if (n !== last) { last = n; beep(1100, .025, 0, 'square', .03); }
+    if (spinning) requestAnimationFrame(tick);
+  })();
+  strip.ontransitionend = strip.ontransitioncancel = () => {
+    if (!spinning) return;
+    spinning = false; unrevealed = '';
+    (win.r >= 2 ? SFX.ach : SFX.pickup)();
+    setText('caseMsg', `${RARITY[win.r].n}: ${win.n}! ` + (dup ? `You had it already, +${CASE_PRICE / 2} 🪙 back.` : 'Your robots wear it now.'));
+    if (!dup) equipSkin(win.k); else renderSkins();
+  };
+}
+$('bCases').onclick = openCases;
+$('bCasesX').onclick = closeCases;
+$('bOpen').onclick = openCase;
+$('skinGrid').onclick = e => { const b = e.target.closest('button.sk'); if (b && !b.disabled) equipSkin(b.dataset.k); };
 const BOARD_WHERE = { local: 'best runs on this machine', loading: 'loading…', global: 'best runs anywhere', offline: 'offline — showing this machine' };
 const WX_TEXT = { santa: ['Hohoho! 🎅', 'Santa is bowling down the road. Stay off it!'], blizzard: ['Blizzard', 'You can barely see the street'], freeze: ['Freezing rain', 'Every surface is ice for a while'] };
 let lastBannerT = 0, lastWxT = 0, playersKey = null, shopKey = '', pipsKey = '', scoresKey = '';
@@ -2455,6 +2568,11 @@ function updateDOM() {
       : 'PvP: 2nd player, press a key');
   }
   const ranked = [...robots].sort((a, b) => b.earn - a.earn);
+  // coins: co-op shares the team's €, pvp only counts this machine's robots. only while driving, so mode toggles can't mint coins
+  const earned = pvp ? robots.reduce((s, r) => s + (r.owner === myOwner ? r.earn : 0), 0) : score;
+  if (play && earned > lastEarned) { skins.coins += earned - lastEarned; saveSkins(); }
+  lastEarned = earned;
+  if (state !== 'title') closeCases();
   // title
   $('title').hidden = state !== 'title';
   if (state === 'title') {
