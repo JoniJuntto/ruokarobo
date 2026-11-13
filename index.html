@@ -1796,13 +1796,14 @@ function snowball(r) { // pvp only: lob a snowball at the nearest rival ahead, o
 // power-ups fire the moment you drive through an item box. pvp only, so there's always a rival
 function powerUp(r) {
   const others = robots.filter(q => q !== r);
-  const k = Math.random() < .03 ? 'booze' : pick(['3g', '3g', 'turbo', 'star', 'storm', 'refill', 'pulla', 'hole']); // booze is the 3 % jackpot
+  const x = Math.random(); // booze 3 %, 3G 4 %, turbo ~54 %, the other five ~8 % each
+  const k = x < .03 ? 'booze' : x < .07 ? '3g' : pick(['turbo', 'turbo', 'turbo', 'turbo', 'turbo', 'turbo', 'turbo', 'star', 'storm', 'refill', 'pulla', 'hole']);
   sfx('pickup');
   if (k === 'turbo') { r.mt = 2.5; r.boost = 1; say(r, '🍄 Turbo!', 1.6); sfx('boost'); }
   if (k === 'star') { r.immune = 6; r.stun = 0; say(r, '⭐ Koskematon!', 2); }
   if (k === '3g') {
     say(r, '📶 3G kaikille!', 2);
-    for (const q of others) { q.lag = 10; say(q, pick(['Lagaa…', 'Yhteys pätkii', '📶 E-verkko?!']), 2); }
+    for (const q of others) { q.lag = 2; say(q, pick(['Lagaa…', 'Yhteys pätkii', '📶 E-verkko?!']), 2); }
     bump('lag3g');
   }
   if (k === 'booze') { say(r, '🍾 Kippis kaikille!', 2); sfx('clink'); for (const q of others) { q.drunk = 5; say(q, 'Hik! 🍾', 1.6); } }
