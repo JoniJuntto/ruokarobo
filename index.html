@@ -1728,6 +1728,7 @@ function recordRun() {
 }
 function damage(r, amt, msg) {
   if (r.hitCd > 0) return;
+  if (r.kid) { r.hitCd = .7; r.stun = Math.max(r.stun, 2); r.vx = r.vy = 0; say(r, pick(['Auts!', 'Hei!', 'Äiti!']), 1); sfx('kick'); return; } // pvp kid: no battery, just knocked over
   r.hitCd = .7; say(r, msg, 1); bump('dmg'); stats.streak = 0;
   if (r.cargo) r.cargo.cond = Math.max(0, r.cargo.cond - amt * (1 - .22 * up.susp) * (ORDERS[r.cargo.o].dmg ?? 1));
   sfx('crash');
@@ -1816,6 +1817,21 @@ function powerUp(r) {
     fx({ k: 'hole', h: { x: clamp(r.x - Math.cos(r.a) * 40, 20, W - 20), y: clamp(r.y - Math.sin(r.a) * 40, 20, H - 20), r: 18 } });
   }
 }
+// pvp snowball kid: walks, turns on the spot, throws. no orders, no holes, no score
+const KID_SP = 120;
+function kidMove(r, inp, dt) {
+  const control = r.stun > 0 ? 0 : 1;
+  r.a += inp.s * 3.4 * dt * control;
+  if (control) { const v = KID_SP * inp.t * (inp.t < 0 ? .5 : 1); r.vx = Math.cos(r.a) * v; r.vy = Math.sin(r.a) * v; }
+  else { r.vx *= Math.exp(-6 * dt); r.vy *= Math.exp(-6 * dt); } // knocked over: slide to a stop
+  r.x += r.vx * dt; r.y += r.vy * dt;
+  for (const b of SOLIDS) pushOut(r, clamp(r.x, b.x, b.x + b.w), clamp(r.y, b.y, b.y + b.h), R);
+  for (const t of trees) pushOut(r, t.x, t.y, R + t.r);
+  r.x = clamp(r.x, R, W - R); r.y = clamp(r.y, R, H - R);
+  r.ballCd = (r.ballCd || 0) - dt;
+  if (inp.x && !r.xPrev && control && r.ballCd <= 0 && state === 'play') { snowball(r); r.ballCd = .5; r.throwT = .3; }
+  r.xPrev = !!inp.x; r.throwT = (r.throwT || 0) - dt;
+}
 function escape(r, msg, nx = Math.cos(r.a), ny = Math.sin(r.a)) {
   r.hole = null; r.immune = 1.5; r.vx = nx * 150; r.vy = ny * 150;
   say(r, msg); sfx('escape');
@@ -1862,6 +1878,8 @@ function updRobot(r, dt) {
       return;
     }
   }
+  if (inp.x && !r.xPrev && state === 'title' && pvp) { r.kid = !r.kid; say(r, r.kid ? 'Lumisota! ❄️' : 'Robo taas', 1.2); sfx('join'); }
+  if (r.kid) return kidMove(r, inp, dt);
   const Sf = { ...surf(r.x, r.y) }, control = r.stun > 0 ? 0 : 1;
   if (r.cargo && ORDERS[r.cargo.o].heavy || isDuo(r)) { Sf.acc *= .65; Sf.max *= .8; Sf.kL *= .6; } // watermelons slide
   if (isDuo(r) && !helper(r)) { Sf.acc *= .3; Sf.max *= .15; }
@@ -2020,6 +2038,7 @@ function robotPairs(dt) {
     if (!pvp && a.hole && !b.hole) { escape(a, 'Kiitos kaveri! 💛', -nx, -ny); Object.assign(a, { tow: b.id, towT: 1.5 }); money += 5; score += 5; pop(a, 'Rescue +5 €', '#ffd84a'); bump('rescues'); continue; }
     if (!pvp && b.hole && !a.hole) { escape(b, 'Kiitos kaveri! 💛', nx, ny); Object.assign(b, { tow: a.id, towT: 1.5 }); money += 5; score += 5; pop(b, 'Rescue +5 €', '#ffd84a'); bump('rescues'); continue; }
     if (a.hole || b.hole) continue;
+    if (a.kid !== b.kid && Math.hypot(b.vx - a.vx, b.vy - a.vy) > 80) damage(a.kid ? a : b, 0, ''); // a robot runs the kid over
     const o = (2 * R - d) / 2;
     a.x -= nx * o; a.y -= ny * o; b.x += nx * o; b.y += ny * o;
     const rv = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny;
@@ -2078,7 +2097,7 @@ function updPeds(dt) {
     if (p.mode === 'zapped') { if ((p.zapT -= dt) <= 0) { p.mode = 'walk'; p.cool = 3; } continue; }
     const dog = p.kind === 'dog';
     if (p.mode === 'walk' && state === 'play' && p.cool <= 0) {
-      const r = robots.filter(r => !r.hole).sort((a, b) => dist(p, a) - dist(p, b))[0];
+      const r = robots.filter(r => !r.hole && !r.kid).sort((a, b) => dist(p, a) - dist(p, b))[0];
       if (r && dist(p, r) < (dog ? 150 : 110)) {
         p.mode = 'chase'; p.target = r;
         if (dog) { say(p, 'Hau hau! 🐕', 1.5); sfx('bark'); } else say(p, pick(['Hei sinä!', 'Taas noi robotit!', 'Nyt riitti!']), 1.5);
@@ -2161,7 +2180,7 @@ function updKids(dt) {
   for (const k of kids) {
     k.cool -= dt; k.throwT -= dt; k.sayT -= dt;
     if (state !== 'play' || (k.zapT -= dt) > 0) continue;
-    const r = robots.filter(r => !r.hole).sort((a, b) => dist(k, a) - dist(k, b))[0];
+    const r = robots.filter(r => !r.hole && !r.kid).sort((a, b) => dist(k, a) - dist(k, b))[0];
     if (!r || dist(k, r) > 260) continue;
     k.a = Math.atan2(r.y - k.y, r.x - k.x);
     if (k.cool > 0) continue;
@@ -2209,6 +2228,7 @@ function update(dt) {
   for (const f of floats) { f.t -= dt; f.h += 3 * dt; }
   while (floats.length && floats[0].t <= 0) floats.shift();
   if (role === 'guest') return guestTick(dt);
+  if (!pvp) robots.forEach(r => r.kid = false); // ponytail: kids exist only in pvp; one line here covers every way pvp gets switched off
   robots.forEach(r => updRobot(r, dt));
   robotPairs(dt);
   updCars(dt);
@@ -2250,7 +2270,7 @@ function update(dt) {
         recordRun();
       } else { // pvp: the winner counts only on the machine that drives it
         bump('pvp');
-        const [a, b] = [...robots].sort((x, y) => y.earn - x.earn);
+        const [a, b] = robots.filter(r => !r.kid).sort((x, y) => y.earn - x.earn); // the kid plays for fun, not €
         if (a?.owner === myOwner && (!b || a.earn > b.earn)) bump('pvpWin');
       }
       saveTot();
@@ -2419,7 +2439,7 @@ function broadcast(dt) {
   netT = 0;
   const m = { type: 's', st: state, pvp, roam, cg: campaign, ch: chapter, pz: paused, level, time, quota, delivered, score, bonus, money, up, banner, bannerT, best,
     r: robots.map(r => ({ id: r.id, i: r.i, n: nameOf(r), sk: skinOf(r), owner: r.owner, x: r.x, y: r.y, a: r.a, vx: r.vx, vy: r.vy, cargo: r.cargo,
-                          hole: typeof r.hole === 'string' ? r.hole : !!r.hole, esc: r.esc, stun: r.stun, say: r.say, sayT: r.sayT, bo: r.boost, bl: r.boostLock, bz: r.boosting, dk: r.dTier, zp: r.zaps, hp: r.hp, e: r.earn, dr: r.drunk, lg: r.lag, tw: r.towT > 0 ? r.tow : -1 })),
+                          hole: typeof r.hole === 'string' ? r.hole : !!r.hole, esc: r.esc, stun: r.stun, say: r.say, sayT: r.sayT, bo: r.boost, bl: r.boostLock, bz: r.boosting, dk: r.dTier, zp: r.zaps, hp: r.hp, e: r.earn, dr: r.drunk, lg: r.lag, kd: !!r.kid, th: r.throwT, tw: r.towT > 0 ? r.tow : -1 })),
     c: cars.map(c => c.x), fx: outbox.splice(0),
     p: peds.map(p => ({ x: p.x, y: p.y, a: p.a, m: p.mode, k: p.kickT > 0, mv: p.moving, s: p.say, st: p.sayT })),
     kd: kids.map(k => ({ a: k.a, th: k.throwT, s: k.say, st: k.sayT, z: k.zapT > 0 })), b: balls, wx: weather,
@@ -2436,7 +2456,7 @@ function applySnap(m) {
     let r = robots.find(q => q.id === s.id);
     if (!r) r = Object.assign(addRobot({ id: s.id, owner: s.owner, i: s.i, n: s.n }), { x: s.x, y: s.y, a: s.a });
     Object.assign(r, { owner: s.owner, n: s.n, skin: s.sk || '', tx: s.x, ty: s.y, ta: s.a, vx: s.vx, vy: s.vy, cargo: s.cargo, hole: s.hole || null,
-                       esc: s.esc, stun: s.stun, say: s.say, sayT: s.sayT, boost: s.bo, boostLock: s.bl, boosting: s.bz, dTier: s.dk || 0, zaps: s.zp, hp: s.hp ?? 1, earn: s.e ?? 0, drunk: s.dr || 0, lag: s.lg || 0, tow: s.tw, towT: s.tw >= 0 ? 1 : 0 });
+                       esc: s.esc, stun: s.stun, say: s.say, sayT: s.sayT, boost: s.bo, boostLock: s.bl, boosting: s.bz, dTier: s.dk || 0, zaps: s.zp, hp: s.hp ?? 1, earn: s.e ?? 0, drunk: s.dr || 0, lag: s.lg || 0, kid: !!s.kd, throwT: s.th || 0, tow: s.tw, towT: s.tw >= 0 ? 1 : 0 });
   }
   m.c.forEach((x, i) => cars[i] && (cars[i].tx = x));
   m.p?.forEach((q, i) => peds[i] && Object.assign(peds[i], { tx: q.x, ty: q.y, a: q.a, mode: q.m, kickT: q.k ? .3 : 0, moving: q.mv, say: q.s, sayT: q.st }));
@@ -2474,6 +2494,16 @@ const SPARK = [0, '#3aa8ff', '#ff8a1f', '#c04bff'];
 function sync(dt) {
   for (const r of robots) {
     place(r.mesh, r.x, r.y); r.mesh.rotation.y = -r.a;
+    r.body.visible = !r.kid;
+    if (r.kid && !r.person) r.person = buildPerson(r.mesh, r.color, '#fff', 1.55); // 1.55 × the robot's .4 = the street kids' .62
+    if (r.person) {
+      r.person.g.visible = !!r.kid;
+      const sw = Math.hypot(r.vx, r.vy) > 10 && r.stun <= 0 ? Math.sin(T * 14) * .6 : 0;
+      r.person.legs[0].rotation.z = sw; r.person.legs[1].rotation.z = -sw;
+      r.person.arms[1].rotation.z = r.throwT > 0 ? -2.4 + (.3 - r.throwT) * 8 : 0;
+      r.person.body.rotation.z = r.stun > 0 ? Math.PI / 2 : 0; // knocked on his back
+    }
+    if (r.kid) { r.arrow.visible = r.beam.visible = false; continue; }
     r.body.position.y = r.hole ? -1 : 0;
     r.body.rotation.x = r.hole ? Math.sin(T * 18) * .12 : 0;
     r.body.rotation.z = r.stun > 0 ? Math.sin(T * 30) * .15 : 0;
@@ -2629,7 +2659,8 @@ function drawUI(vs) {
 function drawTag(v) { // the player's own order sign at the bottom of their view
   const r = v.r, cx = v.x + v.w / 2, by = v.y + v.h - 14;
   let title, sub, num = null, numFill = BLUE, right = '', late = false;
-  if (r.hole) { title = r.hole === 'snow' ? 'Buried in snow' : r.hole === 'avanto' ? 'Fell through the ice' : 'Stuck in a pothole'; sub = pvp ? 'Wiggle out: nobody is coming to help' : 'Wiggle out, or wait for a friend to tow you'; }
+  if (r.kid) { title = '❄️ Snowball kid'; sub = r.stun > 0 ? 'Knocked over! Up in a moment' : 'No score. Pelt the robots and get in their way'; }
+  else if (r.hole) { title = r.hole === 'snow' ? 'Buried in snow' : r.hole === 'avanto' ? 'Fell through the ice' : 'Stuck in a pothole'; sub = pvp ? 'Wiggle out: nobody is coming to help' : 'Wiggle out, or wait for a friend to tow you'; }
   else if (r.cargo) {
     const O = ORDERS[r.cargo.o];
     title = `${O.icon} ${O.name}`; num = r.cargo.dest + 1;
@@ -2659,6 +2690,7 @@ function drawTag(v) { // the player's own order sign at the bottom of their view
     ctx.fillStyle = late ? INK : '#fff'; ctx.font = F(900, 24); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(right, rx + 1 + rw / 2, y + h / 2 + 2);
   }
+  if (r.kid) return; // no battery, boost or zap to show
   // boost meter and stun-gun charges on a small supplementary panel above
   const pw = 230, px = cx - pw / 2, py = y - 30;
   const hp = r.hp ?? 1, hy = py - 28; // robo health
@@ -2875,7 +2907,7 @@ function updateDOM() {
       : conns.size ? 'PvP: friend joined, they press a key'
       : 'PvP: 2nd player, press a key');
   }
-  const ranked = [...robots].sort((a, b) => b.earn - a.earn);
+  const ranked = robots.filter(r => !r.kid).sort((a, b) => b.earn - a.earn);
   if (state !== 'title') closeCases();
   // title
   $('title').hidden = state !== 'title';
@@ -2885,11 +2917,12 @@ function updateDOM() {
     $('bStory').hidden = role === 'guest'; $('bNewStory').hidden = role === 'guest' || !sv || !!urlChapter;
     setText('bStory', urlChapter ? `Story: chapter ${urlChapter}` : sv ? `Continue story: chapter ${sv.ch}` : 'Story');
     $('keys').hidden = touchDev; $('touchNote').hidden = !touchDev;
-    const pk = robots.map(r => r.i + nameOf(r)).join();
+    const pk = robots.map(r => r.i + nameOf(r) + !!r.kid).join() + pvp;
     if (pk !== playersKey) {
       playersKey = pk;
       $('players').innerHTML = robots.length
-        ? robots.map(r => `<span class="chip"><i style="background:${r.color}"></i>${esc(nameOf(r))}</span>`).join('')
+        ? robots.map(r => `<span class="chip"><i style="background:${r.color}"></i>${r.kid ? '🧒 ' : ''}${esc(nameOf(r))}</span>`).join('')
+          + (pvp ? '<br>PvP: press your snowball key to play as a snowball kid. No score, just mayhem.' : '')
         : (touchDev ? 'Touch the stick to join.' : 'Drive with any row of the table. Each row is one player.');
     }
     setText('bestLine', best ? `Best run ${best} €` : '');
