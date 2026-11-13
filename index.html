@@ -1368,9 +1368,10 @@ function achToast(a, sound = true) { // also announces players joining (sound of
 // score list is worth.
 // ponytail: anyone can POST a score straight from the console. The server clamps the numbers
 // and rate-limits each address, which is as far as a page with no login can get.
-// Same-origin, so the board works on whatever host serves the game and needs no CORS. Where
-// nothing answers (opening the file locally, say) the fetch fails and the local board shows.
-const BOARD = { url: '/api/scores' };
+// Absolute URL so every copy of the game (the live site, :8099, a local dev server, the file
+// opened straight from disk) shares the one global board; board.js answers CORS for any origin.
+// Where nothing answers (no network) the fetch fails and the local board shows.
+const BOARD = { url: 'https://robo.huikaton.online/api/scores' };
 const boardOn = () => !!BOARD.url;
 let localBoard = [];
 try { localBoard = JSON.parse(localStorage.getItem('ruokarobo-board') || '[]'); } catch (e) {}
