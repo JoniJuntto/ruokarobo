@@ -3,7 +3,7 @@
 <head>
 <script src="https://analytics.huikaton.online/api/script.js" data-site-id="1a793a74bbc4" defer></script>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>Ruokarobo</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,7 +14,9 @@
   :root{--blue:#0b4f9c;--yellow:#ffcc00;--red:#d7261e;--snow:#f5f8fb;--ink:#1d232b;--orange:#ff6a13;--green:#2f9e57;
         --font:'Overpass',system-ui,sans-serif}
   [hidden]{display:none!important}
-  html,body{margin:0;height:100%;overflow:hidden;background:#0d1b2a;font-family:var(--font);color:var(--ink)}
+  html,body{margin:0;height:100%;overflow:hidden;background:#0d1b2a;font-family:var(--font);color:var(--ink);
+            overscroll-behavior:none;touch-action:manipulation;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+  input{-webkit-user-select:text;user-select:text}
   canvas{position:fixed;inset:0;display:block}
   #ui{pointer-events:none}
   button{font:inherit;cursor:pointer}
@@ -82,7 +84,7 @@
 
   /* title */
   #title{position:fixed;left:max(20px,5vw);top:50%;transform:translateY(-50%);width:min(580px,calc(100vw - 40px));
-         display:flex;flex-direction:column;gap:12px;max-height:calc(100vh - 32px);overflow:auto;padding:4px 4px 8px;box-sizing:border-box}
+         display:flex;flex-direction:column;gap:12px;max-height:calc(100dvh - 32px);overflow:auto;padding:4px 4px 8px;box-sizing:border-box}
   #title > *{flex-shrink:0} /* short windows scroll the column instead of squashing the keys table */
   #title .hero{padding:22px 28px 20px}
   #title .hero svg{width:92px;height:62px;display:block;margin-bottom:8px}
@@ -205,9 +207,11 @@
   @keyframes achOut{to{transform:translateX(-125%);opacity:0}}
 
   /* touch */
-  #stick{position:fixed;left:20px;bottom:84px;width:150px;height:150px;border-radius:50%;background:rgba(255,255,255,.16);box-shadow:inset 0 0 0 3px rgba(255,255,255,.6);touch-action:none}
+  #touch{position:fixed;inset:0;pointer-events:none} /* a frame for the controls, so portrait can lift them all at once */
+  #touch > *{pointer-events:auto}
+  #stick{position:absolute;left:20px;bottom:84px;width:150px;height:150px;border-radius:50%;background:rgba(255,255,255,.16);box-shadow:inset 0 0 0 3px rgba(255,255,255,.6);touch-action:none}
   #knob{position:absolute;left:50%;top:50%;width:60px;height:60px;margin:-30px 0 0 -30px;border-radius:50%;background:#fff;opacity:.85;pointer-events:none}
-  .tbtn{position:fixed;width:84px;height:84px;border-radius:50%;border:0;color:#fff;font:900 14px var(--font);touch-action:none;box-shadow:inset 0 0 0 3px rgba(255,255,255,.7),0 4px 0 rgba(0,0,0,.25)}
+  .tbtn{position:absolute;width:84px;height:84px;border-radius:50%;border:0;color:#fff;font:900 14px var(--font);touch-action:none;box-shadow:inset 0 0 0 3px rgba(255,255,255,.7),0 4px 0 rgba(0,0,0,.25)}
   #tBoost{right:20px;bottom:178px;background:var(--blue)}
   #tBrake{right:20px;bottom:84px;background:var(--orange)}
   #tZap{right:112px;bottom:131px;background:#0a8fa8}
@@ -215,7 +219,24 @@
   #tBall{right:20px;bottom:272px;background:#5aa9d6}
   #tHorn{right:112px;bottom:37px;width:64px;height:64px;background:#e0a100}
 
-  @media (max-width:640px){#sign h2{font-size:34px}#shop h2{font-size:32px}#hud .plate{font-size:18px;padding:8px 11px 5px}#hud{max-width:calc(100vw - 28px)}}
+  /* notched phones: the page runs edge to edge (viewport-fit=cover), so everything pinned to an edge steps in by the safe area.
+     resize() reads the same four variables for the HUD drawn on the canvas */
+  :root{--st:env(safe-area-inset-top,0px);--sr:env(safe-area-inset-right,0px);--sb:env(safe-area-inset-bottom,0px);--sl:env(safe-area-inset-left,0px)}
+  #hud{left:calc(14px + var(--sl));top:calc(12px + var(--st));max-width:calc(100vw - 290px - var(--sl) - var(--sr))}
+  #bPause{right:calc(14px + var(--sr));top:calc(12px + var(--st))}
+  #bMusic{right:calc(68px + var(--sr));top:calc(12px + var(--st))}
+  #joinHint{right:calc(70px + var(--sr));top:calc(12px + var(--st))}
+  #sign,#alert{top:calc(78px + var(--st))}
+  #joinAsk{bottom:calc(24px + var(--sb))}
+  #achs{left:calc(14px + var(--sl))}
+  #touch{inset:var(--st) var(--sr) var(--sb) var(--sl)}
+  #title{left:calc(max(20px,5vw) + var(--sl));width:min(580px,calc(100vw - 40px - var(--sl) - var(--sr)));max-height:calc(100dvh - 32px - var(--st) - var(--sb))}
+  #pause,#shop,#cases{padding:calc(20px + var(--st)) calc(20px + var(--sr)) calc(20px + var(--sb)) calc(20px + var(--sl))}
+
+  @media (max-width:640px){#sign h2{font-size:34px}#shop h2{font-size:32px}#hud .plate{font-size:18px;padding:8px 11px 5px}#hud{max-width:calc(100vw - 160px - var(--sl) - var(--sr))}} /* a column down the left: the minimap has the right */
+  @media (pointer:coarse){.foot span:has(kbd){display:none}} /* no M or Esc key on a phone */
+  @media (pointer:coarse) and (orientation:portrait){#touch{bottom:calc(100px + var(--sb))}} /* clear of the order sign and meters along the bottom */
+  @media (max-height:480px){#title .hero{padding:12px 18px 8px}#title .hero svg,#title .hero p{display:none}#title h1{font-size:40px}} /* phone on its side: Start without scrolling */
   @media (prefers-reduced-motion:reduce){#sign.show,#alert.show,.ach{animation:none}}
 </style>
 </head>
@@ -273,7 +294,7 @@
       <tr><td>Gamepad</td><td>Stick</td><td><kbd>A</kbd></td><td><kbd>B</kbd></td><td><kbd>X</kbd></td><td><kbd>Y</kbd></td><td><kbd>LB</kbd></td><td><kbd>L3</kbd></td></tr>
     </table>
   </div>
-  <div class="plate white" id="touchNote" hidden>Steer with the stick on the left. Boost, brake, zap, hook, horn and (in PvP) snowball are on the right. Hold brake while steering at speed to drift; let go for a mini-turbo.</div>
+  <div class="plate white" id="touchNote" hidden>Once the shift starts, steer with the stick on the left. Boost, brake, zap, hook, horn and (in PvP) snowball are on the right. Hold brake while steering at speed to drift; let go for a mini-turbo.</div>
   <details class="plate white fold" id="achBox">
     <summary>Achievements<span id="achCount"></span></summary>
     <div class="achGrid" id="achGrid"></div>
@@ -474,9 +495,11 @@ scene.fog = new THREE.Fog('#cfdbe8', 60, 220);
 renderer.shadowMap.autoUpdate = false; // updated once per frame, not once per split-screen view
 const camera = new THREE.PerspectiveCamera(45, 1, 1, 700);
 const ui = document.getElementById('ui'), ctx = ui.getContext('2d');
-let vw = 0, vh = 0;
+let vw = 0, vh = 0, safe = { t: 0, r: 0, b: 0, l: 0 }; // safe: px a notch or home bar takes off each edge
 function resize() {
   vw = innerWidth; vh = innerHeight;
+  const cs = getComputedStyle(document.documentElement);
+  for (const k in safe) safe[k] = parseFloat(cs.getPropertyValue('--s' + k)) || 0;
   renderer.setSize(vw, vh); camera.aspect = vw / vh; camera.updateProjectionMatrix();
   const d = devicePixelRatio || 1;
   ui.width = vw * d; ui.height = vh * d; ui.style.width = vw + 'px'; ui.style.height = vh + 'px';
@@ -1563,7 +1586,7 @@ function startLevel(n) {
 }
 function pressStart() {
   if (role === 'guest') return; // the host starts the game
-  if (state === 'title') { roam = false; if (!robots.length) join(touchDev ? { touch: 1 } : { kb: 0 }); newRun(); }
+  if (state === 'title') { roam = false; if (touchDev) joinTouch(); else if (!robots.length) join({ kb: 0 }); newRun(); }
   else if (state === 'over' && stateT > 1) campaign ? retryChapter() : newRun();
   else if (state === 'shop' && stateT > 1) campaign ? (chapter++, state = 'story', stateT = 0) : startLevel(level + 1);
   else if (state === 'story' && stateT > .5) {
@@ -2797,7 +2820,7 @@ function drawUI(vs) {
   for (const v of vs) if (vs.length > 1) ctx.strokeRect(v.x, v.y, v.w, v.h);
 }
 function drawTag(v) { // the player's own order sign at the bottom of their view
-  const r = v.r, cx = v.x + v.w / 2, by = v.y + v.h - 14;
+  const r = v.r, cx = v.x + v.w / 2, by = v.y + v.h - 14 - (v.y + v.h > vh - 1 ? safe.b : 0);
   let title, sub, num = null, numFill = BLUE, right = '', late = false;
   if (r.kid) { title = '❄️ Snowball kid'; sub = r.stun > 0 ? 'Knocked over! Up in a moment' : 'No score. Pelt the robots and get in their way'; }
   else if (r.hole) { title = r.hole === 'snow' ? 'Buried in snow' : r.hole === 'avanto' ? 'Fell through the ice' : 'Stuck in a pothole'; sub = pvp ? 'Wiggle out: nobody is coming to help' : 'Wiggle out, or wait for a friend to tow you'; }
@@ -2914,7 +2937,8 @@ const MINI = .3, miniBg = document.createElement('canvas'); miniBg.width = W * M
   g.fillStyle = '#fff'; for (const b of SHOPS) g.fillText(b.tag, b.x + b.w / 2, b.y + b.h / 2 + 6);
 }
 function drawMinimap(v) {
-  const mw = Math.min(232, v.w * .3), mh = mw * H / BW, x0 = v.x + v.w - mw - 18, y = v.y + (v.y < 1 ? 60 : 18), k = mw / BW;
+  const mid = touchDev && v.w > v.h; // phone on its side: the buttons own the right edge, so the map sits top centre and smaller
+  const mw = Math.min(232, v.w * .3, mid ? v.h * .4 : 1e9), mh = mw * H / BW, x0 = mid ? v.x + (v.w - mw) / 2 : v.x + v.w - mw - 18 - (v.x + v.w > vw - 1 ? safe.r : 0), y = v.y + (v.y < 1 ? 60 + safe.t : 18), k = mw / BW;
   const ox = clamp(v.r.x - BW / 2, 0, W - BW), x = x0 - ox * k; // shows one block's width around the robot
   plate(x0 - 7, y - 7, mw + 14, mh + 14, '#fff', INK);
   ctx.save();
@@ -2973,7 +2997,7 @@ for (const u of SHOP) {
 $('bNext').onclick = $('bStart').onclick = $('bRetry').onclick = $('bStoryGo').onclick = pressStart;
 function storyButton(fresh) {
   if (role === 'guest' || state !== 'title') return;
-  if (!robots.length) join(touchDev ? { touch: 1 } : { kb: 0 });
+  if (touchDev) joinTouch(); else if (!robots.length) join({ kb: 0 });
   const sv = !fresh && !urlChapter && storyLoad();
   startStory(fresh ? 0 : urlChapter || sv?.ch || 0, sv);
 }
@@ -3067,7 +3091,7 @@ function updateDOM() {
       $('players').innerHTML = robots.length
         ? robots.map(r => `<span class="chip"><i style="background:${r.color}"></i>${r.kid ? '🧒 ' : ''}${esc(nameOf(r))}</span>`).join('')
           + (pvp ? '<br>PvP: press your snowball key to play as a snowball kid. No score, just mayhem.' : '')
-        : (touchDev ? 'Touch the stick to join.' : 'Drive with any row of the table. Each row is one player.');
+        : (touchDev ? 'Tap Start shift to play.' : 'Drive with any row of the table. Each row is one player.');
     }
     setText('bestLine', best ? `Best run ${best} €` : '');
     if (achKey !== achDone.size) { // unlocked first, so the newest sit at the top
@@ -3308,7 +3332,7 @@ renderer.setAnimationLoop(now => {
   }
   drawUI(vs);
   updateDOM();
-  $('touch').hidden = !touchDev || !(state === 'play' || state === 'title');
+  $('touch').hidden = !touchDev || state !== 'play' || menuOpen; // only while driving: on the title they sat on top of the menu
   $('tBall').hidden = !pvp;
   musicTick();
 });
