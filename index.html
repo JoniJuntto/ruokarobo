@@ -1143,7 +1143,7 @@ const ORDERS = [
   { icon: '🛋️', name: 'Sofa – needs two robots', duo: true, time: 1.6, bonus: 30, w: 3 }, // counts as 2 orders
 ];
 function pickOrder() {
-  const ws = ORDERS.map(o => o.duo && (robots.length < 2 || pvp) ? 0 : o.w);
+  const ws = (chap()?.orders || ORDERS.map(o => o.w)).map((w, i) => ORDERS[i].duo && (robots.length < 2 || pvp) && !chap()?.orders ? 0 : w); // a chapter's own weights are used as given
   let x = Math.random() * ws.reduce((a, w) => a + w, 0);
   return ws.findIndex(w => (x -= w) < 0);
 }
@@ -1158,23 +1158,34 @@ const KIDS_HOME = 2; // the house by the lake, paper star in the window
 const urlChapter = Math.min(8, Math.max(0, Math.floor(+new URLSearchParams(location.search).get('chapter') || 0))); // ?chapter=N jumps straight in
 const CHAPTERS = [
   { title: 'Prologue', intro: 'Christmas Eve, a little after six. Dad is driving home with a boot full of presents. When he turns onto the street he will honk three times, the way he always does: tö-tö-tööt.\nThe road is icier than it looks.\n\nIn the Salepa warehouse, something switches on.' },
-  { title: 'Waking up (Herääminen)', intro: 'Delivery robot S-1 wakes up on its charging pad with the odd feeling that it used to have hands. Salepa has three orders waiting. Start with those.',
+  { title: 'Waking up (Herääminen)', ice: 0, holes: 0, cars: 1, peds: 1, dogs: 0, kids: 0, plow: false, quota: 3, time: 90, darkness: .1, orders: [1, 0, 0, 0, 0, 0],
+    intro: 'Delivery robot S-1 wakes up on its charging pad with the odd feeling that it used to have hands. Salepa has three orders waiting. Start with those.',
     outro: 'S-1 drove like it had done this a thousand times.' },
-  { title: 'The crash site (Kolaripaikka)', intro: 'Something pulls S-1 to the main road. Presents lie across both lanes, in wrapping paper it somehow remembers buying. Collect every one before the traffic does.',
+  { title: 'The crash site (Kolaripaikka)', ice: 2, holes: 1, cars: 2, peds: 2, dogs: 0, kids: 0, plow: false, quota: 4, time: 90, darkness: .25,
+    intro: 'Something pulls S-1 to the main road. Presents lie across both lanes, in wrapping paper it somehow remembers buying. Collect every one before the traffic does.',
     outro: 'Every present found. A few are a bit dented.' },
-  { title: 'The first present (Ensimmäinen lahja)', intro: 'The house with the paper star in the window. Two kids live there, and tonight nobody is coming home with presents. Take them there. The kids do not trust strange robots, and they have snowballs.',
+  { title: 'The first present (Ensimmäinen lahja)', ice: 3, holes: 2, cars: 1, peds: 2, dogs: 1, kids: 3, kidsNearHome: true, plow: false, quota: 4, time: 95, darkness: .4,
+    intro: 'The house with the paper star in the window. Two kids live there, and tonight nobody is coming home with presents. Take them there. The kids do not trust strange robots, and they have snowballs.',
     outro: 'The door opened. Nobody outside, just presents on the step.' },
-  { title: 'The shift calls (Vuoro kutsuu)', intro: 'The Salepa boss has noticed S-1 wandering off its route. Hit the quota tonight or it goes to the scrapyard. The presents still have to get there in between.',
+  { title: 'The shift calls (Vuoro kutsuu)', ice: 5, holes: 4, cars: 2, peds: 4, dogs: 1, kids: 2, plow: true, quota: 7, time: 100, darkness: .6,
+    intro: 'The Salepa boss has noticed S-1 wandering off its route. Hit the quota tonight or it goes to the scrapyard. The presents still have to get there in between.',
     outro: 'The boss is satisfied. For now.' },
-  { title: 'The ice hole (Avanto)', intro: 'Eetu went to look at the ice hole by the sauna, and the ice gave way. He is holding on to the edge. Hook him out and drive him home.',
+  { title: 'The ice hole (Avanto)', ice: 4, holes: 3, cars: 1, peds: 3, dogs: 1, kids: 1, plow: true, quota: 1, time: 90, darkness: .7,
+    intro: 'Eetu went to look at the ice hole by the sauna, and the ice gave way. He is holding on to the edge. Hook him out and drive him home.',
     outro: 'Eetu is home. Wet, cold and safe.' },
-  { title: 'The tree (Kuusi)', intro: 'Christmas Eve without a tree is not Christmas Eve. Salepa has one left and it is big. Get a colleague to carry the other end, or drag it home very slowly.',
+  { title: 'The tree (Kuusi)', ice: 4, holes: 3, cars: 1, peds: 3, dogs: 1, kids: 2, plow: true, quota: 2, time: 110, darkness: .75,
+    intro: 'Christmas Eve without a tree is not Christmas Eve. Salepa has one left and it is big. Get a colleague to carry the other end, or drag it home very slowly.',
     outro: 'The tree stands in the corner. Aino put the star on top.' },
-  { title: 'Blizzard (Myräkkä)', intro: 'The snow is so thick S-1 can barely see its own wheels. The plough is out. The last presents are still at the shops.',
+  { title: 'Blizzard (Myräkkä)', ice: 6, holes: 5, cars: 2, peds: 3, dogs: 2, kids: 2, plow: true, weather: 'blizzard', quota: 6, time: 105, darkness: .8,
+    intro: 'The snow is so thick S-1 can barely see its own wheels. The plough is out. The last presents are still at the shops.',
     outro: 'Through the storm. Almost morning.' },
-  { title: 'Christmas morning (Joulun aamu)', intro: 'The sky is getting lighter. One present is left, the one that was always meant for Eetu: a red sled. Only S-1 can take it.' },
+  { title: 'Christmas morning (Joulun aamu)', ice: 4, holes: 3, cars: 1, peds: 2, dogs: 1, kids: 0, plow: true, quota: 5, time: 110, darkness: .3,
+    intro: 'The sky is getting lighter. One present is left, the one that was always meant for Eetu: a red sled. Only S-1 can take it.' },
 ];
 const ENDING = { title: 'The end', intro: 'S-1 drives back to the warehouse as the sky turns pink.\nIn the window with the paper star, Eetu is still waving.' };
+// chapter override, or the endless-shift value when there is none
+const chap = () => campaign ? CHAPTERS[chapter] : null;
+const cv = (k, v) => chap()?.[k] ?? v;
 function storyLoad() {
   try { const s = JSON.parse(localStorage.getItem('ruokarobo-story')); return s && s.ch >= 1 && s.ch <= 8 ? s : null; } catch (e) { return null; }
 }
@@ -1191,7 +1202,7 @@ function playChapter() {
   startLevel(chapter);
 }
 // dev only (?chapter=N): skip to the end of a chapter for testing
-if (urlChapter) window.__story = { drain: () => { time = .1; }, clear: () => { delivered = quota; }, get: () => ({ state, chapter, level, quota, delivered, money, up, campaign }) };
+if (urlChapter) window.__story = { drain: () => { time = .1; }, clear: () => { delivered = quota; }, get: () => ({ state, chapter, level, quota, delivered, money, up, campaign, time, darkness, wx: weather.k, santaIn, ice: ice.length, holes: holes.length, cars: cars.length, peds: peds.length, kids: kids.map(k => [Math.round(k.x), Math.round(k.y)]), plow: !!plow }) };
 function retryChapter() { money = storyStart.money; up = { ...storyStart.up }; playChapter(); }
 const DAY = new THREE.Color('#cfdbe8'), NIGHT = new THREE.Color('#0a1328');
 
@@ -1204,39 +1215,40 @@ function spot() {
 }
 function setupLevel(n) {
   ice = []; holes = []; cars = [];
-  for (let i = 0; i < (2 + n * 2) * BLOCKS; i++) ice.push({ ...spot(), rx: rnd(40, 90), ry: rnd(18, 36) });
-  for (let i = 0; i < (2 + n * 2) * BLOCKS; i++) {
+  for (let i = 0; i < cv('ice', 2 + n * 2) * BLOCKS; i++) ice.push({ ...spot(), rx: rnd(40, 90), ry: rnd(18, 36) });
+  for (let i = 0; i < cv('holes', 2 + n * 2) * BLOCKS; i++) {
     const s = spot();
     if (!holes.some(h => Math.hypot(h.x - s.x, h.y - s.y) < 60)) holes.push({ ...s, r: rnd(15, 21) });
   }
   for (let lane = 0; lane < 2; lane++) {
-    const count = (n > 3 ? 2 : 1) * BLOCKS, base = 130 + n * 15 + lane * 20;
+    const count = cv('cars', n > 3 ? 2 : 1) * BLOCKS, base = 130 + n * 15 + lane * 20;
     for (let k = 0; k < count; k++)
       cars.push({ x: (k + Math.random() * .4) * (W + 200) / count, y: lane ? 690 : 630, dir: lane ? -1 : 1, base, v: base,
                   color: pick(['#c0392b', '#2c3e50', '#f1f1f1', '#2e86de', '#7f8c8d', '#16a085']) });
   }
   peds = [];
-  for (let i = 0; i < Math.min(8, 1 + n) * BLOCKS; i++) {
+  for (let i = 0; i < cv('peds', Math.min(8, 1 + n)) * BLOCKS; i++) {
     const side = Math.random() < .75 ? 0 : 1;
     let pos; do pos = pathPoint(side); while (dist(pos, nearShop(pos).door) < 160);
     peds.push({ ...pos, ...waypoint(side), side, kind: 'person', a: 0, vx: 0, vy: 0, mode: 'walk', t: 0, cool: 2, kickT: 0, say: '', sayT: 0,
                 color: pick(['#3b6ea5', '#7a2e3a', '#2e6b4f', '#5b4a8a', '#a0522d', '#333a44']), hat: pick(['#d33', '#f5c400', '#1f4e9c', '#2fbf6a', '#e84393']) });
   }
-  for (let i = 0; n >= 2 && i < (n >= 4 ? 2 : 1) * BLOCKS; i++) { // dogs from shift 2
+  for (let i = 0; i < cv('dogs', n >= 4 ? 2 : n >= 2 ? 1 : 0) * BLOCKS; i++) { // dogs from shift 2
     const side = Math.random() < .7 ? 0 : 1, pos = pathPoint(side);
     peds.push({ ...pos, ...waypoint(side), side, kind: 'dog', a: 0, vx: 0, vy: 0, mode: 'walk', t: 0, cool: 3, kickT: 0, say: '', sayT: 0 });
   }
   kids = []; balls = [];
-  for (let i = 0, tries = 0; i < Math.min(4, n) * BLOCKS && tries < 400 * BLOCKS; tries++) { // kids hide in the snow next to sidewalks
+  const home = chap()?.kidsNearHome && HOUSES[KIDS_HOME].door; // ch 3: the kids guard their own house
+  for (let i = 0, tries = 0; i < cv('kids', Math.min(4, n)) * BLOCKS && tries < 400 * BLOCKS; tries++) { // kids hide in the snow next to sidewalks
     const q = pathPoint(Math.random() < .7 ? 0 : 1), [dx, dy] = pick([[0, 1], [0, -1], [1, 0], [-1, 0]]), off = rnd(45, 70);
     const x = q.x + dx * off, y = q.y + dy * off;
     if (x < 20 || x > W - 20 || y < 20 || y > H - 20 || [...PATHS, ROAD].some(p => inR(x, y, p)) || inLake(x, y, 10) || insideSolid(x, y)
-        || DOORS.some(d => Math.hypot(d.x - x, d.y - y) < 90)) continue;
+        || DOORS.some(d => Math.hypot(d.x - x, d.y - y) < 90) || home && Math.hypot(home.x - x, home.y - y) > 250) continue;
     kids.push({ x, y, dx: -dx, dy: -dy, a: Math.atan2(-dy, -dx), cool: rnd(1, 3), throwT: 0, say: '', sayT: 0,
                 coat: pick(['#ff7b00', '#2d9cff', '#e84393', '#2fbf6a']), hat: pick(['#d33', '#f5c400', '#1f4e9c']) });
     i++;
   }
-  plow = n >= 2 ? { x: 20, y: 580, a: 0, wi: 1, dir: 1 } : null;
+  plow = cv('plow', n >= 2) ? { x: 20, y: 580, a: 0, wi: 1, dir: 1 } : null;
   applyLevel(n);
   if (role === 'host') for (const c of conns) c.send(levelMsg());
 }
@@ -1244,7 +1256,7 @@ function setupLevel(n) {
 function applyLevel(n) {
   buildHazards();
   trackTotal = trackI = 0; tracks.count = 0;
-  darkness = Math.min(.8, (n - 1) * .3);
+  darkness = cv('darkness', Math.min(.8, (n - 1) * .3));
   const day = 1 - darkness;
   const sky = DAY.clone().lerp(NIGHT, darkness / .8);
   scene.background = sky; scene.fog.color.copy(sky);
@@ -1259,11 +1271,12 @@ function applyLevel(n) {
 }
 function startLevel(n) {
   level = n; setupLevel(n);
-  time = 75 + n * 5 + up.battery * 12; delivered = 0;
-  quota = 2 + n + (robots.length - 1) * 2;
+  time = cv('time', 75 + n * 5) + up.battery * 12; delivered = 0;
+  quota = cv('quota', 2 + n) + (robots.length - 1) * 2;
   robots.forEach(r => Object.assign(r, spawn(r.i), { vx: 0, vy: 0, a: 0, camYaw: 0, boost: 1, zaps: 3 + up.tesla, cargo: null, hole: null, stun: 0, immune: 1, hp: 1, earn: 0, towT: 0, hookCd: 0, dDir: 0, dCh: 0, dTier: 0, mt: 0 }));
   weather = { k: null, t: 0 }; weatherIn = n >= 2 ? rnd(15, 35) : Infinity;
-  santa = null; santaIn = rnd(20, 45);
+  if (chap()?.weather) { weather = { k: chap().weather, t: 1e9 }; fx({ k: 'wx', w: weather.k }); sfx('alarm'); } // ch 7: blizzard all chapter
+  santa = null; santaIn = campaign ? Infinity : rnd(20, 45); // no sleigh knocking cars over on the night of the crash
   mark = { ...stats }; // "clear a shift without X" is measured against this snapshot
   most('players', robots.length);
   state = 'play'; stateT = 0;
@@ -2101,13 +2114,13 @@ function leaveOnline(msg) {
 const inviteCode = new URLSearchParams(location.search).get('join');
 if (inviteCode) { history.replaceState(null, '', location.pathname); joinRoom(inviteCode); }
 function levelMsg() {
-  return { type: 'lvl', n: level, ice: ice.map(({ x, y, rx, ry, gone }) => ({ x, y, rx, ry, gone })), holes,
+  return { type: 'lvl', n: level, cg: campaign, ch: chapter, ice: ice.map(({ x, y, rx, ry, gone }) => ({ x, y, rx, ry, gone })), holes,
            cars: cars.map(({ x, y, dir, base, v, color }) => ({ x, y, dir, base, v, color })),
            peds: peds.map(({ x, y, side, kind, color, hat }) => ({ x, y, side, kind, color, hat })),
            kids: kids.map(({ x, y, a, dx, dy, coat, hat }) => ({ x, y, a, dx, dy, coat, hat })), plow: !!plow };
 }
 function applyLevelMsg(m) {
-  level = m.n; ice = m.ice; holes = m.holes; cars = m.cars;
+  level = m.n; campaign = !!m.cg; chapter = m.ch || 0; ice = m.ice; holes = m.holes; cars = m.cars;
   peds = m.peds.map(p => ({ ...p, a: 0, mode: 'walk', kickT: 0, say: '', sayT: 0 }));
   kids = m.kids.map(k => ({ ...k, throwT: 0, say: '', sayT: 0 })); balls = [];
   plow = m.plow ? { x: 20, y: 580, a: 0 } : null;
@@ -2116,7 +2129,7 @@ function applyLevelMsg(m) {
 function broadcast(dt) {
   if (role !== 'host' || (netT += dt) < .05) return;
   netT = 0;
-  const m = { type: 's', st: state, pvp, pz: paused, level, time, quota, delivered, score, bonus, money, up, banner, bannerT, best,
+  const m = { type: 's', st: state, pvp, cg: campaign, ch: chapter, pz: paused, level, time, quota, delivered, score, bonus, money, up, banner, bannerT, best,
     r: robots.map(r => ({ id: r.id, i: r.i, n: nameOf(r), owner: r.owner, x: r.x, y: r.y, a: r.a, vx: r.vx, vy: r.vy, cargo: r.cargo,
                           hole: typeof r.hole === 'string' ? r.hole : !!r.hole, esc: r.esc, stun: r.stun, say: r.say, sayT: r.sayT, bo: r.boost, bl: r.boostLock, bz: r.boosting, dk: r.dTier, zp: r.zaps, hp: r.hp, e: r.earn, tw: r.towT > 0 ? r.tow : -1 })),
     c: cars.map(c => c.x), fx: outbox.splice(0),
@@ -2126,6 +2139,7 @@ function broadcast(dt) {
   for (const c of conns) c.send(m);
 }
 function applySnap(m) {
+  campaign = !!m.cg; chapter = m.ch || 0;
   ({ st: state, pvp, level, time, quota, delivered, score, bonus, money, up, banner, bannerT, best } = m);
   hostPaused = !!m.pz; net.snaps++; net.lastSnap = performance.now();
   const ids = new Set(m.r.map(s => s.id));
@@ -2549,7 +2563,7 @@ function updateDOM() {
     const sc = pvp ? ranked.map(r => `<i style="background:${r.color}"></i><b>${r.earn}</b>`).join('') + '<span class="lbl">€</span>' : '';
     if (sc !== scoresKey) $('hScores').innerHTML = scoresKey = sc;
     $('hWx').hidden = !weather.k;
-    if (weather.k) setText('hWxText', `${WX_TEXT[weather.k][0]} ${Math.ceil(weather.t)} s`);
+    if (weather.k) setText('hWxText', weather.t < 1e6 ? `${WX_TEXT[weather.k][0]} ${Math.ceil(weather.t)} s` : WX_TEXT[weather.k][0]); // a chapter's blizzard has no end
     $('hRoom').hidden = !roomCode; setText('hRoomCode', roomCode);
     const free = KB.filter((k, i) => !myCtrls().some(c => c.kb === i)).map(k => k.name);
     $('joinHint').hidden = robots.length >= MAX_PLAYERS || vw < 900 || touchDev;
@@ -2759,6 +2773,9 @@ function storyCheck() {
   console.assert(CHAPTERS.length === 9, 'prologue + 8 chapters');
   console.assert(CHAPTERS.every(c => c.title && c.intro), 'every chapter has title + intro');
   console.assert(HOUSES[KIDS_HOME] && HOUSES[KIDS_HOME].door.x < BW, 'kids home is in block 0');
+  console.assert(CHAPTERS.slice(1).every(c => c.darkness != null && c.quota > 0 && c.time > 0), 'every chapter sets darkness, quota, time');
+  console.assert(CHAPTERS.every(c => !c.orders || c.orders.length === ORDERS.length), 'order weights match ORDERS');
+  console.assert(CHAPTERS.slice(1).every(c => c.darkness >= 0 && c.darkness <= .8), 'darkness in range');
 }
 storyCheck();
 </script>
