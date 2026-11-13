@@ -149,6 +149,7 @@
       border-right:2px solid #e3ebf3;border-bottom:7px solid var(--rc);font:800 13px var(--font);color:var(--ink);text-align:center;line-height:1.1}
   .sk i{width:48px;height:48px;border-radius:50%;background:var(--sc);box-shadow:inset -6px -8px 0 rgba(0,0,0,.18),0 0 0 2px var(--ink)}
   .sk.r3 i{box-shadow:inset -6px -8px 0 rgba(0,0,0,.18),0 0 0 2px var(--ink),0 0 16px 4px var(--sc)}
+  .sk.r4 i{box-shadow:inset -6px -8px 0 rgba(0,0,0,.18),0 0 0 2px var(--ink),0 0 18px 5px #ff2d55}
   #caseMsg:empty{display:none}
   #skinGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px}
   #skinGrid .sk{height:108px;border:0;border-bottom:7px solid var(--rc);border-radius:8px;background:#fff;box-shadow:0 4px 0 rgba(0,0,0,.22)}
@@ -1195,7 +1196,7 @@ const isStyle = k => COSMETICS.some(c => c.k === k);
 const freshUp = () => ({ tires: 0, motor: 0, susp: 0, battery: 0, turbo: 0, tesla: 0, heat: 0, box: 0, pipo: 0, scarf: 0, fiflag: 0, gold: 0 });
 up = freshUp();
 // skin cases: found hidden on the map during shifts, opened on the title screen; skins live on this machine
-const RARITY = [{ n: 'Common', c: '#9aa5b1', w: 60 }, { n: 'Rare', c: '#2d7cff', w: 28 }, { n: 'Epic', c: '#9b4dff', w: 10 }, { n: 'Legendary', c: '#ffb400', w: 2 }];
+const RARITY = [{ n: 'Common', c: '#9aa5b1', w: 60 }, { n: 'Rare', c: '#2d7cff', w: 28 }, { n: 'Epic', c: '#9b4dff', w: 10 }, { n: 'Legendary', c: '#ffb400', w: 2 }, { n: 'Ultra Rare', c: '#ff2d55', w: 0 }]; // ultra rare: never in a case
 const SKINS = [ // c = shell colour, ro/me = roughness/metalness, e = glow
   { k: '', n: 'Tehdasvalkoinen', r: 0, c: '#f4f4f2' }, // the default, never in a case
   { k: 'mint', n: 'Minttu', r: 0, c: '#9be3c4' },
@@ -1212,11 +1213,17 @@ const SKINS = [ // c = shell colour, ro/me = roughness/metalness, e = glow
   { k: 'onyx', n: 'Onyx', r: 2, c: '#15171b', ro: .18, me: .6 },
   { k: 'aurora', n: 'Revontuli', r: 3, c: '#3fe0b0', e: '#0d6b55', ro: .25 },
   { k: 'lava', n: 'Laava', r: 3, c: '#ff5a1f', e: '#7a1800', ro: .4 },
+  // dad's flannel shirt: unlocked by finishing the story (p paints a pattern onto the shell)
+  { k: 'isi', n: 'Isi', r: 4, c: '#b3261e', hint: 'Finish the story', p: (g, w) => {
+    g.fillStyle = '#b3261e'; g.fillRect(0, 0, w, w); g.fillStyle = 'rgba(20,8,8,.55)'; // buffalo check: dark bands both ways
+    for (let i = 0; i < w; i += w / 4) { g.fillRect(i, 0, w / 8, w); g.fillRect(0, i, w, w / 8); } } },
 ];
+const skinCanvas = s => s.cv ??= (() => { const c = document.createElement('canvas'); c.width = c.height = 64; s.p(c.getContext('2d'), 64); return c; })();
 let skins = { cases: 0, own: [], sel: '' }; // cases are found on the map, see loot
 try { Object.assign(skins, JSON.parse(localStorage.getItem('ruokarobo-skins') || '{}')); } catch (e) {}
 const saveSkins = () => { try { localStorage.setItem('ruokarobo-skins', JSON.stringify(skins)); } catch (e) {} };
-const skinMat = k => { const s = SKINS.find(s => s.k === k) || SKINS[0]; return mat(s.c, s.e, s.ro ?? .82, s.me ?? 0); };
+const skinMat = k => { const s = SKINS.find(s => s.k === k) || SKINS[0]; if (!s.p) return mat(s.c, s.e, s.ro ?? .82, s.me ?? 0);
+  return _m['skin:' + k] ??= new THREE.MeshStandardMaterial({ map: Object.assign(new THREE.CanvasTexture(skinCanvas(s)), { colorSpace: THREE.SRGBColorSpace }), roughness: s.ro ?? .82 }); };
 const skinOf = r => r.owner === myOwner ? skins.sel : r.skin || '';
 function rollSkin() { let x = Math.random() * 100; const r = RARITY.findIndex(q => (x -= q.w) < 0); return pick(SKINS.filter(s => s.k && s.r === r)); }
 function buy(k) {
@@ -2745,7 +2752,7 @@ $('bRoam').onclick = () => { if (state !== 'title' || role === 'guest') return; 
 const TILE = 104, WIN_AT = 40;
 let spinning = false, unrevealed = ''; // unrevealed: already saved as owned, but the reel hasn't stopped on it yet
 const skinTile = (s, tag = 'div', mine = true) =>
-  `<${tag} class="sk r${s.r}${s.k === skins.sel && tag === 'button' ? ' on' : ''}" data-k="${s.k}" style="--sc:${s.c};--rc:${RARITY[s.r].c}"${mine ? '' : ' disabled'}><i></i>${mine ? s.n : '???'}</${tag}>`;
+  `<${tag} class="sk r${s.r}${s.k === skins.sel && tag === 'button' ? ' on' : ''}" data-k="${s.k}" style="--sc:${s.p ? `url(${skinCanvas(s).toDataURL()}) center/cover` : s.c};--rc:${RARITY[s.r].c}"${mine ? '' : ' disabled'}><i></i>${mine ? s.n : s.hint || '???'}</${tag}>`;
 function renderSkins() {
   setText('caseCount', `${skins.cases} 🎁`);
   $('bOpen').disabled = spinning || !skins.cases;
@@ -2907,6 +2914,10 @@ function updateDOM() {
   $('story').hidden = state !== 'story';
   if (state === 'story') {
     const c = CHAPTERS[chapter] || ENDING;
+    if (chapter > 8 && !skins.own.includes('isi')) { // the whole story played: dad's skin
+      skins.own.push('isi'); saveSkins(); renderSkins();
+      achToast({ i: '👔', n: 'Isi unlocked', d: 'Ultra Rare skin. Pick it under Skins.' });
+    }
     setText('storyLbl', chapter >= 1 && chapter <= 8 ? `Chapter ${chapter} of 8` : '');
     setText('storyTitle', c.title); setText('storyText', c.intro);
     $('bStoryGo').disabled = role === 'guest' || stateT < .5;
@@ -3062,6 +3073,7 @@ renderer.setAnimationLoop(now => {
 });
 // campaign data invariants: any failure shows as "Assertion failed" in the console
 function storyCheck() {
+  console.assert(SKINS.some(s => s.k === 'isi' && s.p && RARITY[s.r].n === 'Ultra Rare' && !RARITY[s.r].w), 'Isi: Ultra Rare, patterned, never in a case');
   console.assert(CHAPTERS.length === 9, 'prologue + 8 chapters');
   console.assert(CHAPTERS.every(c => c.title && c.intro), 'every chapter has title + intro');
   console.assert(HOUSES[KIDS_HOME] && HOUSES[KIDS_HOME].door.x < BW, 'kids home is in block 0');
