@@ -1808,6 +1808,11 @@ let role = 'local', peer = null, hostConn = null, myOwner = 'H', roomCode = '', 
 const conns = new Set(), remoteIn = {}, outbox = [], localCtrls = [];
 const menu = document.getElementById('menu'), statusEl = document.getElementById('status'), codeIn = document.getElementById('code');
 const status = t => statusEl.textContent = t;
+// Signaling goes through server/peer.js on whatever host serves the game (Caddy proxies /peerjs).
+// Opened as a local file there is no such host, so it falls back to the public PeerJS cloud.
+const PEER_OPTS = location.protocol.startsWith('http')
+  ? { host: location.hostname, port: +location.port || (location.protocol === 'https:' ? 443 : 80), path: '/peerjs', secure: location.protocol === 'https:' }
+  : {};
 document.getElementById('bHost').onclick = hostRoom;
 document.getElementById('bJoin').onclick = () => joinRoom(codeIn.value);
 function showMenuButtons(on) { document.getElementById('bHost').hidden = document.getElementById('joinBox').hidden = !on; }
@@ -1818,7 +1823,7 @@ function hostRoom() {
   roomCode = Array.from({ length: 5 }, () => pick([...'ABCDEFGHJKMNPQRSTUVWXYZ23456789'])).join('');
   bump('online'); saveTot();
   status('Opening room…'); showMenuButtons(false);
-  peer = new Peer('ruokarobo-' + roomCode);
+  peer = new Peer('ruokarobo-' + roomCode, PEER_OPTS);
   peer.on('open', () => { role = 'host'; status(`Room code: ${roomCode} — friends type it in and press Join`); });
   peer.on('error', e => {
     if (e.type !== 'unavailable-id') return leaveOnline('Online error: ' + e.type);
@@ -1843,7 +1848,7 @@ function joinRoom(code) {
   if (!code || role !== 'local' || peer) return;
   if (!window.Peer) return status('Online library failed to load. Check your internet connection.');
   status('Connecting…'); showMenuButtons(false);
-  peer = new Peer();
+  peer = new Peer(PEER_OPTS);
   peer.on('open', id => {
     hostConn = peer.connect('ruokarobo-' + code, { reliable: true });
     hostConn.on('open', () => {
