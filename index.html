@@ -471,13 +471,13 @@ const SURF = {
 let presents = [], eetu = null, ice = [], holes = [], cars = [], peds = [], kids = [], balls = [], loot = [], thieves = [], plow = null, santa = null, santaIn = Infinity;
 let weather = { k: null, t: 0 }, weatherIn = Infinity;
 function surf(x, y) { // surface feel with upgrades applied
-  const s = SURF[surface(x, y)];
-  const grip = up.tires * (s === SURF.ice ? .9 : 1.4);
-  if (s === SURF.ice) return { ice: true, acc: s.acc + up.tires * 60, kF: s.kF + up.tires * .3, kL: s.kL + grip, max: s.max };
-  return { acc: s.acc * (1 + .12 * up.motor), kF: s.kF, kL: s.kL + grip, max: s.max * (1 + .1 * up.motor) };
+  const s = SURF[surface(x, y, up.heat >= 3)]; // heated wheels 3: freezing rain doesn't stick under you
+  const grip = up.tires * (s === SURF.ice ? 1.2 : 1.4);
+  if (s === SURF.ice) return { ice: true, acc: s.acc + up.tires * 90, kF: s.kF + up.tires * .3, kL: s.kL + grip, max: s.max };
+  return { acc: s.acc * (1 + .25 * up.motor), kF: s.kF, kL: s.kL + grip, max: s.max * (1 + .2 * up.motor) };
 }
-function surface(x, y) {
-  if (weather.k === 'freeze') return 'ice'; // freezing rain glazes everything
+function surface(x, y, dry) {
+  if (weather.k === 'freeze' && !dry) return 'ice'; // freezing rain glazes everything
   for (const p of ice) if (!p.gone && ((x - p.x) / p.rx) ** 2 + ((y - p.y) / p.ry) ** 2 < 1) return 'ice';
   if (inLake(x, y)) return 'ice';
   if (inR(x, y, ROAD)) return 'path';
@@ -486,14 +486,17 @@ function surface(x, y) {
 }
 
 // ---------- three.js setup ----------
-const MOBILE = matchMedia('(pointer: coarse)').matches; // phones/tablets: lighter shadows and fewer lamp lights
-const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+const MOBILE = matchMedia('(pointer: coarse)').matches || location.search.includes('mobile'); // phones/tablets: lighter shadows and fewer lamp lights
+const PX = MOBILE ? 1.5 : 2; // pixel ratio ceiling: a 3x phone screen at 1.5x draws a quarter of the pixels
+const renderer = new THREE.WebGLRenderer({ antialias: !MOBILE, // phones: MSAA costs more than it shows at 1.5x+ density
+  powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio, PX));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = MOBILE ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
 document.body.prepend(renderer.domElement);
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog('#cfdbe8', 60, 220);
+const FOG_FAR = MOBILE ? 160 : 220; // phones draw one block deep instead of nearly one and a half
+scene.fog = new THREE.Fog('#cfdbe8', 60, FOG_FAR);
 renderer.shadowMap.autoUpdate = false; // updated once per frame, not once per split-screen view
 const camera = new THREE.PerspectiveCamera(45, 1, 1, 700);
 const ui = document.getElementById('ui'), ctx = ui.getContext('2d');
@@ -524,13 +527,20 @@ sun.shadow.bias = -.0004; sun.shadow.normalBias = .04;
 scene.add(sun);
 
 const _g = {}, _m = {};
-const boxGeo = (w, h, d, r = 0) => _g[`b${w},${h},${d},${r}`] ??= r ? new RoundedBoxGeometry(w, h, d, 2, r) : new THREE.BoxGeometry(w, h, d);
-const cylGeo = (a, b, h, n = 16) => _g[`c${a},${b},${h},${n}`] ??= new THREE.CylinderGeometry(a, b, h, n);
-const coneGeo = (r, h, n = 14) => _g[`k${r},${h},${n}`] ??= new THREE.ConeGeometry(r, h, n);
-const sphGeo = r => _g[`s${r}`] ??= new THREE.SphereGeometry(r, r < .5 ? 12 : 18, r < .5 ? 9 : 13);
-const capGeo = (r, l) => _g[`p${r},${l}`] ??= new THREE.CapsuleGeometry(r, l, 6, 14);
+// phones shade with Lambert: no specular or environment lookups per pixel, about half the fragment work of the PBR shader.
+// It keeps roughness/metalness as plain fields because the bakers key on them. isStd marks "a normal lit material" either way.
+const Std = MOBILE ? class extends THREE.MeshLambertMaterial {
+  constructor({ roughness = 1, metalness = 0, ...p } = {}) { super(p); this.roughness = roughness; this.metalness = metalness; }
+} : THREE.MeshStandardMaterial;
+Std.prototype.isStd = true;
+const LO = MOBILE ? .5 : 1, seg = (n, min = 5) => Math.max(min, Math.round(n * LO)); // phones: half the segments on every round shape
+const boxGeo = (w, h, d, r = 0) => _g[`b${w},${h},${d},${r}`] ??= r ? new RoundedBoxGeometry(w, h, d, MOBILE ? 1 : 2, r) : new THREE.BoxGeometry(w, h, d);
+const cylGeo = (a, b, h, n = 16) => _g[`c${a},${b},${h},${n}`] ??= new THREE.CylinderGeometry(a, b, h, seg(n, 6));
+const coneGeo = (r, h, n = 14) => _g[`k${r},${h},${n}`] ??= new THREE.ConeGeometry(r, h, seg(n, 6));
+const sphGeo = r => _g[`s${r}`] ??= new THREE.SphereGeometry(r, seg(r < .5 ? 12 : 18, 6), seg(r < .5 ? 9 : 13));
+const capGeo = (r, l) => _g[`p${r},${l}`] ??= new THREE.CapsuleGeometry(r, l, seg(6, 3), seg(14, 7));
 // physically based materials; rough = matte by default, lower it for paint, glass and metal
-const mat = (c, e, rough = .82, metal = 0) => _m[`${c}|${e || ''}|${rough}|${metal}`] ??= new THREE.MeshStandardMaterial(
+const mat = (c, e, rough = .82, metal = 0) => _m[`${c}|${e || ''}|${rough}|${metal}`] ??= new Std(
   e ? { color: c, emissive: e, emissiveIntensity: .9, roughness: rough, metalness: metal } : { color: c, roughness: rough, metalness: metal });
 function mesh(geo, m, parent, x = 0, y = 0, z = 0) {
   const o = new THREE.Mesh(geo, typeof m === 'string' ? mat(m) : m);
@@ -553,7 +563,7 @@ function fuse(g, keep = [], rough = null) {
   const by = {};
   for (const o of g.children) {
     const m = o.material;
-    if (!o.isMesh || keep.includes(o) || Array.isArray(m) || m.map || m.transparent || m.emissive.getHex() || !m.isMeshStandardMaterial) continue;
+    if (!o.isMesh || keep.includes(o) || Array.isArray(m) || m.map || m.transparent || m.emissive.getHex() || !m.isStd) continue;
     (by[rough ?? `${m.roughness}|${m.metalness}`] ??= []).push(o);
   }
   for (const [k, ms] of Object.entries(by)) {
@@ -562,11 +572,11 @@ function fuse(g, keep = [], rough = null) {
       o.updateMatrix(); const q = plainCopy(o.geometry).applyMatrix4(o.matrix); q.deleteAttribute('uv'); return paint(q, o.material.color);
     });
     const [r, me = 0] = String(k).split('|').map(Number);
-    const f = new THREE.Mesh(mergeGeometries(gs), _vc[k] ??= new THREE.MeshStandardMaterial({ vertexColors: true, roughness: r, metalness: me }));
+    const f = new THREE.Mesh(mergeGeometries(gs), _vc[k] ??= new Std({ vertexColors: true, roughness: r, metalness: me }));
     f.castShadow = f.receiveShadow = true; ms.forEach(o => g.remove(o)); g.add(f);
   }
 }
-const boxMat = new THREE.MeshStandardMaterial({ map: tex(128, 128, (g, w) => { g.fillStyle = '#fff'; g.fillRect(0, 0, w, w); g.strokeStyle = '#1d232b'; g.lineWidth = 10; g.strokeRect(5, 5, w - 10, w - 10);
+const boxMat = new Std({ map: tex(128, 128, (g, w) => { g.fillStyle = '#fff'; g.fillRect(0, 0, w, w); g.strokeStyle = '#1d232b'; g.lineWidth = 10; g.strokeRect(5, 5, w - 10, w - 10);
   g.font = '900 96px Overpass, system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#1d232b'; g.fillText('?', w / 2, w / 2 + 6); }),
   transparent: true, opacity: .8, roughness: .2, emissive: '#444', emissiveIntensity: .5 });
 const box = (p, w, h, d, c, x, y, z) => mesh(boxGeo(w, h, d), c, p, x, y, z);
@@ -653,17 +663,17 @@ const crackTex = tex(512, 512, (c, w, h) => { // frozen lake with cracks and sno
 const FI_TEX = tex(180, 110, (c) => { c.fillStyle = '#fff'; c.fillRect(0, 0, 180, 110); c.fillStyle = '#003580'; c.fillRect(50, 0, 30, 110); c.fillRect(0, 40, 180, 30); });
 // shared materials
 const snowMat = mat('#fbfdff', null, .9);
-const groundMat = new THREE.MeshStandardMaterial({ map: snowTex, roughness: .95 });
-const walkMat = new THREE.MeshStandardMaterial({ map: walkTex, roughness: .9 });
-const roadMat = new THREE.MeshStandardMaterial({ map: asphaltTex, roughness: .85 });
-const glass = new THREE.MeshStandardMaterial({ color: '#ffd98a', emissive: '#ffb84a', emissiveIntensity: .75, roughness: .15 });
+const groundMat = new Std({ map: snowTex, roughness: .95 });
+const walkMat = new Std({ map: walkTex, roughness: .9 });
+const roadMat = new Std({ map: asphaltTex, roughness: .85 });
+const glass = new Std({ color: '#ffd98a', emissive: '#ffb84a', emissiveIntensity: .75, roughness: .15 });
 const darkGlass = mat('#1b2631', null, .08, .3);
 const white = mat('#f4f4f0', null, .7), metalGray = mat('#9aa1a8', null, .35, .6), rubber = mat('#16181b', null, .9);
-const wallMats = {}, wallMat = c => wallMats[c] ??= new THREE.MeshStandardMaterial({ color: c, map: sidingTex, roughness: .85 });
-const roofMat = new THREE.MeshStandardMaterial({ color: '#3a3f47', map: roofTex, roughness: .45, metalness: .35 });
+const wallMats = {}, wallMat = c => wallMats[c] ??= new Std({ color: c, map: sidingTex, roughness: .85 });
+const roofMat = new Std({ color: '#3a3f47', map: roofTex, roughness: .45, metalness: .35 });
 function plateMesh(n) {
   const t = tex(64, 48, (g) => { g.fillStyle = '#1f4e9c'; g.fillRect(0, 0, 64, 48); g.strokeStyle = '#fff'; g.lineWidth = 3; g.strokeRect(4, 4, 56, 40); g.fillStyle = '#fff'; g.font = '900 30px Overpass, system-ui'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(n, 32, 27); });
-  return new THREE.Mesh(new THREE.PlaneGeometry(1.4, 1.05), new THREE.MeshStandardMaterial({ map: t, emissive: '#fff', emissiveMap: t, emissiveIntensity: .3, roughness: .5 }));
+  return new THREE.Mesh(new THREE.PlaneGeometry(1.4, 1.05), new Std({ map: t, emissive: '#fff', emissiveMap: t, emissiveIntensity: .3, roughness: .5 }));
 }
 
 // ---------- static scene ----------
@@ -683,7 +693,7 @@ const staticFrom = scene.children.length; // everything added from here to bakeS
     const b = mesh(sphGeo(1), snowMat, scene); place(b, x, y + side * rnd(0, 3), 0);
     b.scale.set(rnd(1.8, 2.8), rnd(.45, .8), rnd(.7, 1)); b.rotation.y = rnd(-.2, .2);
   }
-  const lake = new THREE.MeshStandardMaterial({ map: crackTex, roughness: .12, metalness: .05 });
+  const lake = new Std({ map: crackTex, roughness: .12, metalness: .05 });
   flat(new THREE.CircleGeometry(1, 64), lake, LAKE.x, LAKE.y, .025, LAKE.rx * S, LAKE.ry * S);
   flat(new THREE.CircleGeometry(1, 32), mat('#e8f4fb'), AVANTO.x, AVANTO.y, .03, (AVANTO.r + 6) * S, (AVANTO.r + 4) * S); // snowy rim
   flat(new THREE.CircleGeometry(1, 32), mat('#0f3a55', null, .05, .2), AVANTO.x, AVANTO.y, .04, AVANTO.r * S, AVANTO.r * .8 * S);
@@ -763,11 +773,11 @@ function buildBlock(b) {
       }
     }
   });
-  const fm = new THREE.MeshStandardMaterial({ map: facade, emissive: '#fff', emissiveMap: facade, emissiveIntensity: .22, roughness: .85 });
+  const fm = new Std({ map: facade, emissive: '#fff', emissiveMap: facade, emissiveIntensity: .22, roughness: .85 });
   mesh(boxGeo(w, hh, d), [fm, fm, snowMat, fm, fm, fm], g, 0, hh / 2, 0);
   rbox(g, w + .5, .7, d + .5, .1, '#8d939b', 0, hh + .3, 0); // parapet
   rbox(g, w + .2, .35, d + .2, .1, snowMat, 0, hh + .75, 0);
-  const rail = new THREE.MeshStandardMaterial({ color: '#cfe6f5', roughness: .1, metalness: .1, transparent: true, opacity: .45 });
+  const rail = new Std({ color: '#cfe6f5', roughness: .1, metalness: .1, transparent: true, opacity: .45 });
   for (let r = 1; r < 5; r++) for (const fx of [-.32, .32]) { // balconies on the front
     rbox(g, 4.4, .25, 1.6, .06, '#b9b1a2', w * fx, r * 3.2 + .35, d / 2 + .8);
     box(g, 4.4, 1.1, .08, rail, w * fx, r * 3.2 + .95, d / 2 + 1.56);
@@ -792,7 +802,7 @@ function buildShop(b) {
     }
     c.fillStyle = '#9fd3ff'; c.fillRect(214, 86, 84, 106);
   });
-  const fm = new THREE.MeshStandardMaterial({ map: front, emissive: '#fff', emissiveMap: front, emissiveIntensity: .45, roughness: .4 });
+  const fm = new Std({ map: front, emissive: '#fff', emissiveMap: front, emissiveIntensity: .45, roughness: .4 });
   const wall = mat('#7d858f', null, .6, .2);
   mesh(boxGeo(w, hh, d), [wall, wall, snowMat, wall, fm, wall], g, 0, hh / 2, 0);
   rbox(g, w + .4, .6, d + .4, .1, '#5b626c', 0, hh + .2, 0);
@@ -821,8 +831,8 @@ function buildSauna() {
   Object.assign(smokeFrom, { x: b.x + b.w / 2 + w * .3 / S, y: b.y + b.h / 2, h: 5.6 });
 }
 let flagMesh;
-const barkMat = new THREE.MeshStandardMaterial({ map: barkTex, roughness: .8 });
-const crown = new THREE.MeshStandardMaterial({ color: '#7d6658', roughness: 1, transparent: true, opacity: .22, depthWrite: false }); // bare birch twigs, seen as a haze
+const barkMat = new Std({ map: barkTex, roughness: .8 });
+const crown = new Std({ color: '#7d6658', roughness: 1, transparent: true, opacity: .22, depthWrite: false }); // bare birch twigs, seen as a haze
 function buildTree(t) {
   const g = group(t.x, t.y); g.rotation.y = rnd(0, 6);
   if (t.kind === 'spruce') {
@@ -860,7 +870,7 @@ function buildTree(t) {
     mesh(cylGeo(.08, .12, 10, 12), white, g, 0, 5, 0);
     mesh(sphGeo(.16), mat('#d9b44a', null, .3, .8), g, 0, 10.05, 0);
     const fp = new THREE.Group(); fp.position.y = 8.9; g.add(fp);
-    const f = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 2.2, 12, 1), new THREE.MeshStandardMaterial({ map: FI_TEX, side: THREE.DoubleSide, roughness: .8 }));
+    const f = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 2.2, 12, 1), new Std({ map: FI_TEX, side: THREE.DoubleSide, roughness: .8 }));
     f.position.x = 1.85; f.castShadow = true; fp.add(f); flagMesh = fp;
   }
 }
@@ -883,7 +893,7 @@ function buildPerson(parent, coat, hat, scale = 1) {
     mesh(capGeo(.1, .55), coatM, a, 0, -.38, 0); mesh(sphGeo(.12), hatM, a, 0, -.76, 0);
     return a;
   });
-  const head = mesh(sphGeo(.27), new THREE.MeshStandardMaterial({ color: '#f1c7a5', roughness: .7 }), body, 0, 2.33, 0);
+  const head = mesh(sphGeo(.27), new Std({ color: '#f1c7a5', roughness: .7 }), body, 0, 2.33, 0);
   mesh(sphGeo(.06), mat('#e8a98a', null, .7), body, .27, 2.3, 0);
   for (const z of [-.09, .09]) mesh(sphGeo(.035), '#1d1d1d', body, .24, 2.4, z);
   for (const z of [-.1, .1]) { const br = box(body, .04, .04, .14, '#3a2a1f', .25, 2.47, z); br.rotation.x = z > 0 ? .5 : -.5; }
@@ -920,7 +930,7 @@ function buildStatue() {
     c.fillStyle = '#f3d68a'; c.textAlign = 'center'; c.textBaseline = 'middle';
     c.font = '900 28px Overpass, system-ui'; c.fillText('OLLI LINDHOLM', 128, 38); c.font = '700 22px Overpass, system-ui'; c.fillText('1964–2019', 128, 70);
   });
-  const plaque = new THREE.Mesh(new THREE.PlaneGeometry(2.8, 1.05), new THREE.MeshStandardMaterial({ map: t, roughness: .35, metalness: .7 }));
+  const plaque = new THREE.Mesh(new THREE.PlaneGeometry(2.8, 1.05), new Std({ map: t, roughness: .35, metalness: .7 }));
   plaque.position.set(0, 1.6, 1.82); g.add(plaque);
   const p = buildPerson(g, '#000', '#000', 1.7); p.g.position.y = 2.7; p.g.rotation.y = -Math.PI / 2; // faces the road
   // singing: hand held at the chin, mic tilted up to the mouth (not a raised arm)
@@ -941,10 +951,10 @@ trees.forEach(buildTree);
   const buckets = new Map(), roots = scene.children.slice(staticFrom).filter(o => !o.isLight && o !== flagMesh);
   const add = (key, m, cast, recv, g) => {
     for (const k in g.attributes) if (k !== 'position' && k !== 'normal' && k !== 'uv' && !(k === 'color' && m.vertexColors)) g.deleteAttribute(k);
-    if (m.isMeshStandardMaterial && !m.map && !m.transparent && !m.emissive.getHex()) { // plain colour → vertex colour, shared material
+    if (m.isStd && !m.map && !m.transparent && !m.emissive.getHex()) { // plain colour → vertex colour, shared material
       g.deleteAttribute('uv'); if (!m.vertexColors) paint(g, m.color); // already fused: keep its colours
       const vk = `${m.roughness}|${m.metalness}`; key = 'vc' + vk + key.slice(m.uuid.length);
-      m = _vc[vk] ??= new THREE.MeshStandardMaterial({ vertexColors: true, roughness: m.roughness, metalness: m.metalness });
+      m = _vc[vk] ??= new Std({ vertexColors: true, roughness: m.roughness, metalness: m.metalness });
     }
     const b = buckets.get(key) ?? buckets.set(key, { m, cast, recv, gs: [] }).get(key);
     if (!g.index) g.setIndex(seqIndex(g.attributes.position.count)); // mergeGeometries wants all indexed
@@ -985,7 +995,7 @@ const snow = new THREE.Points(snowGeo, new THREE.PointsMaterial({ color: '#fff',
   map: tex(32, 32, (c) => { const g = c.createRadialGradient(16, 16, 0, 16, 16, 16); g.addColorStop(0, '#fff'); g.addColorStop(1, 'rgba(255,255,255,0)'); c.fillStyle = g; c.fillRect(0, 0, 32, 32); }) }));
 scene.add(snow);
 const smoke = Array.from({ length: 16 }, (_, i) => {
-  const m = new THREE.Mesh(sphGeo(1), new THREE.MeshStandardMaterial({ color: '#d5d7dc', roughness: 1, transparent: true, opacity: .5 }));
+  const m = new THREE.Mesh(sphGeo(1), new Std({ color: '#d5d7dc', roughness: 1, transparent: true, opacity: .5 }));
   scene.add(m); return { m, t: i / 16 * 3 };
 });
 // snowballs, tow ropes, wheel tracks and snow spray
@@ -1021,7 +1031,7 @@ function burst(x, y, n = 12) { for (let k = 0; k < n; k++) puff(x, y, .3, rnd(-3
 
 // ---------- hazards & cars (rebuilt per level) ----------
 let hazardGroup = new THREE.Group(); scene.add(hazardGroup);
-const iceMat = new THREE.MeshStandardMaterial({ color: '#dff2fe', roughness: .05, metalness: .1, transparent: true, opacity: .9 });
+const iceMat = new Std({ color: '#dff2fe', roughness: .05, metalness: .1, transparent: true, opacity: .9 });
 const rimGeo = new THREE.TorusGeometry(1, .28, 6, 20);
 function holeMesh(h) {
   const r = h.r * S;
@@ -1181,9 +1191,9 @@ function buildRobot(r) {
   fuse(body, [shell, lidM]); // shell and lid swap materials with skins
   const flag = new THREE.Group(); flag.position.set(-1.45, 5.75, .85); body.add(flag);
   const fl = new THREE.Mesh(_g.pennant ??= (() => { const s = new THREE.Shape(); s.moveTo(0, 0); s.lineTo(-1.3, -.3); s.lineTo(0, -.6); s.closePath(); return new THREE.ShapeGeometry(s); })(),
-    new THREE.MeshStandardMaterial({ color: '#ff7b00', emissive: '#ff5500', emissiveIntensity: .3, roughness: .7, side: THREE.DoubleSide }));
+    new Std({ color: '#ff7b00', emissive: '#ff5500', emissiveIntensity: .3, roughness: .7, side: THREE.DoubleSide }));
   flag.add(fl);
-  const fiFlag = new THREE.Mesh(_g.fiflag ??= new THREE.PlaneGeometry(1.3, .8), new THREE.MeshStandardMaterial({ map: FI_TEX, roughness: .8, side: THREE.DoubleSide }));
+  const fiFlag = new THREE.Mesh(_g.fiflag ??= new THREE.PlaneGeometry(1.3, .8), new Std({ map: FI_TEX, roughness: .8, side: THREE.DoubleSide }));
   fiFlag.position.set(-.65, -.4, 0); flag.add(fiFlag);
   const pipo = new THREE.Group(); body.add(pipo); // shop cosmetics
   const ph = mesh(new THREE.SphereGeometry(.85, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), mat(r.color, null, .95), pipo, .3, 2.12, 0); ph.scale.y = 1.05;
@@ -1328,16 +1338,16 @@ let best = 0; try { best = +localStorage.getItem('ruokarobo-best') || 0; } catch
 const floats = [];
 // team money buys robot upgrades between shifts; each upgrade has 3 levels
 let money = 0, up = { tires: 0, motor: 0, susp: 0, battery: 0 };
-const PRICES = [60, 120, 200];
+const PRICES = [100, 300, 700]; // steep on purpose: a run affords 2-3 maxed lines, never the whole shop
 const UPGRADES = [
-  { k: 'tires', key: '1', name: '❄️ Studded tyres', desc: 'Less sliding, especially on ice' },
-  { k: 'motor', key: '2', name: '⚡ Stronger motor', desc: 'Drive faster' },
-  { k: 'susp', key: '3', name: '🛞 Suspension', desc: 'Less damage, quicker out of potholes' },
-  { k: 'battery', key: '4', name: '🔋 Bigger battery', desc: '+12 s per shift' },
-  { k: 'turbo', key: '5', name: '🚀 Rocket booster', desc: 'Longer, stronger boost that refills faster' },
-  { k: 'tesla', key: '6', name: '⚡ Tesla coil', desc: '+1 zap charge and longer reach' },
-  { k: 'heat', key: '7', name: '🔥 Heated wheels', desc: 'Melt ice patches by driving on them' },
-  { k: 'box', key: '8', name: '📦 Thermobox', desc: 'Longer deadlines, +10 % pay' },
+  { k: 'tires', key: '1', name: '❄️ Studded tyres', desc: 'Less sliding, especially on ice', lv: ['Ice stops throwing you around', 'Steer and brake on ice', 'Ice drives like snow'] },
+  { k: 'motor', key: '2', name: '⚡ Stronger motor', desc: 'Drive faster', lv: ['+20 % top speed', '+40 % top speed', '+60 % top speed'] },
+  { k: 'susp', key: '3', name: '🛞 Suspension', desc: 'Less damage, quicker out of potholes', lv: ['Much less damage, out of potholes twice as fast', 'Pop out of potholes at once', 'Drive straight over potholes'] },
+  { k: 'battery', key: '4', name: '🔋 Bigger battery', desc: '+20 s per shift', lv: ['+20 s per shift', '+40 s per shift', '+60 s per shift'] },
+  { k: 'turbo', key: '5', name: '🚀 Rocket booster', desc: 'Longer, stronger boost that refills faster', lv: ['Boost lasts 3 s, refills in 5', 'Boost lasts 4.5 s, refills in 3.5', 'Boost almost never runs out'] },
+  { k: 'tesla', key: '6', name: '⚡ Tesla coil', desc: 'More zap charges and longer reach', lv: ['5 zaps, longer reach', '7 zaps, long reach', '9 zaps, huge reach'] },
+  { k: 'heat', key: '7', name: '🔥 Heated wheels', desc: 'Melt ice patches by driving on them', lv: ['Melt an ice patch in a second', 'Melt ice almost at once', 'Melt ice on touch, ignore freezing rain'] },
+  { k: 'box', key: '8', name: '📦 Thermobox', desc: 'Longer deadlines, more pay', lv: ['+25 % pay and deadline', '+50 % pay and deadline', '+75 % pay and deadline'] },
 ];
 const COSMETICS = [
   { k: 'pipo', key: '9', name: '🧶 Pipo hats', desc: 'Warm heads for every robot' },
@@ -1346,6 +1356,15 @@ const COSMETICS = [
   { k: 'gold', key: '-', name: '✨ Gold paint', desc: 'Pure bling' },
 ];
 const SHOP = [...UPGRADES, ...COSMETICS];
+if (location.search.includes('selftest')) { // ?selftest: the price curve still beats the income curve (55 € a delivery + ~30 € battery bonus, quota 2 + shift)
+  const income = n => Array.from({ length: n }, (_, i) => (3 + i) * 55 + 30).reduce((a, b) => a + b), all = PRICES.reduce((a, b) => a + b);
+  console.assert(income(3) < PRICES[0] * 8, 'three shifts buy level 1 of everything');
+  console.assert(income(10) * 1.75 < all * UPGRADES.length, 'ten shifts max the whole shop'); // 1.75: thermobox maxed from the start, the best case
+  const avg = a => a.reduce((x, y) => x + y) / a.length, trip = avg(SHOPS.flatMap(b => HOUSES.filter(h => Math.abs(h.door.x - b.door.x) < BW * 1.2).map(h => dist(b.door, h.door) + dist(h.door, nearShop(h.door).door))));
+  // where the battery wall sits: seconds a shift gives per order vs seconds a round trip takes flat out on a clear path
+  console.log('selftest wall', { trip: Math.round(trip), perOrder: [1, 3, 5, 7, 10, 14].map(n => `shift ${n}: ${((80 + n * 3) / (2 + n)).toFixed(1)} s`), tripBase: (trip / SURF.path.max).toFixed(1), tripMotor3: (trip / SURF.path.max / 1.6).toFixed(1) });
+  console.log('selftest', { after3: income(3), after10: income(10), maxOne: all, maxAll: all * UPGRADES.length });
+}
 const isStyle = k => COSMETICS.some(c => c.k === k);
 const freshUp = () => ({ tires: 0, motor: 0, susp: 0, battery: 0, turbo: 0, tesla: 0, heat: 0, box: 0, pipo: 0, scarf: 0, fiflag: 0, gold: 0 });
 up = freshUp();
@@ -1443,7 +1462,7 @@ let skins = { cases: 0, own: [], sel: '', horn: '' }; // cases are found on the 
 try { Object.assign(skins, JSON.parse(localStorage.getItem('ruokarobo-skins') || '{}')); } catch (e) {}
 const saveSkins = () => { try { localStorage.setItem('ruokarobo-skins', JSON.stringify(skins)); } catch (e) {} };
 const skinMat = k => { const s = SKINS.find(s => s.k === k) || SKINS[0]; if (!s.p && s.op == null) return mat(s.c, s.e, s.ro ?? .82, s.me ?? 0);
-  return _m['skin:' + k] ??= (t => new THREE.MeshStandardMaterial({ map: t, roughness: s.ro ?? .82, metalness: s.me ?? 0,
+  return _m['skin:' + k] ??= (t => new Std({ map: t, roughness: s.ro ?? .82, metalness: s.me ?? 0,
     ...s.glow && { emissive: '#fff', emissiveMap: t, emissiveIntensity: .8 }, ...s.op != null && { transparent: true, opacity: s.op, depthWrite: false } }))(
     s.p ? Object.assign(new THREE.CanvasTexture(skinCanvas(s)), { colorSpace: THREE.SRGBColorSpace }) : null); };
 const skinOf = r => r.owner === myOwner ? skins.sel : r.skin || '';
@@ -1632,7 +1651,8 @@ function applyLevel(n) {
   const sky = DAY.clone().lerp(NIGHT, darkness / .8);
   scene.background = sky; scene.fog.color.copy(sky);
   const d2 = day * day; // light falls off fast: kaamos should feel dark
-  hemi.intensity = .06 + .57 * d2; sun.intensity = .08 + 2.67 * d2;
+  hemi.intensity = (.06 + .57 * d2) * (MOBILE ? 3 : 1); // Lambert gets no environment light, so the sky light stands in for it
+  sun.intensity = .08 + 2.67 * d2;
   const envI = .07 + .48 * d2; // dim the studio reflections at night
   scene.traverse(o => { for (const m of [].concat(o.material || [])) if ('envMapIntensity' in m) m.envMapIntensity = envI; });
   sun.color.set(darkness > .5 ? '#9fb4ff' : '#fff1dc');
@@ -1643,9 +1663,9 @@ function applyLevel(n) {
 }
 function startLevel(n) {
   level = n; setupLevel(n);
-  time = Math.round((cv('time', 75 + n * 5) + up.battery * 12) * Math.max(.6, 1 - coopX() * .2)); delivered = 0; goalDone = false;
+  time = Math.round((cv('time', 80 + n * 3) + up.battery * 20) * Math.max(.6, 1 - coopX() * .2)); delivered = 0; goalDone = false;
   quota = cv('quota', 2 + n) + (robots.length - 1) * 2;
-  robots.forEach(r => Object.assign(r, spawn(r.i), { vx: 0, vy: 0, a: 0, camYaw: 0, boost: 1, zaps: 3 + up.tesla, cargo: null, hole: null, stun: 0, immune: 1, hp: 1, earn: 0, towT: 0, hookCd: 0, dDir: 0, dCh: 0, dTier: 0, mt: 0, drunk: 0, lag: 0 }));
+  robots.forEach(r => Object.assign(r, spawn(r.i), { vx: 0, vy: 0, a: 0, camYaw: 0, boost: 1, zaps: 3 + 2 * up.tesla, cargo: null, hole: null, stun: 0, immune: 1, hp: 1, earn: 0, towT: 0, hookCd: 0, dDir: 0, dCh: 0, dTier: 0, mt: 0, drunk: 0, lag: 0 }));
   BOXES.forEach(b => b.t = 0);
   weather = { k: null, t: 0 }; weatherIn = n >= 2 ? rnd(15, 35) : Infinity;
   if (chap()?.weather) { weather = { k: chap().weather, t: 1e9 }; fx({ k: 'wx', w: weather.k }); sfx('alarm'); } // ch 7: blizzard all chapter
@@ -1916,10 +1936,10 @@ function damage(r, amt, msg) {
   if (r.hitCd > 0) return;
   if (r.kid) { r.hitCd = .7; r.stun = Math.max(r.stun, 2); r.vx = r.vy = 0; say(r, pick(['Auts!', 'Hei!', 'Äiti!']), 1); sfx('kick'); return; } // pvp kid: no battery, just knocked over
   r.hitCd = .7; say(r, msg, 1); bump('dmg'); stats.streak = 0;
-  if (r.cargo) r.cargo.cond = Math.max(0, r.cargo.cond - amt * (1 - .22 * up.susp) * (ORDERS[r.cargo.o].dmg ?? 1));
+  if (r.cargo) r.cargo.cond = Math.max(0, r.cargo.cond - amt * (1 - .28 * up.susp) * (ORDERS[r.cargo.o].dmg ?? 1));
   sfx('crash');
   if (r.immune > 0) return;
-  r.hp = Math.max(0, r.hp - amt * (1 - .22 * up.susp));
+  r.hp = Math.max(0, r.hp - amt * (1 - .28 * up.susp));
   if (r.hp <= 0) { // out cold: a few seconds of sparks, then back up on half a battery
     r.hp = .5; r.stun = Math.max(r.stun, 2.5); r.immune = 3; r.vx = r.vy = 0;
     say(r, 'Rikki! 🔧', 2.5); fx({ k: 'burst', x: r.x, y: r.y, n: 26 }); bump('broke');
@@ -1929,7 +1949,7 @@ function damage(r, amt, msg) {
 function zap(r) {
   r.zaps -= 1; r.zapCd = .4; sfx('zap');
   const fx_ = Math.cos(r.a), fy = Math.sin(r.a);
-  let best = null, bd = 120 + 30 * up.tesla;
+  let best = null, bd = 120 + 50 * up.tesla;
   for (const e of [...peds, ...kids, ...thieves, ...(pvp ? robots.filter(q => q !== r && !q.hole) : [])]) {
     if (e.mode === 'fall') continue;
     const dx = e.x - r.x, dy = e.y - r.y, d = Math.hypot(dx, dy);
@@ -1998,7 +2018,7 @@ function powerUp(r) {
     say(r, '⚡ Ukkosmyrsky!', 2); sfx('zap');
     for (const q of others) { fx({ k: 'zap', x1: r.x, y1: r.y, x2: q.x, y2: q.y }); q.stun = Math.max(q.stun, 1.5); q.vx = q.vy = 0; say(q, 'Bzzzt! ⚡', 1.4); }
   }
-  if (k === 'refill') { r.hookCd = 0; r.zaps = 3 + up.tesla; say(r, '🪝 Koukku ja ⚡ täynnä!', 1.8); }
+  if (k === 'refill') { r.hookCd = 0; r.zaps = 3 + 2 * up.tesla; say(r, '🪝 Koukku ja ⚡ täynnä!', 1.8); }
   if (k === 'pulla') { r.boost = 1; r.hp = 1; say(r, '🥐 Mummon pulla!', 1.8); }
   if (k === 'hole') { // a fresh pothole dug right behind you, for whoever's following
     say(r, '🕳️ Kuoppa taakse!', 1.8);
@@ -2049,7 +2069,7 @@ function updRobot(r, dt) {
   } else r.lagQ = null;
   const inp = r.drunk ? { ...in0, s: clamp(-in0.s + Math.sin(T * 2.3 + r.i) * .7, -1, 1) } : in0; // drunk: steering flips and sways
   if (r.hole) {
-    if (inp.t || inp.s) r.esc += dt * .35 * (1 + .5 * up.susp);
+    if (inp.t || inp.s) r.esc += dt * .35 * [1, 2, 12, 12][up.susp];
     if (r.esc >= 1) { escape(r, 'Ylös! 💪'); bump('holes'); }
     return;
   }
@@ -2076,10 +2096,10 @@ function updRobot(r, dt) {
   if (r.boost >= 1) r.boostLock = false;
   const boosting = !!(inp.b && inp.t > 0 && !r.boostLock && control); // drains to exactly 0 (clamp) so the lock below engages
   if (boosting && !r.boosting) sfx('boost');
-  r.boost = clamp(r.boost + (boosting ? -dt / (2 + .7 * up.turbo) : dt / (7 - 1.5 * up.turbo)), 0, 1);
+  r.boost = clamp(r.boost + (boosting ? -dt / (2 + 1.2 * up.turbo) : dt / (7 - 1.8 * up.turbo)), 0, 1);
   if (r.boost <= 0) r.boostLock = true;
   // stun gun: 3 charges, one recharges every 6 s; zaps the nearest local, dog or kid in front
-  r.zaps = Math.min(3 + up.tesla, r.zaps + dt / 6); r.zapCd -= dt;
+  r.zaps = Math.min(3 + 2 * up.tesla, r.zaps + dt / 6); r.zapCd -= dt;
   if (inp.z && !r.zPrev && control && r.zapCd <= 0 && r.zaps >= 1 && state === 'play') zap(r);
   r.zPrev = !!inp.z;
   r.hookCd -= dt;
@@ -2121,7 +2141,7 @@ function updRobot(r, dt) {
   if (sp > max) { const k = Math.max(max / sp, Math.exp(-3 * dt)); r.vx *= k; r.vy *= k; }
   r.x += r.vx * dt; r.y += r.vy * dt;
   // heated wheels: stay on an ice patch and it melts away (the lake stays frozen)
-  if (up.heat && Sf.ice) for (const p of ice) if (!p.gone && ((r.x - p.x) / p.rx) ** 2 + ((r.y - p.y) / p.ry) ** 2 < 1 && (p.melt = (p.melt || 0) + dt * .6 * up.heat) >= 1) {
+  if (up.heat && Sf.ice) for (const p of ice) if (!p.gone && ((r.x - p.x) / p.rx) ** 2 + ((r.y - p.y) / p.ry) ** 2 < 1 && (p.melt = (p.melt || 0) + dt * [0, .85, 2.5, 99][up.heat]) >= 1) {
     p.gone = true; if (p.mesh) p.mesh.visible = false; pop(r, '🔥 Ice melted', '#ffb35c'); sfx('escape');
   }
   if (state === 'play') { // driving counters
@@ -2132,8 +2152,12 @@ function updRobot(r, dt) {
   }
 
   if (r.immune <= 0) for (const h of holes) if (Math.hypot(r.x - h.x, r.y - h.y) < h.r) {
+    if (up.susp >= 3) { // suspension 3: over it with a bump, once per pothole until another one
+      if (r.overH !== h) { r.overH = h; if (r.cargo) r.cargo.cond = Math.max(0, r.cargo.cond - .04 * (ORDERS[r.cargo.o].dmg ?? 1)); pop(r, '🛞 Over it', '#9fd3ff'); sfx('kick'); }
+      break;
+    }
     r.hole = h; r.esc = 0; r.x = h.x; r.y = h.y; r.vx = r.vy = 0; bump('holeIn');
-    if (r.cargo) r.cargo.cond = Math.max(0, r.cargo.cond - .15 * (1 - .22 * up.susp) * (ORDERS[r.cargo.o].dmg ?? 1));
+    if (r.cargo) r.cargo.cond = Math.max(0, r.cargo.cond - .15 * (1 - .28 * up.susp) * (ORDERS[r.cargo.o].dmg ?? 1));
     say(r, 'Apua! 🆘', 3); sfx('hole');
     return;
   }
@@ -2172,11 +2196,11 @@ function updRobot(r, dt) {
     const sled = chap()?.goal === 'sled' && r === robots[0] && delivered >= quota - 1 && !goalDone;
     const o = sled ? SLED : pickOrder(), O = ORDERS[o], dest = O.home ? KIDS_HOME : pick(near);
     // each order has a deadline: arrive in time for the speed tip
-    r.cargo = { dest, o, cond: 1, t0: T, t: Math.round((8 + dist(shop.door, HOUSES[dest].door) / 60) * (O.time || 1) * (1 + .15 * up.box)) };
+    r.cargo = { dest, o, cond: 1, t0: T, t: Math.round((8 + dist(shop.door, HOUSES[dest].door) / 60) * (O.time || 1) * (1 + .25 * up.box)) };
     say(r, `${O.icon} → ${dest + 1}`); pop(r, O.name, '#fff'); sfx('pickup');
   } else if (r.cargo && dist(r, HOUSES[r.cargo.dest].door) < 45 && (!isDuo(r) || helper(r) || campaign && robots.length === 1)) {
     const c = r.cargo, O = ORDERS[c.o], late = c.t <= 0, tipX = O.tipX || 1;
-    const pay = Math.round(((late ? 10 : 20) + (O.bonus || 0) + Math.round(15 * c.cond) + (late ? 0 : Math.min(20 * tipX, Math.round(c.t * tipX)))) * (1 + .1 * up.box));
+    const pay = Math.round(((late ? 10 : 20) + (O.bonus || 0) + Math.round(15 * c.cond) + (late ? 0 : Math.min(20 * tipX, Math.round(c.t * tipX)))) * (1 + .25 * up.box));
     money += pay; score += pay; r.earn += pay; delivered += O.duo ? 2 : 1;
     const h = O.duo && helper(r); if (h) { say(h, 'Hyvä tiimi! 🛋️'); pop(h, '🛋️ Teamwork', '#9fd3ff'); }
     if (c.o === EETU) { goalDone = true; goalT = T; eetu.state = 'home'; say(r, 'Kotona! 💛', 2); }
@@ -2511,11 +2535,11 @@ function update(dt) {
 }
 
 // ---------- 3D sync ----------
-const goldMat = new THREE.MeshStandardMaterial({ color: '#e8c547', roughness: .28, metalness: .9 });
+const goldMat = new Std({ color: '#e8c547', roughness: .28, metalness: .9 });
 let lastFreeze = false;
 function applyWeatherLook(dt) {
   const bl = weather.k === 'blizzard', k = Math.min(1, dt * 1.5);
-  scene.fog.near += ((bl ? 4 : 60) - scene.fog.near) * k; scene.fog.far += ((bl ? 38 : 220) - scene.fog.far) * k;
+  scene.fog.near += ((bl ? 4 : 60) - scene.fog.near) * k; scene.fog.far += ((bl ? 38 : FOG_FAR) - scene.fog.far) * k;
   snowGeo.setDrawRange(0, bl ? SNOW_N : snowCount);
   const fz = weather.k === 'freeze';
   if (fz !== lastFreeze) { // glaze the world blue while freezing rain lasts
@@ -2533,7 +2557,7 @@ function updCameras(dt) {
   // shadows, snowfall and lamp lights cover one block's worth, so they follow the local players
   const mine = robots.filter(r => r.owner === myOwner), fx = state === 'title' || !mine.length ? BW / 2 : mine.reduce((t, r) => t + r.x, 0) / mine.length;
   const wx = fx * S - OX;
-  sun.position.set(wx - 60, 70, 55); sun.target.position.set(wx, 0, 0); sun.target.updateMatrixWorld();
+  if (shadowNow) sun.position.set(wx - 60, 70, 55), sun.target.position.set(wx, 0, 0); sun.target.updateMatrixWorld();
   snow.position.x = wx; moveLamps(fx);
   // third-person chase cam per robot; yaw lags behind so ice slides feel like slides
   for (const r of robots) {
@@ -2941,7 +2965,7 @@ function drawTag(v) { // the player's own order sign at the bottom of their view
   ctx.fillText('Boost', px + 11, py + 13); ctx.fillText('Zap', px + 146, py + 13);
   ctx.fillStyle = '#d8e0e8'; rr(px + 50, py + 8, 84, 8, 2); ctx.fill();
   ctx.fillStyle = r.boost > .02 && !r.boostLock ? BLUE : '#9aa5b1'; rr(px + 50, py + 8, 84 * r.boost, 8, 2); ctx.fill();
-  const nz = 3 + up.tesla, zs = 51 / nz, zw = zs - (nz > 3 ? 2 : 5); // tesla coil adds pips, squeeze them in
+  const nz = 3 + 2 * up.tesla, zs = 51 / nz, zw = zs - (nz > 3 ? 2 : 5); // tesla coil adds pips, squeeze them in
   for (let k = 0; k < nz; k++) {
     const f = clamp((r.zaps ?? 3) - k, 0, 1), zx = px + 172 + k * zs;
     ctx.fillStyle = '#d8e0e8'; rr(zx, py + 6, zw, 12, 2); ctx.fill();
@@ -3185,7 +3209,7 @@ function updateDOM() {
   $('hud').hidden = !play;
   if (play) {
     setText('hShiftLbl', campaign ? 'Chapter' : 'Shift'); setText('hShift', level); setText('hTime', Math.ceil(time)); setText('hMoney', money); setText('hDel', `${delivered} / ${quota}`);
-    $('hBat').style.width = clamp(time / (75 + level * 5 + up.battery * 12), 0, 1) * 100 + '%';
+    $('hBat').style.width = clamp(time / (80 + level * 3 + up.battery * 20), 0, 1) * 100 + '%';
     $('hBatPlate').classList.toggle('low', time < 15);
     const pk = `${delivered}/${quota}`;
     if (pk !== pipsKey) { pipsKey = pk; $('hPips').innerHTML = quota <= 12 ? Array.from({ length: quota }, (_, i) => `<i class="${i < delivered ? 'on' : ''}"></i>`).join('') : ''; }
@@ -3232,12 +3256,13 @@ function updateDOM() {
   const sk = JSON.stringify([state, money, up, role, level]);
   if (state === 'shop' && sk !== shopKey) {
     shopKey = sk;
-    setText('shopSub', campaign ? `${CHAPTERS[chapter].title} done. ${CHAPTERS[chapter].outro || ''}` : `Shift ${level} done. Agree on an upgrade before the next one.`);
+    setText('shopSub', campaign ? `${CHAPTERS[chapter].title} done. ${CHAPTERS[chapter].outro || ''}` : `Shift ${level} done. Next: ${quota + 1} orders in ${Math.round((83 + level * 3 + up.battery * 20) * Math.max(.6, 1 - coopX() * .2))} s, ${hz(4 + level * 2) * BLOCKS} ice patches and as many potholes. Buy for that.`);
     setText('shopBonus', `+${bonus} €`); setText('shopMoney', `${money} €`);
     for (const b of document.querySelectorAll('.card')) {
       const u = SHOP.find(u => u.k === b.dataset.k), lv = up[u.k], style = isStyle(u.k), price = PRICES[lv];
       b.disabled = !style && (lv >= 3 || money < price); b.classList.toggle('owned', style ? !!lv : lv >= 3);
       b.querySelector('.lv').innerHTML = `<kbd>${u.key}</kbd>` + (style ? '' : Array.from({ length: 3 }, (_, i) => `<i class="${i < lv ? 'on' : ''}"></i>`).join(''));
+      if (u.lv) b.querySelector('small').textContent = lv >= 3 ? u.lv[2] : `Level ${lv + 1}: ${u.lv[lv]}`;
       b.querySelector('.price').textContent = style ? (lv ? 'On' : 'Free') : lv >= 3 ? 'Maxed' : `${price} €`;
     }
     $('bNext').disabled = role === 'guest';
@@ -3279,19 +3304,23 @@ function updateDOM() {
 let menuOpen = false, paused = false, hostPaused = false, fps = 60;
 const frozen = () => paused;
 const cfg = { music: 1, sfx: 1, shadows: true, scale: 1 };
-// ponytail: dynamic resolution. Below 45 fps drop pixels (phones), above 57 win them back; floor .6 so a 30 Hz
-// low-power-mode screen doesn't go blurry. cfg.scale stays the user's ceiling.
-let dynRes = 1, dynT = 0;
+// ponytail: dynamic resolution. The target is 60 fps on phones and 120 on computers, or the screen's own rate if that
+// is lower (peak = the best fps this screen has shown). Under 92 % of it drop pixels; win them back only after 20 s
+// without a drop, so it doesn't flip every 2 s. Floor .5; a 30 Hz low-power screen has peak 30 and never drops.
+// cfg.scale stays the user's ceiling.
+let dynRes = 1, dynT = 0, peak = 30, dropT = 0;
 function adaptRes(raw) {
-  if ((dynT += raw) < 2 || state !== 'play') return; dynT = 0;
-  const n = fps < 45 ? Math.max(.6, dynRes - .15) : fps > 57 ? Math.min(1, dynRes + .1) : dynRes;
+  peak = Math.max(peak, Math.min(fps, MOBILE ? 60 : 120));
+  if ((dynT += raw) < 2 || state !== 'play') return; dynT = 0; dropT += 2;
+  const n = fps < peak * .92 ? Math.max(.5, dynRes - .15) : dropT > 20 ? Math.min(1, dynRes + .1) : dynRes;
+  if (n < dynRes) dropT = 0;
   if (n !== dynRes) { dynRes = n; applyCfg(); }
 }
 try { Object.assign(cfg, JSON.parse(localStorage.getItem('ruokarobo-cfg') || '{}')); } catch (e) {}
 function applyCfg() {
   try { localStorage.setItem('ruokarobo-cfg', JSON.stringify(cfg)); } catch (e) {}
   sun.castShadow = cfg.shadows;
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 2) * cfg.scale * dynRes); resize();
+  renderer.setPixelRatio(Math.min(devicePixelRatio, PX) * cfg.scale * dynRes); resize();
 }
 $('sMusic').value = cfg.music; $('sSfx').value = cfg.sfx; $('sShadows').checked = cfg.shadows; $('sScale').value = cfg.scale;
 $('sMusic').oninput = e => { cfg.music = +e.target.value; applyCfg(); };
@@ -3401,21 +3430,37 @@ setupLevel(1);
   const sp = new THREE.SpotLight(); scene.add(sp); lampLights.forEach(l => l.visible = true);
   renderer.compile(scene, camera); scene.remove(sp); lampLights.forEach(l => l.visible = darkness > 0);
 }
-let last = performance.now();
+let last = performance.now(), shadowNow = true;
+// ?perf: per-phase CPU ms (render includes the GPU: gl.finish) logged every 2 s, also on window.__perf
+const PERF = location.search.includes('perf') && { n: 0, t0: performance.now(), ms: {}, worst: 0, x: +new URLSearchParams(location.search).get('perf') || 1 }; // ?perf=N draws every frame N times: raise N until fps drops and 1000 / fps / N is the true GPU ms per frame
+const lap = PERF ? (k, t) => { const n = performance.now(); PERF.ms[k] = (PERF.ms[k] || 0) + n - t; return n; } : () => 0;
 renderer.setAnimationLoop(now => {
   const raw = (now - last) / 1000, dt = Math.min(.05, raw); last = now;
   if (raw > 0) fps += (1 / raw - fps) * .05;
-  update(dt); sync(frozen() ? 0 : dt); adaptRes(raw);
+  let pt = PERF ? performance.now() : 0; const pt0 = pt;
+  shadowNow = !MOBILE || !shadowNow; // phones redraw the shadow map every other frame: it is half the triangles of a frame
+  update(dt); pt = lap('update', pt); sync(frozen() ? 0 : dt); pt = lap('sync', pt); if (!(PERF.x > 1)) adaptRes(raw); // a load test must not rescale itself
   const vs = views();
-  renderer.shadowMap.needsUpdate = true;
+  renderer.shadowMap.needsUpdate = shadowNow;
   renderer.setScissorTest(true);
   for (const v of vs) {
     v.cam.aspect = v.w / v.h; v.cam.far = scene.fog.far + 5; v.cam.updateProjectionMatrix(); // past the fog is just sky colour: don't draw it
     renderer.setViewport(v.x, vh - v.y - v.h, v.w, v.h); renderer.setScissor(v.x, vh - v.y - v.h, v.w, v.h);
     renderer.render(scene, v.cam);
+    for (let i = 1; i < PERF.x; i++) { renderer.shadowMap.needsUpdate = true; renderer.render(scene, v.cam); }
   }
-  drawUI(vs);
-  updateDOM();
+  if (PERF) { renderer.getContext().finish(); pt = lap('render', pt); }
+  drawUI(vs); pt = lap('ui', pt);
+  updateDOM(); pt = lap('dom', pt);
+  if (PERF) {
+    PERF.worst = Math.max(PERF.worst, pt - pt0);
+    if (++PERF.n && pt - PERF.t0 > 2000) {
+      const o = { fps: Math.round(PERF.n / (pt - PERF.t0) * 1000), worst: +PERF.worst.toFixed(1), calls: renderer.info.render.calls, tris: renderer.info.render.triangles, px: renderer.getPixelRatio(), state };
+      let tot = 0; for (const k in PERF.ms) tot += o[k] = +(PERF.ms[k] / PERF.n).toFixed(2); o.total = +tot.toFixed(2);
+      console.log('perf ' + JSON.stringify(window.__perf = o));
+      (PERF.el ||= document.body.appendChild(Object.assign(document.createElement('div'), { style: 'position:fixed;left:50%;bottom:4px;transform:translateX(-50%);z-index:99;font:12px monospace;color:#fff;background:#000a;padding:2px 6px;pointer-events:none' }))).textContent = `${o.fps} fps · ${o.total} ms · res ${o.px.toFixed(2)} · ${o.calls} calls`; Object.assign(PERF, { n: 0, t0: pt, ms: {}, worst: 0 });
+    }
+  }
   $('touch').hidden = !touchDev || state !== 'play' || menuOpen; // only while driving: on the title they sat on top of the menu
   $('tBall').hidden = !pvp;
   musicTick();
