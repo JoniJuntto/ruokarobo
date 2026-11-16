@@ -282,8 +282,7 @@
       <circle cx="21" cy="54" r="6" fill="#fff"/><circle cx="41" cy="54" r="6" fill="#fff"/><circle cx="61" cy="54" r="6" fill="#fff"/>
     </svg>
     <h1>Ruokarobo</h1>
-    <p>Deliver groceries from the real Alepa and S-market shops around Helsinki Central Station, Kamppi to Kruununhaka, through ice, potholes and very grumpy neighbours.</p>
-    <p style="font-size:11px;opacity:.7;margin-top:6px">Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener" style="color:inherit">OpenStreetMap</a> contributors</p>
+    <p>Deliver groceries from the corner shops to every door on the street, through ice, potholes and very grumpy neighbours.</p>
   </div>
   <div class="plate white" id="keys">
     <table>
@@ -310,6 +309,7 @@
     <input id="pname" placeholder="Name" maxlength="12" autocomplete="off" aria-label="Name for the leaderboard">
     <button class="go" id="bStart">Start shift</button>
     <button class="ghost" id="bRoam">Free roam</button>
+    <button class="ghost" id="bMap">🏙 Helsinki map</button>
     <button class="ghost mode" id="bMode" hidden>Mode: Co-op</button>
     <button class="go" id="bStory">Story</button>
     <button class="ghost" id="bNewStory" hidden>New story</button>
@@ -392,7 +392,6 @@
 
 <div id="achs"></div>
 <div id="touch" hidden><div id="stick"><div id="knob"></div></div><button id="tBoost" class="tbtn">Boost</button><button id="tBrake" class="tbtn">Brake</button><button id="tZap" class="tbtn">Zap</button><button id="tHook" class="tbtn">Hook</button><button id="tBall" class="tbtn" hidden>Snow</button><button id="tHorn" class="tbtn">Tööt</button></div>
-<script src="helsinki.js"></script>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.min.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 <script defer src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script type="module">
@@ -401,263 +400,65 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-// Simulation runs on central Helsinki, baked from OpenStreetMap into helsinki.js (tools/bake_helsinki.py):
-// 16 px per metre, x east, y south, the Central Station in the middle. Rendering maps px → 3D units.
-const MAP = window.HKI;
-const MOBILE = matchMedia('(pointer: coarse)').matches || location.search.includes('mobile'); // phones/tablets: lighter shadows, fewer lamp lights and trees
-const W = MAP.W, H = MAP.H, R = 7, S = .1, OX = W * S / 2, OZ = H * S / 2, PPM = MAP.ppm;
+// Simulation runs on a flat 8000x900 map (px): five 1600px blocks along one road. Rendering maps px → 3D units.
+const BW = 1600, BLOCKS = 5, W = BW * BLOCKS, H = 900, R = 7, S = .1, OX = W * S / 2, OZ = H * S / 2;
+const inR = (x, y, p) => x >= p[0] && x <= p[0] + p[2] && y >= p[1] && y <= p[1] + p[3];
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const rnd = (a, b) => a + Math.random() * (b - a);
 const pick = a => a[Math.random() * a.length | 0];
-const pts = (a, from = 0) => { const o = []; for (let i = from; i + 1 < a.length; i += 2) o.push({ x: a[i], y: a[i + 1] }); return o; };
-const seeded = s => () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296; // same numbers on every client
 
 // ---------- map ----------
-const ZONE = 260 * PPM; // hazards, pedestrians and traffic gather within this of a shop: where the deliveries are
-const BLOCKS = MAP.shops.length; // per-level hazard counts were "per block, one shop each": now per shop
-const SHOP_LOOK = { Alepa: ['ALEPA', '#f28c00'], 'S-market': ['S-MARKET', '#d7261e'] };
-const SHOPS = MAP.shops.map(([brand, street, no, x, y, nx, ny], k) => ({ name: SHOP_LOOK[brand][0], color: SHOP_LOOK[brand][1],
-  tag: String.fromCharCode(65 + k), addr: `${street} ${no}`, door: { x, y }, nx, ny }));
-const nearShop = p => SHOPS.reduce((a, b) => dist(p, a.door) <= dist(p, b.door) ? a : b);
-const HOUSES = MAP.houses.map(([street, no, x, y, nx, ny], i) => ({ door: { x, y }, nx, ny, no, addr: `${street} ${no}`, n: i + 1 }));
-const KIDS_HOME = MAP.kidsHome; // campaign: the kids' house on the shore, paper star in the window
-const AVANTO = { x: MAP.avanto[0], y: MAP.avanto[1], r: 20 }; // ice-swimming hole out on the frozen bay, by the sauna pier
-const SAUNA = { x: AVANTO.x + 75, y: AVANTO.y - 25, w: 70, h: 50 };
-const STATUE = { x: MAP.statue[0] - 20, y: MAP.statue[1] - 20, w: 40, h: 40 }; // Olli Lindholm in bronze, Kaisaniemi park
-const SOLIDS = [SAUNA, STATUE]; // rectangles; the city's buildings collide through their walls (wallPush)
-const DOORS = [...SHOPS.map(b => b.door), ...HOUSES.map(h => h.door)];
-
-// surface raster, one cell per metre: canvas 2D fills the shapes, then each pixel's colour says what it is
-const CELL = PPM, GW = Math.ceil(W / CELL), GH = Math.ceil(H / CELL);
-const G_SNOW = 0, G_PATH = 1, G_ROAD = 2, G_ICE = 3, G_WALL = 4;
-const grid = new Uint8Array(GW * GH);
-const cellAt = (x, y) => grid[clamp(y / CELL | 0, 0, GH - 1) * GW + clamp(x / CELL | 0, 0, GW - 1)];
-const TRAMS = MAP.rails.filter(r => r[0] === 1).map(r => [104, 0, ...r.slice(1)]); // tram tracks are paved like a road
-const ROADS = [...MAP.roads, ...TRAMS];
-{
-  const c = document.createElement('canvas'); c.width = GW; c.height = GH;
-  const g = c.getContext('2d', { willReadFrequently: true }); g.scale(1 / CELL, 1 / CELL);
-  g.lineCap = g.lineJoin = 'round';
-  const line = (a, from) => { g.beginPath(); for (let i = from; i + 1 < a.length; i += 2) i === from ? g.moveTo(a[i], a[i + 1]) : g.lineTo(a[i], a[i + 1]); g.stroke(); };
-  const poly = (a, from = 0) => { g.beginPath(); for (let i = from; i + 1 < a.length; i += 2) g.lineTo(a[i], a[i + 1]); g.closePath(); g.fill(); };
-  g.fillStyle = '#000'; g.fillRect(0, 0, W, H);
-  g.strokeStyle = g.fillStyle = '#0f0';
-  for (const r of ROADS) { g.lineWidth = r[0] + 5 * PPM; line(r, 2); } // a sidewalk along every street, mapped or not
-  for (const w of MAP.walks) { g.lineWidth = w[0]; line(w, 1); }
-  MAP.areas.forEach(a => poly(a)); MAP.piers.forEach(a => poly(a));
-  g.strokeStyle = '#f00';
-  for (const r of ROADS) { g.lineWidth = r[0]; line(r, 2); }
-  g.fillStyle = '#00f'; MAP.water.forEach(a => poly(a));
-  g.fillStyle = '#fff'; MAP.buildings.forEach(b => poly(b, 1));
-  const px = g.getImageData(0, 0, GW, GH).data;
-  for (let i = 0; i < GW * GH; i++) {
-    const r = px[i * 4], gr = px[i * 4 + 1], b = px[i * 4 + 2];
-    grid[i] = r > 100 && gr > 100 && b > 100 ? G_WALL : b > 100 ? G_ICE : r > 100 ? G_ROAD : gr > 100 ? G_PATH : G_SNOW;
-  }
-  // the sea: OSM draws only its shore, so flood the snow on the water side of each coastline, walled in by the coast itself
-  g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = '#000'; g.fillRect(0, 0, GW, GH); g.scale(1 / CELL, 1 / CELL);
-  g.strokeStyle = '#fff'; g.lineWidth = 2.5 * CELL; MAP.coast.forEach(a => line(a, 0));
-  const wall = g.getImageData(0, 0, GW, GH).data, stack = [];
-  for (const s of pts(MAP.seaSeeds)) {
-    const i0 = (s.y / CELL | 0) * GW + (s.x / CELL | 0);
-    if (grid[i0] !== G_SNOW || wall[i0 * 4] > 60) continue;
-    const filled = []; stack.push(i0); grid[i0] = G_ICE;
-    while (stack.length) {
-      const i = stack.pop(); filled.push(i);
-      const x = i % GW;
-      for (const j of [x > 0 ? i - 1 : -1, x < GW - 1 ? i + 1 : -1, i - GW, i + GW])
-        if (j >= 0 && j < grid.length && grid[j] === G_SNOW && wall[j * 4] <= 60) { grid[j] = G_ICE; stack.push(j); }
-    }
-    if (filled.length > grid.length * .3) { stack.length = 0; for (const i of filled) grid[i] = G_SNOW; } // leaked onto land: a seed on the wrong side
-  }
-  for (let i = 0; i < GW * GH; i++) if (grid[i] === G_SNOW && wall[i * 4] > 60) { // the shore line itself: ice if it touches ice
-    const x = i % GW; if ((x > 0 && grid[i - 1] === G_ICE) || (x < GW - 1 && grid[i + 1] === G_ICE)) grid[i] = G_ICE;
-  }
-}
-const nearKind = (x, y, rad, kind) => { // is any cell of this kind within rad px (a square around the point)?
-  const n = Math.ceil(rad / CELL);
-  for (let j = -n; j <= n; j++) for (let i = -n; i <= n; i++) if (cellAt(x + i * CELL, y + j * CELL) === kind) return true;
-  return false;
-};
-const inLake = (x, y, m = 0) => m ? nearKind(x, y, m, G_ICE) : cellAt(x, y) === G_ICE;
-
-// building walls, hashed by 8 m cell; each wall is listed in every cell within 32 px of it, so one lookup is enough
-const WH = 128, wallHash = new Map(), BPOLY = MAP.buildings.map(b => pts(b, 1));
-BPOLY.forEach((ps, bi) => ps.forEach((p, k) => {
-  const q = ps[(k + 1) % ps.length], s = [p.x, p.y, q.x, q.y, bi];
-  for (let i = Math.floor((Math.min(p.x, q.x) - 32) / WH); i <= Math.floor((Math.max(p.x, q.x) + 32) / WH); i++)
-    for (let j = Math.floor((Math.min(p.y, q.y) - 32) / WH); j <= Math.floor((Math.max(p.y, q.y) + 32) / WH); j++) {
-      const key = i * 4096 + j; (wallHash.get(key) ?? wallHash.set(key, []).get(key)).push(s);
-    }
-}));
-function segPoint(x, y, s) { // closest point on wall s to (x, y)
-  const dx = s[2] - s[0], dy = s[3] - s[1], u = clamp(((x - s[0]) * dx + (y - s[1]) * dy) / (dx * dx + dy * dy || 1), 0, 1);
-  return [s[0] + u * dx, s[1] + u * dy];
-}
-function inPoly(x, y, ps) {
-  let c = false;
-  for (let i = 0, j = ps.length - 1; i < ps.length; j = i++)
-    if ((ps[i].y > y) !== (ps[j].y > y) && x < (ps[j].x - ps[i].x) * (y - ps[i].y) / (ps[j].y - ps[i].y) + ps[i].x) c = !c;
-  return c;
-}
-// shove o out of every building wall within rad; returns the hardest impact (pushOut's "speed into the wall")
-function wallPush(o, rad) {
-  const list = wallHash.get(Math.floor(o.x / WH) * 4096 + Math.floor(o.y / WH));
-  if (!list) return 0;
-  if (cellAt(o.x, o.y) === G_WALL && list.some(s => inPoly(o.x, o.y, BPOLY[s[4]]))) { // got inside (spawned, flung by a car): out the nearest wall
-    let best = Infinity, bx = 0, by = 0;
-    for (const s of list) { const [cx, cy] = segPoint(o.x, o.y, s), d = Math.hypot(cx - o.x, cy - o.y); if (d < best) { best = d; bx = cx; by = cy; } }
-    const d = best || 1; o.x = bx + (bx - o.x) / d * (rad + 1); o.y = by + (by - o.y) / d * (rad + 1);
-  }
-  let hit = 0;
-  for (const s of list) { const [cx, cy] = segPoint(o.x, o.y, s); hit = Math.max(hit, pushOut(o, cx, cy, rad)); }
-  return hit;
-}
-function collide(o, rad) {
-  let hit = wallPush(o, rad);
-  for (const b of SOLIDS) hit = Math.max(hit, pushOut(o, clamp(o.x, b.x, b.x + b.w), clamp(o.y, b.y, b.y + b.h), rad));
-  return hit;
-}
-
-// street networks. OSM ways share their junction nodes, and the bake rounds every node to whole px, so equal coords = same node
-function graph() {
-  const id = new Map(), nodes = [], adj = [], hash = new Map();
-  const nid = (x, y) => {
-    const k = x * 65536 + y; let i = id.get(k);
-    if (i === undefined) {
-      id.set(k, i = nodes.length); nodes.push({ x, y }); adj.push([]);
-      const hk = (x >> 8) * 4096 + (y >> 8); (hash.get(hk) ?? hash.set(hk, []).get(hk)).push(i);
-    }
-    return i;
-  };
-  return { nodes, adj, nid, hash };
-}
-const onMap = (x, y) => x > 0 && y > 0 && x < W && y < H;
-function nearNode(g, x, y, maxR = 6) { // nearest node, searching 256 px rings outwards
-  let best = -1, bd = Infinity;
-  const cx = x >> 8, cy = y >> 8;
-  for (let r = 0; r <= maxR; r++) {
-    for (let i = cx - r; i <= cx + r; i++) for (let j = cy - r; j <= cy + r; j++) {
-      if (Math.max(Math.abs(i - cx), Math.abs(j - cy)) !== r) continue;
-      for (const n of g.hash.get(i * 4096 + j) ?? []) { const d = Math.hypot(g.nodes[n].x - x, g.nodes[n].y - y); if (d < bd) { bd = d; best = n; } }
-    }
-    if (best >= 0 && bd < r * 256) break;
-  }
-  return best;
-}
-const CG = graph(); // cars: drivable streets, one way where OSM says so; an edge knows its lane offset
-for (const r of MAP.roads) {
-  if (!(r[1] & 1)) continue;
-  const one = r[1] & 2, back = r[1] & 4, off = one ? 0 : r[0] / 4;
-  for (let i = 2; i + 3 < r.length; i += 2) {
-    if (!onMap(r[i], r[i + 1]) || !onMap(r[i + 2], r[i + 3])) continue;
-    const a = CG.nid(r[i], r[i + 1]), b = CG.nid(r[i + 2], r[i + 3]);
-    if (!back) CG.adj[a].push({ to: b, off, w: r[0] });
-    if (!one || back) CG.adj[b].push({ to: a, off, w: r[0] });
-  }
-}
-const WG = graph(), RG = graph(); // WG: sidewalks and paths, for people on foot. RG: everything, for robots' GPS route
-const link = (g, a, from) => { for (let i = from; i + 3 < a.length; i += 2) { const p = g.nid(a[i], a[i + 1]), q = g.nid(a[i + 2], a[i + 3]); if (p !== q) { g.adj[p].push(q); g.adj[q].push(p); } } };
-for (const w of MAP.walks) { link(WG, w, 1); link(RG, w, 1); }
-for (const r of ROADS) link(RG, r, 2);
-{ // GPS snaps only to the biggest connected network: dropping tunnels and passages through buildings leaves little islands
-  const comp = new Int32Array(RG.nodes.length).fill(-1), size = [];
-  for (let s = 0; s < comp.length; s++) {
-    if (comp[s] >= 0) continue;
-    const c = size.length, st = [s]; comp[s] = c; size.push(0);
-    while (st.length) { const u = st.pop(); size[c]++; for (const v of RG.adj[u]) if (comp[v] < 0) { comp[v] = c; st.push(v); } }
-  }
-  const main = size.indexOf(Math.max(...size));
-  for (const [k, list] of RG.hash) RG.hash.set(k, list.filter(n => comp[n] === main));
-}
-// A* from a to b over g; a list of points to drive through, ending at b
-function findRoute(g, a, b) {
-  const s = nearNode(g, a.x, a.y), t = nearNode(g, b.x, b.y);
-  if (s < 0 || t < 0) return [b];
-  const N = g.nodes.length, cost = new Float64Array(N).fill(Infinity), prev = new Int32Array(N).fill(-1), T = g.nodes[t];
-  const hq = [], push = (f, n) => { hq.push([f, n]); let i = hq.length - 1; while (i) { const p = (i - 1) >> 1; if (hq[p][0] <= hq[i][0]) break; [hq[p], hq[i]] = [hq[i], hq[p]]; i = p; } };
-  const pop = () => { const top = hq[0], last = hq.pop(); if (hq.length) { hq[0] = last; let i = 0; for (;;) { const l = 2 * i + 1, r = l + 1; let m = i; if (l < hq.length && hq[l][0] < hq[m][0]) m = l; if (r < hq.length && hq[r][0] < hq[m][0]) m = r; if (m === i) break; [hq[m], hq[i]] = [hq[i], hq[m]]; i = m; } } return top; };
-  cost[s] = 0; push(0, s);
-  while (hq.length) {
-    const [f, u] = pop();
-    if (u === t) break;
-    const U = g.nodes[u];
-    if (f > cost[u] + Math.hypot(U.x - T.x, U.y - T.y) + 1e-6) continue;
-    for (const v of g.adj[u]) {
-      const V = g.nodes[v], c = cost[u] + Math.hypot(V.x - U.x, V.y - U.y);
-      if (c < cost[v]) { cost[v] = c; prev[v] = u; push(c + Math.hypot(V.x - T.x, V.y - T.y), v); }
-    }
-  }
-  if (prev[t] < 0 && s !== t) return [b];
-  const out = [b]; for (let n = t; n >= 0; n = prev[n]) out.push(g.nodes[n]);
-  return out.reverse();
-}
-// a random point near a shop (or near `c`) whose surface is one of `kinds`, away from doors
-function zonePoint(kinds, c = pick(SHOPS).door, rad = ZONE, doorGap = 80) {
-  for (let i = 0; i < 400; i++) {
-    const a = rnd(0, 7), d = Math.sqrt(Math.random()) * rad, x = c.x + Math.cos(a) * d, y = c.y + Math.sin(a) * d;
-    if (onMap(x, y) && kinds.includes(cellAt(x, y)) && !DOORS.some(q => Math.hypot(q.x - x, q.y - y) < doorGap)) return { x, y };
-  }
-  return { ...c };
-}
-const _zone = new Map();
-function pathPoint(c = pick(SHOPS).door, rad = ZONE) { // a sidewalk node near a shop: where people walk
-  const k = `${c.x},${c.y},${rad}`;
-  const list = _zone.get(k) ?? _zone.set(k, WG.nodes.flatMap((n, i) => WG.adj[i].length && Math.hypot(n.x - c.x, n.y - c.y) < rad ? [i] : [])).get(k);
-  const i = list.length ? pick(list) : nearNode(WG, c.x, c.y);
-  return { x: WG.nodes[i].x, y: WG.nodes[i].y, ni: i, pi: -1 };
-}
-const walkOn = p => { const n = wander(p); return { tx: n.x, ty: n.y, ni: p.ni, pi: p.pi }; };
-// next sidewalk node for someone walking: onwards, not back where they came from unless it's a dead end
-function wander(p) {
-  const n0 = p.ni >= 0 ? WG.nodes[p.ni] : null;
-  if (!n0 || Math.hypot(n0.x - p.x, n0.y - p.y) > 40) { p.ni = nearNode(WG, p.x, p.y); p.pi = -1; }
-  else { const nb = WG.adj[p.ni].filter(n => n !== p.pi), nx = nb.length ? pick(nb) : p.pi >= 0 ? p.pi : p.ni; p.pi = p.ni; p.ni = nx; }
-  return WG.nodes[p.ni] ?? p;
-}
-const CROSS = pts(MAP.crossings).filter(c => cellAt(c.x, c.y) === G_ROAD); // zebra crossings: drivers stop for robots
-// item boxes (pvp): five on the streets around each shop, the same spots on every client
-const BOXES = (() => {
-  const rng = seeded(7), out = [];
-  for (const s of SHOPS) for (let k = 0, tries = 0; k < 5 && tries < 500; tries++) {
-    const a = rng() * 7, d = (40 + rng() * 120) * PPM, x = s.door.x + Math.cos(a) * d, y = s.door.y + Math.sin(a) * d;
-    if (onMap(x, y) && cellAt(x, y) === G_ROAD && !out.some(b => Math.hypot(b.x - x, b.y - y) < 40 * PPM)) { out.push({ x, y, t: 0 }); k++; }
-  }
-  return out;
-})();
+const BX = Array.from({ length: BLOCKS }, (_, k) => k * BW); // left edge of each block
+const PATHS = [[0, 560, W, 40], [0, 720, W, 40], ...BX.flatMap(bx => [[bx + 620, 256, 40, 304], [bx + 400, 220, 950, 36], [bx + 1300, 256, 40, 304]])];
+const ROAD = [0, 600, W, 120];
+// item boxes: a row across the road mid-block plus one on each sidewalk; t = seconds until it respawns
+const BOXES = BX.flatMap(bx => [{ x: bx + 960, y: 625 }, { x: bx + 960, y: 660 }, { x: bx + 960, y: 695 }, { x: bx + 300, y: 580 }, { x: bx + 1450, y: 740 }]).map(b => ({ ...b, t: 0 }));
 const LAG = 1; // 3G input delay in seconds; the knob for how awful it feels
-// robots start on the sidewalk outside the shop by the station: the first sidewalk cells, ring by ring, 40 px apart
-const SPAWNS = (() => {
-  const d = SHOPS[0].door, out = [];
-  for (let r = 0; out.length < 8 && r < 60; r++) for (let j = -r; j <= r; j++) for (let i = -r; i <= r; i++) {
-    if (Math.max(Math.abs(i), Math.abs(j)) !== r || out.length >= 8) continue;
-    const x = d.x + i * 20 + 10, y = d.y + j * 20 + 10;
-    if (cellAt(x, y) === G_PATH && !nearKind(x, y, 24, G_WALL) && !nearKind(x, y, 8, G_ROAD) && out.every(p => Math.hypot(p.x - x, p.y - y) >= 40)) out.push({ x, y });
-  }
-  return out;
-})();
-const LAMPS = pts(MAP.lamps).filter(l => cellAt(l.x, l.y) !== G_WALL);
+const CROSS = BX.flatMap(bx => [[bx + 620, 600, 40, 120], [bx + 1300, 600, 40, 120]]);
+const LAKE = { x: 980, y: 400, rx: 210, ry: 95 };
+const AVANTO = { x: 1100, y: 420, r: 20 }; // ice-swimming hole by the sauna pier
+// one shop per block; the lake, avanto and sauna stay in the first block
+const SHOPS = [['SALEPA', '#e8501f', 'A'], ['PUOTI', '#2d6fd6', 'B'], ['KIOSKI', '#2f9e57', 'C'], ['MARKETTI', '#c02a7a', 'D'], ['KAUPPA', '#7a4fc9', 'E']]
+  .map(([name, color, tag], k) => ({ x: BX[k] + 30, y: 330, w: 190, h: 200, door: { x: BX[k] + 125, y: 552 }, name, color, tag }));
+const nearShop = p => SHOPS.reduce((a, b) => dist(p, a.door) <= dist(p, b.door) ? a : b);
+const SAUNA = { x: 1205, y: 420, w: 70, h: 50 };
+const STATUE = { x: BW + 960, y: 380, w: 40, h: 40 }; // Olli Lindholm in bronze, block 2 where block 1 has its lake
+const WALLS = ['#b3261e', '#e2b13c', '#3d6e9e', '#2e6b4f'];
+const HOUSES = BX.flatMap((bx, k) => [
+  { x: 420, y: 90, w: 150, h: 110, door: { x: 495, y: 222 }, wall: 0 },
+  { x: 780, y: 80, w: 160, h: 120, door: { x: 860, y: 222 }, wall: 0 },
+  { x: 1120, y: 90, w: 150, h: 110, door: { x: 1195, y: 222 }, wall: 1 },
+  { x: 1390, y: 300, w: 170, h: 220, door: { x: 1475, y: 552 }, tall: true },
+  { x: 250, y: 790, w: 160, h: 90, door: { x: 330, y: 776 }, wall: 0 },
+  { x: 760, y: 790, w: 160, h: 90, door: { x: 840, y: 776 }, wall: 2 },
+  { x: 1250, y: 790, w: 160, h: 90, door: { x: 1330, y: 776 }, wall: 0 },
+].map(h => ({ ...h, x: h.x + bx, door: { x: h.door.x + bx, y: h.door.y }, wall: WALLS[(h.wall + k) % WALLS.length] })));
+HOUSES.forEach((h, i) => h.n = i + 1);
+const KIDS_HOME = 2; // campaign: the kids' house by the lake, paper star in the window
+const SOLIDS = [...SHOPS, SAUNA, STATUE, ...HOUSES];
+const DOORS = [...SHOPS.map(b => b.door), ...HOUSES.map(h => h.door)];
+const LAMPS = [];
+for (const bx of BX) {
+  for (const x of [180, 450, 760, 1060, 1420]) LAMPS.push({ x: bx + x, y: 548 }, { x: bx + x + 60, y: 772 });
+  for (const x of [470, 760, 1040, 1260]) LAMPS.push({ x: bx + x, y: 270 });
+}
+const inLake = (x, y, m = 0) => ((x - LAKE.x) / (LAKE.rx + m)) ** 2 + ((y - LAKE.y) / (LAKE.ry + m)) ** 2 < 1;
 
-const trees = [{ x: STATUE.x - 60, y: STATUE.y + 20, r: 5, kind: 'flag' }];
+const trees = [{ x: 300, y: 150, r: 5, kind: 'flag' }];
 function freeAt(x, y, m) {
-  if (x < m || y < m || x > W - m || y > H - m || cellAt(x, y) !== G_SNOW) return false;
-  for (const k of [G_PATH, G_ROAD, G_WALL, G_ICE]) if (nearKind(x, y, m, k)) return false;
+  if (x < m || y < m || x > W - m || y > H - m) return false;
+  for (const p of [...PATHS, ROAD]) if (x > p[0] - m && x < p[0] + p[2] + m && y > p[1] - m && y < p[1] + p[3] + m) return false;
   for (const b of SOLIDS) if (x > b.x - m && x < b.x + b.w + m && y > b.y - m && y < b.y + b.h + m) return false;
+  if (inLake(x, y, m)) return false;
   if (DOORS.some(d => Math.hypot(d.x - x, d.y - y) < 70)) return false;
   return !trees.some(t => Math.hypot(t.x - x, t.y - y) < m * 2);
 }
-{ // the city's own street and park trees (thinned so phones keep up), a spruce where there's room, plus four snowmen
-  const gap = (MOBILE ? 16 : 10) * PPM;
-  for (const t of pts(MAP.trees)) {
-    const c = cellAt(t.x, t.y);
-    if (c === G_WALL || c === G_ROAD || c === G_ICE || Math.hypot(t.x - STATUE.x, t.y - STATUE.y) < 120 || trees.some(q => Math.abs(q.x - t.x) < gap && Math.hypot(q.x - t.x, q.y - t.y) < gap)) continue;
-    const spruce = c === G_SNOW && !nearKind(t.x, t.y, 40, G_PATH) && !nearKind(t.x, t.y, 40, G_ROAD) && !nearKind(t.x, t.y, 40, G_WALL) && Math.random() < .5;
-    trees.push({ ...t, kind: spruce ? 'spruce' : 'birch', r: spruce ? 15 : 10 });
-  }
-  for (let n = 0, tries = 0; n < 4 && tries < 4000; tries++) {
-    const p = zonePoint([G_SNOW], STATUE, 120 * PPM, 120);
-    if (freeAt(p.x, p.y, 24)) { trees.push({ ...p, kind: 'snowman', r: 13 }); n++; }
+for (let tries = 0; trees.length < 45 * BLOCKS && tries < 4000 * BLOCKS; tries++) {
+  const x = rnd(0, W), y = rnd(0, H);
+  if (freeAt(x, y, 24)) {
+    const kind = trees.length < 4 ? 'snowman' : Math.random() < .55 ? 'spruce' : 'birch';
+    trees.push({ x, y, kind, r: { spruce: 15, birch: 10, snowman: 13 }[kind] });
   }
 }
 
@@ -679,11 +480,14 @@ function surf(x, y) { // surface feel with upgrades applied
 function surface(x, y, dry) {
   if (weather.k === 'freeze' && !dry) return 'ice'; // freezing rain glazes everything
   for (const p of ice) if (!p.gone && ((x - p.x) / p.rx) ** 2 + ((y - p.y) / p.ry) ** 2 < 1) return 'ice';
-  const c = cellAt(x, y);
-  return c === G_ICE ? 'ice' : c === G_ROAD || c === G_PATH ? 'path' : 'snow';
+  if (inLake(x, y)) return 'ice';
+  if (inR(x, y, ROAD)) return 'path';
+  for (const p of PATHS) if (inR(x, y, p)) return 'path';
+  return 'snow';
 }
 
 // ---------- three.js setup ----------
+const MOBILE = matchMedia('(pointer: coarse)').matches || location.search.includes('mobile'); // phones/tablets: lighter shadows and fewer lamp lights
 const PX = MOBILE ? 1.5 : 2; // pixel ratio ceiling: a 3x phone screen at 1.5x draws a quarter of the pixels
 const renderer = new THREE.WebGLRenderer({ antialias: !MOBILE, // phones: MSAA costs more than it shows at 1.5x+ density
   powerPreference: 'high-performance' });
@@ -817,7 +621,7 @@ const snowTex = tex(512, 512, (c, w, h) => {
   blotches(c, w, h, 30, 'rgba(214,226,240,.22)', 110); blotches(c, w, h, 30, 'rgba(255,255,255,.5)', 80);
   speckle(c, w, h, 1800, ['rgba(255,255,255,.95)', 'rgba(205,218,234,.35)'], 1.1);
 }, true);
-snowTex.repeat.set((W * S + 400) / 8.4, (H * S + 400) / 8.4);
+snowTex.repeat.set(110, 75);
 const asphaltTex = tex(512, 512, (c, w, h) => {
   c.fillStyle = '#4a4f57'; c.fillRect(0, 0, w, h);
   blotches(c, w, h, 50, 'rgba(30,33,38,.35)', 60); blotches(c, w, h, 25, 'rgba(215,222,230,.18)', 80); // road salt
@@ -830,12 +634,25 @@ const walkTex = tex(512, 512, (c, w, h) => { // packed snow on the sidewalk, wit
   for (let i = 0; i < 70; i++) { const x = Math.random() * w, y = Math.random() * h; c.beginPath(); c.ellipse(x, y, 5, 9, Math.random() * 3, 0, 7); c.fill(); }
   speckle(c, w, h, 2500, ['rgba(255,255,255,.7)', 'rgba(120,130,145,.3)'], 1.2);
 }, true);
+const sidingTex = tex(256, 256, (c, w, h) => { // vertical board-and-batten, tinted by wall color
+  c.fillStyle = '#ffffff'; c.fillRect(0, 0, w, h);
+  for (let x = 0; x < w; x += 16) {
+    c.fillStyle = `rgba(0,0,0,${rnd(.02, .07)})`; c.fillRect(x, 0, 16, h);
+    c.fillStyle = 'rgba(0,0,0,.28)'; c.fillRect(x, 0, 1.5, h);
+    c.fillStyle = 'rgba(255,255,255,.35)'; c.fillRect(x + 1.5, 0, 2, h);
+  }
+  speckle(c, w, h, 800, ['rgba(0,0,0,.06)', 'rgba(255,255,255,.08)'], 1.2);
+}, true);
+const roofTex = tex(256, 64, (c, w, h) => { // standing-seam metal
+  c.fillStyle = '#ffffff'; c.fillRect(0, 0, w, h);
+  for (let x = 0; x < w; x += 22) { c.fillStyle = 'rgba(0,0,0,.35)'; c.fillRect(x, 0, 2, h); c.fillStyle = 'rgba(255,255,255,.5)'; c.fillRect(x + 2, 0, 2, h); }
+}, true);
 const barkTex = tex(128, 512, (c, w, h) => { // birch: white bark with black dashes
   c.fillStyle = '#f1efe8'; c.fillRect(0, 0, w, h);
   blotches(c, w, h, 12, 'rgba(200,195,180,.5)', 30);
   for (let i = 0; i < 60; i++) { c.fillStyle = `rgba(25,25,25,${rnd(.5, .9)})`; c.fillRect(Math.random() * w, Math.random() * h, rnd(8, 40), rnd(2, 5)); }
 }, true);
-const crackTex = tex(512, 512, (c, w, h) => { // frozen sea with cracks and snow dust
+const crackTex = tex(512, 512, (c, w, h) => { // frozen lake with cracks and snow dust
   c.fillStyle = '#b3d9ef'; c.fillRect(0, 0, w, h);
   blotches(c, w, h, 25, 'rgba(240,248,255,.55)', 90); blotches(c, w, h, 15, 'rgba(120,175,210,.4)', 60);
   c.strokeStyle = 'rgba(255,255,255,.75)'; c.lineWidth = 1.4;
@@ -843,7 +660,7 @@ const crackTex = tex(512, 512, (c, w, h) => { // frozen sea with cracks and snow
     let x = Math.random() * w, y = Math.random() * h; c.beginPath(); c.moveTo(x, y);
     for (let k = 0; k < 6; k++) { x += rnd(-40, 40); y += rnd(-30, 30); c.lineTo(x, y); } c.stroke();
   }
-}, true);
+});
 const FI_TEX = tex(180, 110, (c) => { c.fillStyle = '#fff'; c.fillRect(0, 0, 180, 110); c.fillStyle = '#003580'; c.fillRect(50, 0, 30, 110); c.fillRect(0, 40, 180, 30); });
 // shared materials
 const snowMat = mat('#fbfdff', null, .9);
@@ -853,28 +670,42 @@ const roadMat = new Std({ map: asphaltTex, roughness: .85 });
 const glass = new Std({ color: '#ffd98a', emissive: '#ffb84a', emissiveIntensity: .75, roughness: .15 });
 const darkGlass = mat('#1b2631', null, .08, .3);
 const white = mat('#f4f4f0', null, .7), metalGray = mat('#9aa1a8', null, .35, .6), rubber = mat('#16181b', null, .9);
+const wallMats = {}, wallMat = c => wallMats[c] ??= new Std({ color: c, map: sidingTex, roughness: .85 });
+const roofMat = new Std({ color: '#3a3f47', map: roofTex, roughness: .45, metalness: .35 });
 function plateMesh(n) {
-  const t = tex(64, 48, (g) => { g.fillStyle = '#1f4e9c'; g.fillRect(0, 0, 64, 48); g.strokeStyle = '#fff'; g.lineWidth = 3; g.strokeRect(4, 4, 56, 40); g.fillStyle = '#fff'; g.font = `900 ${String(n).length > 2 ? 19 : 30}px Overpass, system-ui`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(n, 32, 27); });
+  const t = tex(64, 48, (g) => { g.fillStyle = '#1f4e9c'; g.fillRect(0, 0, 64, 48); g.strokeStyle = '#fff'; g.lineWidth = 3; g.strokeRect(4, 4, 56, 40); g.fillStyle = '#fff'; g.font = '900 30px Overpass, system-ui'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(n, 32, 27); });
   return new THREE.Mesh(new THREE.PlaneGeometry(1.4, 1.05), new Std({ map: t, emissive: '#fff', emissiveMap: t, emissiveIntensity: .3, roughness: .5 }));
 }
 
 // ---------- static scene ----------
 const staticFrom = scene.children.length; // everything added from here to bakeStatic() never moves
 {
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(W * S + 400, H * S + 400), groundMat);
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(W * S + 120, 400), groundMat);
   ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
-  for (let i = 0; i < 50 * BLOCKS; i++) { // snowdrifts in the parks and yards
-    const { x, y } = zonePoint([G_SNOW], undefined, ZONE * 1.4, 70);
+  for (let i = 0; i < 50 * BLOCKS; i++) { // snowdrifts in the yards
+    const x = rnd(0, W), y = rnd(0, H);
     if (!freeAt(x, y, 30)) continue;
     const d = mesh(sphGeo(1), snowMat, scene); place(d, x, y, 0); d.scale.set(rnd(2, 5), rnd(.5, 1.1), rnd(1.5, 3)); d.rotation.y = rnd(0, 3);
   }
+  // plowed snowbanks along the outer edges of the sidewalks
+  const gap = x => DOORS.some(d => Math.abs(d.x - x) < 40) || CROSS.some(c => x > c[0] - 30 && x < c[0] + 70);
+  for (const [y, side] of [[553, -1], [767, 1]]) for (let x = 10; x < W; x += rnd(26, 40)) {
+    if (gap(x) || (side < 0 && SHOPS.some(b => x > b.x - 10 && x < b.x + b.w + 10))) continue;
+    const b = mesh(sphGeo(1), snowMat, scene); place(b, x, y + side * rnd(0, 3), 0);
+    b.scale.set(rnd(1.8, 2.8), rnd(.45, .8), rnd(.7, 1)); b.rotation.y = rnd(-.2, .2);
+  }
+  const lake = new Std({ map: crackTex, roughness: .12, metalness: .05 });
+  flat(new THREE.CircleGeometry(1, 64), lake, LAKE.x, LAKE.y, .025, LAKE.rx * S, LAKE.ry * S);
   flat(new THREE.CircleGeometry(1, 32), mat('#e8f4fb'), AVANTO.x, AVANTO.y, .03, (AVANTO.r + 6) * S, (AVANTO.r + 4) * S); // snowy rim
   flat(new THREE.CircleGeometry(1, 32), mat('#0f3a55', null, .05, .2), AVANTO.x, AVANTO.y, .04, AVANTO.r * S, AVANTO.r * .8 * S);
-  const pier = group(AVANTO.x + 73, AVANTO.y + 26);
+  const pier = group(1173, 446);
   for (let k = -3; k <= 3; k++) rbox(pier, .85, .22, 1.7, .05, '#8a5a33', k * .93, .25, 0);
   for (const sx of [-2.8, 2.8]) for (const sz of [-.7, .7]) mesh(cylGeo(.12, .12, 1), '#5c3b20', pier, sx, .1, sz);
-  for (const [d, n, shop] of [...SHOPS.map(b => [b.door, b, 1]), ...HOUSES.map(h => [h.door, h, 0])]) // door mats, along the wall
-    flat(new THREE.PlaneGeometry(3.6, 1.6), mat(shop ? '#2f7d4a' : '#7a5230', null, .95), d.x, d.y, .06).rotation.z = Math.atan2(-n.nx, -n.ny);
+  tiled(ROAD, roadMat, .02, 12);
+  for (const p of PATHS) tiled(p, walkMat, .03, 10);
+  for (let x = 10; x < W; x += 60) rect([x, 658, 32, 4], '#e9c84a', .045);
+  for (const c of CROSS) for (let y = c[1] + 6; y < c[1] + c[3] - 4; y += 16) rect([c[0], y, c[2], 9], '#eef0f2', .045);
+  for (const d of DOORS) flat(new THREE.PlaneGeometry(3.6, 1.6), mat(SHOPS.some(b => b.door === d) ? '#2f7d4a' : '#7a5230', null, .95), d.x, d.y, .05);
 }
 LAMPS.forEach(l => { // modern street lamp with an arm
   const g = group(l.x, l.y);
@@ -885,12 +716,11 @@ LAMPS.forEach(l => { // modern street lamp with an arm
   rbox(g, .9, .22, .5, .08, pole, 1.45, 6.3, 0);
   box(g, .7, .04, .34, mat('#fff3c4', '#ffd877'), 1.45, 6.18, 0);
 });
-// ponytail: 14 (6 on phones) real lights follow the players around the city's ~1100 lamps; more lights = slower shaders and a recompile per change
+// ponytail: 14 (6 on phones) real lights follow the players around 42 lamps; more lights = slower shaders and a recompile per change
 const lampLights = Array.from({ length: MOBILE ? 6 : 14 }, () => { const pl = new THREE.PointLight('#ffd9a0', 0, 28, 1); scene.add(pl); return pl; });
-function moveLamps(fx, fy) {
-  const near = LAMPS.filter(l => Math.abs(l.x - fx) < 1500 && Math.abs(l.y - fy) < 1500)
-    .sort((a, b) => Math.hypot(a.x - fx, a.y - fy) - Math.hypot(b.x - fx, b.y - fy));
-  lampLights.forEach((pl, i) => place(pl, near[i] ? near[i].x + 14.5 : -1e5, near[i]?.y ?? 0, 6)); // spare lights park far away
+function moveLamps(fx) {
+  const near = [...LAMPS].sort((a, b) => Math.abs(a.x - fx) - Math.abs(b.x - fx));
+  lampLights.forEach((pl, i) => place(pl, near[i].x + 14.5, near[i].y, 6));
 }
 function windowAt(g, x, y, z, s, w = 2.1, h = 2.3) { // framed window with crossbars and a sill, facing +Z*s
   rbox(g, w + .4, h + .4, .16, .05, white, x, y, z);
@@ -898,23 +728,69 @@ function windowAt(g, x, y, z, s, w = 2.1, h = 2.3) { // framed window with cross
   box(g, .1, h, .22, white, x, y, z + s * .03); box(g, w, .1, .22, white, x, y + h * .12, z + s * .03);
   rbox(g, w + .7, .14, .45, .04, white, x, y - h / 2 - .25, z + s * .18);
 }
-// a group standing on a facade: local +Z points out of the wall (nx, ny: the wall's outward normal on the map)
-function onWall(p, nx, ny) { const g = group(p.door.x - nx * 1.2 * PPM, p.door.y - ny * 1.2 * PPM); g.rotation.y = Math.atan2(nx, ny); return g; }
-function buildDoor(h) { // the building is the real one: add a front door, a canopy, a step and the house-number plate
-  const g = onWall(h, h.nx, h.ny);
-  rbox(g, 2.4, 3.6, .3, .05, white, 0, 1.8, .1);
-  rbox(g, 1.9, 3.3, .3, .04, '#6b3b1c', 0, 1.65, .18);
-  mesh(sphGeo(.08), mat('#d9b44a', null, .3, .8), g, .6, 1.6, .38);
-  rbox(g, 3.2, .3, 1.8, .05, '#4a4f57', 0, 3.95, .9); rbox(g, 3, .14, 1.6, .05, snowMat, 0, 4.15, .9);
-  rbox(g, 2.8, .35, 1, .05, '#9aa1a8', 0, .17, .5);
-  const p = plateMesh(h.no); p.position.set(2, 3, .2); g.add(p);
-  if (h === HOUSES[KIDS_HOME]) { // two crossed squares read as a folded paper star, in the window next to the door
-    windowAt(g, -3.2, 3.2, .1, 1);
-    for (const rz of [0, Math.PI / 4]) box(g, 1, 1, .06, mat('#d7261e', '#ff3a20'), -3.2, 3.2, .32).rotation.z = rz;
+function buildHouse(b) {
+  const g = group(b.x + b.w / 2, b.y + b.h / 2), w = b.w * S, d = b.h * S, base = .7, wh = 4.6, rh = 3.4, top = base + wh;
+  const s = b.door.y > b.y + b.h / 2 ? 1 : -1, fz = s * d / 2;
+  rbox(g, w + .35, base, d + .35, .08, '#8d939b', 0, base / 2, 0); // stone plinth
+  mesh(boxGeo(w, wh, d), wallMat(b.wall), g, 0, base + wh / 2, 0);
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) box(g, .45, wh, .45, white, sx * w / 2, base + wh / 2, sz * d / 2);
+  for (const sz of [-1, 1]) box(g, w + 1.5, .3, .2, white, 0, top - .05, sz * (d / 2 + .72)); // fascia
+  mesh(prism(d + 1.6, rh, w + 1.6), roofMat, g, 0, top, 0);
+  mesh(prism(d + 1.5, rh * .97, w + 1.5), snowMat, g, 0, top + .32, 0);
+  const run = d / 2 + .8, slope = Math.atan2(rh, run), len = Math.hypot(rh, run);
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) { // white barge boards on the gables
+    const bb = box(g, .2, .3, len, white, sx * (w / 2 + .8), top + rh / 2, sz * run / 2); bb.rotation.x = sz * slope;
   }
+  rbox(g, 1, 2.6, 1, .05, '#8a3b2a', w * .25, top + rh * .55, -s * d * .15);
+  rbox(g, 1.3, .2, 1.3, .05, '#4a4f57', w * .25, top + rh * .55 + 1.35, -s * d * .15);
+  const dx = (b.door.x - b.x - b.w / 2) * S;
+  for (const side of [1, -1]) for (const fx of [-.3, .3]) {
+    if (side === s && Math.abs(w * fx - dx) < 2.2) continue; // leave room for the door
+    windowAt(g, w * fx, base + wh * .55, side * (d / 2 + .02), side);
+    if (b === HOUSES[KIDS_HOME] && side === s) { // two crossed squares read as a folded paper star, in both front windows
+      for (const rz of [0, Math.PI / 4]) box(g, 1, 1, .06, mat('#d7261e', '#ff3a20'), w * fx, base + wh * .55, side * (d / 2 + .14)).rotation.z = rz;
+    }
+  }
+  rbox(g, 2, 3.2, .16, .05, white, dx, base + 1.6, fz + s * .02);
+  rbox(g, 1.5, 2.85, .2, .04, '#6b3b1c', dx, base + 1.45, fz + s * .06);
+  mesh(sphGeo(.08), mat('#d9b44a', null, .3, .8), g, dx + .5, base + 1.45, fz + s * .2);
+  const canopy = mesh(prism(2.6, .8, 1.6), roofMat, g, dx, base + 3.25, fz + s * .8); canopy.rotation.y = Math.PI / 2;
+  const cs = mesh(prism(2.5, .78, 1.55), snowMat, g, dx, base + 3.38, fz + s * .8); cs.rotation.y = Math.PI / 2;
+  rbox(g, 2.4, .35, 1, .05, '#9aa1a8', dx, .17, fz + s * .5); rbox(g, 2.4, .35, .6, .05, '#9aa1a8', dx, .5, fz + s * .3);
+  const p = plateMesh(b.n); p.position.set(dx + 1.7, base + 2.8, fz + s * .1); if (s < 0) p.rotation.y = Math.PI; g.add(p);
 }
-function buildShop(b) { // the store is in a real building: a lit shop front with the chain's sign, and a canopy over the door
-  const g = onWall(b, b.nx, b.ny);
+function buildBlock(b) {
+  const g = group(b.x + b.w / 2, b.y + b.h / 2), w = b.w * S, d = b.h * S, hh = 16;
+  const facade = tex(256, 256, (c) => {
+    c.fillStyle = '#ddd2bd'; c.fillRect(0, 0, 256, 256);
+    blotches(c, 256, 256, 12, 'rgba(160,150,130,.25)', 50);
+    for (let r = 0; r < 5; r++) {
+      c.fillStyle = 'rgba(120,110,95,.35)'; c.fillRect(0, 48 + r * 50, 256, 2); // floor seams
+      for (let k = 0; k < 4; k++) {
+        const lit = Math.random() < .6;
+        c.fillStyle = '#f7f4ee'; c.fillRect(17 + k * 60, 13 + r * 50, 40, 34);
+        c.fillStyle = lit ? '#ffd98a' : '#3d4652'; c.fillRect(20 + k * 60, 16 + r * 50, 34, 28);
+        c.fillStyle = '#f7f4ee'; c.fillRect(36 + k * 60, 16 + r * 50, 2, 28);
+      }
+    }
+  });
+  const fm = new Std({ map: facade, emissive: '#fff', emissiveMap: facade, emissiveIntensity: .22, roughness: .85 });
+  mesh(boxGeo(w, hh, d), [fm, fm, snowMat, fm, fm, fm], g, 0, hh / 2, 0);
+  rbox(g, w + .5, .7, d + .5, .1, '#8d939b', 0, hh + .3, 0); // parapet
+  rbox(g, w + .2, .35, d + .2, .1, snowMat, 0, hh + .75, 0);
+  const rail = new Std({ color: '#cfe6f5', roughness: .1, metalness: .1, transparent: true, opacity: .45 });
+  for (let r = 1; r < 5; r++) for (const fx of [-.32, .32]) { // balconies on the front
+    rbox(g, 4.4, .25, 1.6, .06, '#b9b1a2', w * fx, r * 3.2 + .35, d / 2 + .8);
+    box(g, 4.4, 1.1, .08, rail, w * fx, r * 3.2 + .95, d / 2 + 1.56);
+    rbox(g, 4.2, .12, 1.4, .05, snowMat, w * fx, r * 3.2 + .55, d / 2 + .8);
+  }
+  const dx = (b.door.x - b.x - b.w / 2) * S;
+  rbox(g, 2.6, 3.2, .2, .05, darkGlass, dx, 1.6, d / 2 + .1);
+  rbox(g, 4.6, .3, 2.4, .08, '#4a4f57', dx, 3.6, d / 2 + 1.1);
+  const p = plateMesh(b.n); p.position.set(dx + 2.4, 3.1, d / 2 + .12); g.add(p);
+}
+function buildShop(b) {
+  const g = group(b.x + b.w / 2, b.y + b.h / 2), w = b.w * S, d = b.h * S, hh = 7;
   const front = tex(512, 192, (c) => {
     c.fillStyle = '#262b32'; c.fillRect(0, 0, 512, 192);
     c.fillStyle = b.color; c.fillRect(0, 0, 512, 72);
@@ -928,11 +804,17 @@ function buildShop(b) { // the store is in a real building: a lit shop front wit
     c.fillStyle = '#9fd3ff'; c.fillRect(214, 86, 84, 106);
   });
   const fm = new Std({ map: front, emissive: '#fff', emissiveMap: front, emissiveIntensity: .45, roughness: .4 });
-  const f = new THREE.Mesh(new THREE.PlaneGeometry(13, 4.9), fm); f.position.set(0, 2.6, .14); g.add(f);
+  const wall = mat('#7d858f', null, .6, .2);
+  mesh(boxGeo(w, hh, d), [wall, wall, snowMat, wall, fm, wall], g, 0, hh / 2, 0);
+  rbox(g, w + .4, .6, d + .4, .1, '#5b626c', 0, hh + .2, 0);
+  rbox(g, w + .2, .3, d + .2, .1, snowMat, 0, hh + .55, 0);
   const dark = mat('#2b2f36', null, .5, .4);
-  rbox(g, 7, .3, 2.2, .08, dark, 0, 5.4, 1.1); rbox(g, 6.8, .14, 2, .05, snowMat, 0, 5.6, 1.1); // entrance canopy
+  rbox(g, 7, .3, 2.6, .08, dark, 0, 4.1, d / 2 + 1.3); // entrance canopy
+  rbox(g, 6.8, .14, 2.4, .05, snowMat, 0, 4.3, d / 2 + 1.3);
+  for (const sx of [-3.2, 3.2]) mesh(cylGeo(.1, .1, 4), dark, g, sx, 2, d / 2 + 2.45);
+  rbox(g, 3, 1.2, 2, .1, metalGray, -4, hh + .6, -3); rbox(g, 4, 1.4, 3, .1, metalGray, 4, hh + .7, 2);
   for (let k = 0; k < 3; k++) { // bike rack
-    const t = mesh(new THREE.TorusGeometry(.55, .06, 8, 20, Math.PI), metalGray, g, 5 + k * 1.1, 0, 1.6); t.rotation.y = Math.PI / 2;
+    const t = mesh(new THREE.TorusGeometry(.55, .06, 8, 20, Math.PI), metalGray, g, w / 2 - 2 - k * 1.1, 0, d / 2 + 1.5); t.rotation.y = Math.PI / 2;
   }
 }
 const smokeFrom = { x: 0, y: 0, h: 0 };
@@ -1060,7 +942,7 @@ function buildStatue() {
   p.g.traverse(o => { if (o.isMesh) o.material = bronze; });
 }
 SHOPS.forEach(buildShop); buildSauna(); buildStatue();
-HOUSES.forEach(buildDoor);
+HOUSES.forEach(h => h.tall ? buildBlock(h) : buildHouse(h));
 trees.forEach(buildTree);
 // ponytail: ~2700 static meshes → one per (material, shadow flags, 80-unit map chunk), ~2700 → ~150 draw calls.
 // Chunks keep frustum culling working. Anything that must move later has to be built after this.
@@ -1082,8 +964,7 @@ trees.forEach(buildTree);
   const p = new THREE.Vector3();
   for (const root of roots) root.traverse(o => {
     if (!o.isMesh) return;
-    o.getWorldPosition(p);
-    const f = `${o.castShadow | 0}${o.receiveShadow | 0}|${Math.floor((p.x + OX) / 80)},${Math.floor((p.z + OZ) / 80)}`;
+    const chunk = Math.floor((o.getWorldPosition(p).x + OX) / 80), f = `${o.castShadow | 0}${o.receiveShadow | 0}|${chunk}`;
     const g = plainCopy(o.geometry).applyMatrix4(o.matrixWorld);
     if (!Array.isArray(o.material)) return add(o.material.uuid + f, o.material, o.castShadow, o.receiveShadow, g);
     for (const gr of o.geometry.groups) { // multi-material box: one sub-geometry per face group
@@ -1097,116 +978,13 @@ trees.forEach(buildTree);
     o.matrixAutoUpdate = false; scene.add(o);
   }
 })();
-// ---------- the city: buildings, streets, sidewalks and sea ice ----------
-// Built straight into 160-unit chunks, one mesh per material per chunk: few draws, and frustum culling still drops what's behind you.
-const facadeTex = tex(256, 256, (c) => { // 4 bays x 4 floors of windows, tinted per building by vertex colour
-  c.fillStyle = '#ffffff'; c.fillRect(0, 0, 256, 256);
-  blotches(c, 256, 256, 14, 'rgba(120,110,95,.18)', 50);
-  for (let r = 0; r < 4; r++) {
-    c.fillStyle = 'rgba(90,80,70,.28)'; c.fillRect(0, r * 64 + 60, 256, 3); // cornice line between floors
-    for (let k = 0; k < 4; k++) { c.fillStyle = '#f4f1ea'; c.fillRect(k * 64 + 16, r * 64 + 12, 32, 40); c.fillStyle = '#3d4652'; c.fillRect(k * 64 + 19, r * 64 + 15, 26, 34); c.fillStyle = '#f4f1ea'; c.fillRect(k * 64 + 31, r * 64 + 15, 2, 34); }
-  }
-}, true);
-const facadeGlow = tex(256, 256, (c) => { // the same windows, about half of them lit: shows in kaamos darkness
-  c.fillStyle = '#000'; c.fillRect(0, 0, 256, 256);
-  for (let r = 0; r < 4; r++) for (let k = 0; k < 4; k++) if (Math.random() < .5) { c.fillStyle = '#ffd98a'; c.fillRect(k * 64 + 19, r * 64 + 15, 12, 34); c.fillRect(k * 64 + 33, r * 64 + 15, 12, 34); }
-}, true);
-const facadeMat = new Std({ map: facadeTex, vertexColors: true, emissive: '#fff', emissiveMap: facadeGlow, emissiveIntensity: .35, roughness: .85 });
-const iceMat0 = new Std({ map: crackTex, roughness: .12, metalness: .05 });
-const zebraMat = mat('#eef0f2', null, .7);
-const roofTex = snowTex.clone(); roofTex.repeat.set(1, 1); // the ground's snow, one tile per 10 units
-const roofMat = new Std({ map: roofTex, color: '#dfe5ec', roughness: .95 });
-const FACADES = ['#e8d8b0', '#f0e2c0', '#d9b77c', '#c9c2b5', '#e6c9b5', '#b8b2a8', '#f2ecdf', '#d3a77a', '#9ea7ad', '#e3cf9a', '#c98f6b', '#dcd6c4'];
-(function buildCity() {
-  const CH = 1600, buckets = new Map();
-  const B = (m, x, y, shadow) => { // geometry accumulator for this material in the chunk around (x, y)
-    const k = `${m.uuid}|${Math.floor(x / CH)},${Math.floor(y / CH)}`;
-    return buckets.get(k) ?? buckets.set(k, { m, shadow, p: [], n: [], uv: [], c: [], i: [] }).get(k);
-  };
-  const flatV = (b, x, y, h, unit) => { b.p.push(x * S - OX, h, y * S - OZ); b.n.push(0, 1, 0); b.uv.push(x * S / unit, y * S / unit); return b.p.length / 3 - 1; };
-  const tri = (b, i, j, k) => { // ground triangles face up whatever order they came in
-    const P = b.p, cr = (P[j * 3] - P[i * 3]) * (P[k * 3 + 2] - P[i * 3 + 2]) - (P[j * 3 + 2] - P[i * 3 + 2]) * (P[k * 3] - P[i * 3]);
-    b.i.push(i, ...(cr > 0 ? [k, j] : [j, k]));
-  };
-  // a flat band along a polyline: a quad per segment, and a round joint where it bends or ends
-  function ribbon(m, a, from, w, h, unit) {
-    const ps = pts(a, from), r = w / 2;
-    for (let k = 0; k + 1 < ps.length; k++) {
-      const p = ps[k], q = ps[k + 1], L = Math.hypot(q.x - p.x, q.y - p.y);
-      if (L < 1) continue;
-      const nx = -(q.y - p.y) / L * r, ny = (q.x - p.x) / L * r, b = B(m, (p.x + q.x) / 2, (p.y + q.y) / 2);
-      const i0 = flatV(b, p.x + nx, p.y + ny, h, unit), i1 = flatV(b, q.x + nx, q.y + ny, h, unit), i2 = flatV(b, q.x - nx, q.y - ny, h, unit), i3 = flatV(b, p.x - nx, p.y - ny, h, unit);
-      tri(b, i0, i1, i2); tri(b, i0, i2, i3);
-    }
-    ps.forEach((p, k) => {
-      if (k > 0 && k < ps.length - 1) { // a straight-through node needs no joint
-        const a1 = Math.atan2(p.y - ps[k - 1].y, p.x - ps[k - 1].x), a2 = Math.atan2(ps[k + 1].y - p.y, ps[k + 1].x - p.x);
-        if (Math.abs(Math.atan2(Math.sin(a2 - a1), Math.cos(a2 - a1))) < .2) return;
-      }
-      const b = B(m, p.x, p.y), c = flatV(b, p.x, p.y, h, unit), n = 8;
-      for (let s = 0; s <= n; s++) flatV(b, p.x + Math.cos(s / n * 6.283) * r, p.y + Math.sin(s / n * 6.283) * r, h, unit);
-      for (let s = 0; s < n; s++) tri(b, c, c + 1 + s, c + 2 + s);
-    });
-  }
-  function fillPoly(m, a, from, h, unit) {
-    const ps = pts(a, from); if (ps.length < 3) return;
-    const cx = ps.reduce((t, p) => t + p.x, 0) / ps.length, cy = ps.reduce((t, p) => t + p.y, 0) / ps.length, b = B(m, cx, cy);
-    const base = b.p.length / 3; ps.forEach(p => flatV(b, p.x, p.y, h, unit));
-    for (const [i, j, k] of THREE.ShapeUtils.triangulateShape(ps.map(p => new THREE.Vector2(p.x, p.y)), [])) tri(b, base + i, base + j, base + k);
-  }
-  for (const r of ROADS) ribbon(walkMat, r, 2, r[0] + 5 * PPM, .02, 10); // the sidewalk the raster gives every street
-  for (const w of MAP.walks) ribbon(walkMat, w, 1, w[0], .03, 10);
-  for (const a of [...MAP.areas, ...MAP.piers]) fillPoly(walkMat, a, 0, .03, 10);
-  for (const r of ROADS) ribbon(roadMat, r, 2, r[0], .04, 12);
-  for (const c of CROSS) { // zebra stripes: run along the street, laid across it
-    const n = nearNode(CG, c.x, c.y, 1), e = CG.adj[n]?.[0]; // crossings are nodes of the street they cross
-    if (!e || Math.hypot(CG.nodes[n].x - c.x, CG.nodes[n].y - c.y) > 2) continue;
-    const to = CG.nodes[e.to], L = Math.hypot(to.x - c.x, to.y - c.y) || 1, ux = (to.x - c.x) / L, uy = (to.y - c.y) / L;
-    for (let o = -e.w / 2 + 10; o < e.w / 2 - 6; o += 16) {
-      const mx = c.x - uy * o, my = c.y + ux * o, b = B(zebraMat, mx, my);
-      const q = [[-24, -4], [24, -4], [24, 4], [-24, 4]].map(([a, d]) => flatV(b, mx + ux * a - uy * d, my + uy * a + ux * d, .055, 10));
-      tri(b, q[0], q[1], q[2]); tri(b, q[0], q[2], q[3]);
-    }
-  }
-  for (let y = 0; y < GH; y++) for (let x = 0; x < GW;) { // sea and lake ice: one quad per run of ice cells in a row
-    if (grid[y * GW + x] !== G_ICE) { x++; continue; }
-    let e = x; while (e < GW && grid[y * GW + e] === G_ICE) e++;
-    const b = B(iceMat0, (x + e) / 2 * CELL, y * CELL), q = [[x, y], [e, y], [e, y + 1], [x, y + 1]].map(([u, v]) => flatV(b, u * CELL, v * CELL, .025, 40));
-    tri(b, q[0], q[1], q[2]); tri(b, q[0], q[2], q[3]); x = e;
-  }
-  // buildings: walls with windows and a flat, snowed-in roof
-  const FW = 16 * PPM * S, FH = 12.8 * PPM * S, col = new THREE.Color();
-  BPOLY.forEach((ps, bi) => {
-    const h = MAP.buildings[bi][0] * S, cx = ps.reduce((t, p) => t + p.x, 0) / ps.length, cy = ps.reduce((t, p) => t + p.y, 0) / ps.length;
-    const b = B(facadeMat, cx, cy, true), rf = B(roofMat, cx, cy, true);
-    col.set(FACADES[(bi * 7 + (bi >> 3)) % FACADES.length]);
-    let u = 0;
-    ps.forEach((p, k) => {
-      const q = ps[(k + 1) % ps.length], L = Math.hypot(q.x - p.x, q.y - p.y);
-      if (L < 1) return;
-      const nx = -(q.y - p.y) / L, nz = (q.x - p.x) / L, i = b.p.length / 3, l = L * S;
-      b.p.push(p.x * S - OX, 0, p.y * S - OZ, q.x * S - OX, 0, q.y * S - OZ, q.x * S - OX, h, q.y * S - OZ, p.x * S - OX, h, p.y * S - OZ);
-      for (let v = 0; v < 4; v++) { b.n.push(nx, 0, nz); b.c.push(col.r, col.g, col.b); }
-      b.uv.push(u / FW, 0, (u + l) / FW, 0, (u + l) / FW, h / FH, u / FW, h / FH);
-      b.i.push(i, i + 1, i + 2, i, i + 2, i + 3); u += l;
-    });
-    const base = rf.p.length / 3; ps.forEach(p => flatV(rf, p.x, p.y, h, 10));
-    for (const [i, j, k] of THREE.ShapeUtils.triangulateShape(ps.map(p => new THREE.Vector2(p.x, p.y)), [])) tri(rf, base + i, base + j, base + k);
-  });
-  for (const { m, shadow, p, n, uv, c, i } of buckets.values()) {
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.Float32BufferAttribute(p, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(n, 3));
-    g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); if (c.length) g.setAttribute('color', new THREE.Float32BufferAttribute(c, 3));
-    g.setIndex(p.length / 3 > 65535 ? new THREE.Uint32BufferAttribute(i, 1) : new THREE.Uint16BufferAttribute(i, 1));
-    const o = new THREE.Mesh(g, m); o.receiveShadow = true; o.castShadow = !!shadow; o.matrixAutoUpdate = false; scene.add(o);
-  }
-})();
 // a customer waits at every door; shown when their order is on its way
 for (const h of HOUSES) {
+  const south = h.door.y > h.y + h.h / 2;
   h.cust = h === HOUSES[KIDS_HOME] ? buildPerson(scene, '#2d9cff', '#d33', .62) // the kids' house: Eetu answers the door
     : buildPerson(scene, pick(['#7a2e3a', '#2e6b4f', '#5b4a8a', '#3b6ea5']), pick(['#d33', '#f5c400', '#e84393']));
-  place(h.cust.g, h.door.x - h.ny * 22, h.door.y + h.nx * 22); // beside the door, facing the street
-  h.cust.g.rotation.y = -Math.atan2(h.ny, h.nx);
+  place(h.cust.g, h.door.x + 22, south ? h.door.y - 12 : h.door.y + 8);
+  h.cust.g.rotation.y = south ? -Math.PI / 2 : Math.PI / 2;
   h.cust.g.visible = false; h.custT = 0;
 }
 
@@ -1375,7 +1153,7 @@ const KB = [
 // ponytail: the street is sized for 4; grow the map before raising this
 const MAX_PLAYERS = 4;
 const keys = new Set(), robots = [];
-const spawn = i => ({ ...SPAWNS[i % SPAWNS.length] });
+const spawn = i => ({ x: 70 + (i % 4) * 42, y: i < 4 ? 582 : 550 });
 const arrowGeo = (() => { const s = new THREE.Shape(); s.moveTo(1.3, 0); s.lineTo(-.6, .8); s.lineTo(-.6, -.8); s.closePath(); const g = new THREE.ShapeGeometry(s); g.rotateX(-Math.PI / 2); return g; })();
 function beam(color) {
   const g = new THREE.Group(); scene.add(g);
@@ -1579,15 +1357,11 @@ const COSMETICS = [
   { k: 'gold', key: '-', name: '✨ Gold paint', desc: 'Pure bling' },
 ];
 const SHOP = [...UPGRADES, ...COSMETICS];
-// average order round trip (shop → door → nearest shop). Real Helsinki streets are ~4.7x longer than the old village's 1485 px,
-// so shifts get that much more battery and the leftover-battery bonus is paid in village seconds: same difficulty, same economy
-const TRIP = (a => a.reduce((x, y) => x + y) / a.length)(SHOPS.flatMap(b => HOUSES.filter(h => dist(h.door, b.door) < 350 * PPM).map(h => dist(b.door, h.door) + dist(h.door, nearShop(h.door).door))));
-const MAPX = Math.max(1, TRIP / 1485);
 if (location.search.includes('selftest')) { // ?selftest: the price curve still beats the income curve (55 € a delivery + ~30 € battery bonus, quota 2 + shift)
   const income = n => Array.from({ length: n }, (_, i) => (3 + i) * 55 + 30).reduce((a, b) => a + b), all = PRICES.reduce((a, b) => a + b);
   console.assert(income(3) < PRICES[0] * 8, 'three shifts buy level 1 of everything');
   console.assert(income(10) * 1.75 < all * UPGRADES.length, 'ten shifts max the whole shop'); // 1.75: thermobox maxed from the start, the best case
-  const trip = TRIP;
+  const avg = a => a.reduce((x, y) => x + y) / a.length, trip = avg(SHOPS.flatMap(b => HOUSES.filter(h => Math.abs(h.door.x - b.door.x) < BW * 1.2).map(h => dist(b.door, h.door) + dist(h.door, nearShop(h.door).door))));
   // where the battery wall sits: seconds a shift gives per order vs seconds a round trip takes flat out on a clear path
   console.log('selftest wall', { trip: Math.round(trip), perOrder: [1, 3, 5, 7, 10, 14].map(n => `shift ${n}: ${((80 + n * 3) / (2 + n)).toFixed(1)} s`), tripBase: (trip / SURF.path.max).toFixed(1), tripMotor3: (trip / SURF.path.max / 1.6).toFixed(1) });
   console.log('selftest', { after3: income(3), after10: income(10), maxOne: all, maxAll: all * UPGRADES.length });
@@ -1799,64 +1573,51 @@ if (urlChapter) window.__story = { drain: () => { time = .1; }, end: () => { cha
 function retryChapter() { money = storyStart.money; up = { ...storyStart.up }; playChapter(); }
 const DAY = new THREE.Color('#cfdbe8'), NIGHT = new THREE.Color('#0a1328');
 
-const spot = () => zonePoint(Math.random() < .67 ? [G_PATH] : [G_ROAD]); // ice and potholes: on a sidewalk twice as often as on the street
-function carAt(c, n0, e) { // put car c on the street edge n0 → e.to, at the start (c.v is its speed)
-  Object.assign(c, { n0, n1: e.to, off: e.off, t: 0 }); carPlace(c);
-}
-function carPlace(c) { // position and heading from where it is along its edge; it keeps to the right of the centre line
-  const A = CG.nodes[c.n0], B = CG.nodes[c.n1], dx = B.x - A.x, dy = B.y - A.y, L = Math.hypot(dx, dy) || 1;
-  c.len = L; c.a = Math.atan2(dy, dx);
-  c.x = A.x + dx * c.t / L - dy / L * c.off; c.y = A.y + dy * c.t / L + dx / L * c.off;
-}
-function carStart(c, near = pick(SHOPS).door, rad = ZONE) { // a random street edge near a shop
-  for (let i = 0; i < 200; i++) {
-    const p = zonePoint([G_ROAD], near, rad, 0), u = nearNode(CG, p.x, p.y);
-    if (u >= 0 && CG.adj[u].length) { carAt(c, u, pick(CG.adj[u])); return c; }
+function spot() {
+  for (;;) {
+    const p = pick([...PATHS, ...PATHS, ROAD]);
+    const x = p[0] + Math.random() * p[2], y = p[1] + Math.random() * p[3];
+    if (!DOORS.some(d => Math.hypot(d.x - x, d.y - y) < 80)) return { x, y };
   }
-  return null;
-}
-function nextEdge(c, straight) { // at a junction: any way on (the straightest for Santa), not back unless it's a dead end
-  const outs = CG.adj[c.n1], fwd = outs.filter(e => e.to !== c.n0), opts = fwd.length ? fwd : outs;
-  if (!opts.length) return false;
-  const turn = e => { const B = CG.nodes[c.n1], C = CG.nodes[e.to], d = Math.atan2(C.y - B.y, C.x - B.x) - c.a; return Math.abs(Math.atan2(Math.sin(d), Math.cos(d))); };
-  carAt(c, c.n1, straight ? opts.reduce((a, b) => turn(a) <= turn(b) ? a : b) : pick(opts));
-  return true;
 }
 function setupLevel(n) {
   ice = []; holes = []; cars = [];
   eetu = chap()?.goal === 'rescue' ? { x: AVANTO.x, y: AVANTO.y, state: 'ice', say: '', sayT: 0, cool: 1 } : null; // ch 5: holding on to the edge
-  presents = chap()?.goal !== 'collect' ? [] : Array.from({ length: cv('quota', 0) + (robots.length - 1) * 2 }, () => ({ ...zonePoint([G_ROAD], SHOPS[0].door, 120 * PPM), gone: false }));
+  presents = chap()?.goal !== 'collect' ? [] : Array.from({ length: cv('quota', 0) + (robots.length - 1) * 2 }, () => ({ x: rnd(500, 1300), y: rnd(615, 705), gone: false }));
   for (let i = 0; i < hz(cv('ice', 2 + n * 2)) * BLOCKS; i++) ice.push({ ...spot(), rx: rnd(40, 90), ry: rnd(18, 36) });
   for (let i = 0; i < hz(cv('holes', 2 + n * 2)) * BLOCKS; i++) {
     const s = spot();
     if (!holes.some(h => Math.hypot(h.x - s.x, h.y - s.y) < 60)) holes.push({ ...s, r: rnd(15, 21) });
   }
-  for (let k = hz(cv('cars', n > 3 ? 2 : 1)) * BLOCKS * 2; k > 0; k--) { // as many as two lanes per block had
-    const base = 130 + n * 15 + rnd(0, 20), c = carStart({ base, v: base, color: pick(['#c0392b', '#2c3e50', '#f1f1f1', '#2e86de', '#7f8c8d', '#16a085']) });
-    if (c) cars.push(c);
+  for (let lane = 0; lane < 2; lane++) {
+    const count = hz(cv('cars', n > 3 ? 2 : 1)) * BLOCKS, base = 130 + n * 15 + lane * 20;
+    for (let k = 0; k < count; k++)
+      cars.push({ x: (k + Math.random() * .4) * (W + 200) / count, y: lane ? 690 : 630, dir: lane ? -1 : 1, base, v: base,
+                  color: pick(['#c0392b', '#2c3e50', '#f1f1f1', '#2e86de', '#7f8c8d', '#16a085']) });
   }
   peds = [];
   for (let i = 0; i < hz(cv('peds', Math.min(8, 1 + n))) * BLOCKS; i++) {
-    let pos; do pos = pathPoint(); while (dist(pos, nearShop(pos).door) < 160);
-    peds.push({ ...pos, ...walkOn(pos), kind: 'person', a: 0, vx: 0, vy: 0, mode: 'walk', t: 0, cool: 2, kickT: 0, say: '', sayT: 0,
+    const side = Math.random() < .75 ? 0 : 1;
+    let pos; do pos = pathPoint(side); while (dist(pos, nearShop(pos).door) < 160);
+    peds.push({ ...pos, ...waypoint(side), side, kind: 'person', a: 0, vx: 0, vy: 0, mode: 'walk', t: 0, cool: 2, kickT: 0, say: '', sayT: 0,
                 color: pick(['#3b6ea5', '#7a2e3a', '#2e6b4f', '#5b4a8a', '#a0522d', '#333a44']), hat: pick(['#d33', '#f5c400', '#1f4e9c', '#2fbf6a', '#e84393']) });
   }
   for (let i = 0; i < hz(cv('dogs', n >= 4 ? 2 : n >= 2 ? 1 : 0)) * BLOCKS; i++) { // dogs from shift 2
-    const pos = pathPoint();
-    peds.push({ ...pos, ...walkOn(pos), kind: 'dog', a: 0, vx: 0, vy: 0, mode: 'walk', t: 0, cool: 3, kickT: 0, say: '', sayT: 0 });
+    const side = Math.random() < .7 ? 0 : 1, pos = pathPoint(side);
+    peds.push({ ...pos, ...waypoint(side), side, kind: 'dog', a: 0, vx: 0, vy: 0, mode: 'walk', t: 0, cool: 3, kickT: 0, say: '', sayT: 0 });
   }
   for (let i = 0; i < hz(woltN(n)); i++) { // Woltti couriers on e-mopeds: they hunt a robot down from anywhere and only a zap shakes them off
-    const pos = pathPoint();
-    peds.push({ ...pos, ...walkOn(pos), kind: 'wolt', a: 0, vx: 0, vy: 0, mode: 'walk', t: 0, cool: 4, kickT: 0, say: '', sayT: 0, color: WOLT, hat: WOLT });
+    const side = i % 2, pos = pathPoint(side);
+    peds.push({ ...pos, ...waypoint(side), side, kind: 'wolt', a: 0, vx: 0, vy: 0, mode: 'walk', t: 0, cool: 4, kickT: 0, say: '', sayT: 0, color: WOLT, hat: WOLT });
   }
   kids = []; balls = [];
   const nKids = hz(cv('kids', Math.min(4, n))) * BLOCKS, nBums = campaign && !nKids ? 0 : BLOCKS; // no bottles in story chapters without kids
   const home = chap()?.kidsNearHome && HOUSES[KIDS_HOME].door; // ch 3: the kids guard their own house
-  for (let i = 0, tries = 0; i < nKids + nBums && tries < 400 * BLOCKS; tries++) { // kids hide in the snow next to sidewalks; one bum per shop
-    const near = home && i < nKids, q = near ? pathPoint(home, 50 * PPM) : pathPoint(), [dx, dy] = pick([[0, 1], [0, -1], [1, 0], [-1, 0]]), off = rnd(45, 70);
+  for (let i = 0, tries = 0; i < nKids + nBums && tries < 400 * BLOCKS; tries++) { // kids hide in the snow next to sidewalks; one bum per block
+    const q = pathPoint(Math.random() < .7 ? 0 : 1), [dx, dy] = pick([[0, 1], [0, -1], [1, 0], [-1, 0]]), off = rnd(45, 70);
     const x = q.x + dx * off, y = q.y + dy * off;
-    if (x < 20 || x > W - 20 || y < 20 || y > H - 20 || cellAt(x, y) !== G_SNOW || inLake(x, y, 10) || insideSolid(x, y)
-        || DOORS.some(d => Math.hypot(d.x - x, d.y - y) < 90) || near && Math.hypot(home.x - x, home.y - y) > 50 * PPM || kids.some(k => Math.hypot(k.x - x, k.y - y) < 60)) continue;
+    if (x < 20 || x > W - 20 || y < 20 || y > H - 20 || [...PATHS, ROAD].some(p => inR(x, y, p)) || inLake(x, y, 10) || insideSolid(x, y)
+        || DOORS.some(d => Math.hypot(d.x - x, d.y - y) < 90) || home && i < nKids && Math.hypot(home.x - x, home.y - y) > 250) continue;
     const bum = i >= nKids;
     kids.push({ x, y, dx: -dx, dy: -dy, a: Math.atan2(-dy, -dx), cool: rnd(1, 3), throwT: 0, say: '', sayT: 0, bum,
                 coat: bum ? pick(['#5a4d3a', '#4a4f3a', '#3d3a36']) : pick(['#ff7b00', '#2d9cff', '#e84393', '#2fbf6a']),
@@ -1864,19 +1625,20 @@ function setupLevel(n) {
     i++;
   }
   loot = []; // skin cases tucked in beside a building, well off the sidewalks: you have to go looking
-  for (let tries = 0; loot.length < 2 && tries < 5000; tries++) { // in a courtyard or a park, against a wall
-    const { x, y } = zonePoint([G_SNOW], undefined, ZONE * 1.3, 120);
-    if (nearKind(x, y, 14, G_WALL) || !nearKind(x, y, 45, G_WALL) || nearKind(x, y, 70, G_PATH) || nearKind(x, y, 70, G_ROAD) || inLake(x, y, 20)
-        || trees.some(t => Math.hypot(t.x - x, t.y - y) < t.r + 15)
-        || loot.some(l => Math.hypot(l.x - x, l.y - y) < 150 * PPM)) continue; // spread out: not both round the same corner
+  const rectD = (x, y, p) => Math.hypot(Math.max(p[0] - x, 0, x - p[0] - p[2]), Math.max(p[1] - y, 0, y - p[1] - p[3]));
+  for (let tries = 0; loot.length < 2 && tries < 5000; tries++) {
+    const x = rnd(25, W - 25), y = rnd(25, H - 15), sd = Math.min(...SOLIDS.map(b => rectD(x, y, [b.x, b.y, b.w, b.h])));
+    if (sd < 14 || sd > 45 || [...PATHS, ROAD].some(p => rectD(x, y, p) < 70) || inLake(x, y, 20)
+        || DOORS.some(d => Math.hypot(d.x - x, d.y - y) < 120) || trees.some(t => Math.hypot(t.x - x, t.y - y) < t.r + 15)
+        || loot.some(l => Math.abs(l.x - x) < BW / 2)) continue; // spread out: not both in the same block
     loot.push({ x, y, got: 0 });
   }
   if (Math.random() < .2) loot.push({ x: SAUNA.x + SAUNA.w / 2, y: SAUNA.y + SAUNA.h + 25, got: 0, ham: 1 }); // rare: a kinkkumittari left by the sauna
-  plow = cv('plow', n >= 2) ? (p => ({ ...p, ...walkOn(p), a: 0 }))(pathPoint(SHOPS[0].door)) : null;
+  plow = cv('plow', n >= 2) ? { x: 20, y: 580, a: 0, wi: 1, dir: 1 } : null;
   // Prösma robots (endless, shift 5+): one per block, two from shift 8. they wander until someone nearby carries an order
   thieves = campaign || pvp || roam || n < 5 ? [] : Array.from({ length: hz(n >= 8 ? 2 : 1) * BLOCKS }, () => {
-    const s = pathPoint(), g = walkOn(s);
-    return { ...s, gx: g.tx, gy: g.ty, a: 0, vx: 0, vy: 0, cargo: null, cd: 0, imm: 0, say: '', sayT: 0 };
+    const s = spot(), g = spot();
+    return { ...s, gx: g.x, gy: g.y, a: 0, vx: 0, vy: 0, cargo: null, cd: 0, imm: 0, say: '', sayT: 0 };
   });
   applyLevel(n);
   if (role === 'host') for (const c of conns) c.send(levelMsg());
@@ -1902,7 +1664,7 @@ function applyLevel(n) {
 }
 function startLevel(n) {
   level = n; setupLevel(n);
-  time = Math.round((cv('time', 80 + n * 3) + up.battery * 20) * MAPX * Math.max(.6, 1 - coopX() * .2)); delivered = 0; goalDone = false;
+  time = Math.round((cv('time', 80 + n * 3) + up.battery * 20) * Math.max(.6, 1 - coopX() * .2)); delivered = 0; goalDone = false;
   quota = cv('quota', 2 + n) + (robots.length - 1) * 2;
   robots.forEach(r => Object.assign(r, spawn(r.i), { vx: 0, vy: 0, a: 0, camYaw: 0, boost: 1, zaps: 3 + 2 * up.tesla, cargo: null, hole: null, stun: 0, immune: 1, hp: 1, earn: 0, towT: 0, hookCd: 0, dDir: 0, dCh: 0, dTier: 0, mt: 0, drunk: 0, lag: 0 }));
   BOXES.forEach(b => b.t = 0);
@@ -2272,7 +2034,7 @@ function kidMove(r, inp, dt) {
   if (control) { const v = KID_SP * inp.t * (inp.t < 0 ? .5 : 1); r.vx = Math.cos(r.a) * v; r.vy = Math.sin(r.a) * v; }
   else { r.vx *= Math.exp(-6 * dt); r.vy *= Math.exp(-6 * dt); } // knocked over: slide to a stop
   r.x += r.vx * dt; r.y += r.vy * dt;
-  collide(r, R);
+  for (const b of SOLIDS) pushOut(r, clamp(r.x, b.x, b.x + b.w), clamp(r.y, b.y, b.y + b.h), R);
   for (const t of trees) pushOut(r, t.x, t.y, R + t.r);
   r.x = clamp(r.x, R, W - R); r.y = clamp(r.y, R, H - R);
   r.ballCd = (r.ballCd || 0) - dt;
@@ -2320,7 +2082,7 @@ function updRobot(r, dt) {
       r.vx = t.vx + (tx - r.x) * 6; r.vy = t.vy + (ty - r.y) * 6;
       const d = t.a - r.a; r.a += Math.atan2(Math.sin(d), Math.cos(d)) * Math.min(1, dt * 5);
       r.x += r.vx * dt; r.y += r.vy * dt;
-      collide(r, R); // hooked for 5 s: don't drag through houses
+      for (const b of SOLIDS) pushOut(r, clamp(r.x, b.x, b.x + b.w), clamp(r.y, b.y, b.y + b.h), R); // hooked for 5 s: don't drag through houses
       r.x = clamp(r.x, R, W - R); r.y = clamp(r.y, R, H - R);
       return;
     }
@@ -2407,7 +2169,10 @@ function updRobot(r, dt) {
     damage(r, .2, ''); say(r, 'Kylmää! 🥶', 3); sfx('hole'); fx({ k: 'burst', x: r.x, y: r.y, n: 20 });
     return;
   }
-  if (collide(r, R) > 150) { damage(r, .08, surface(r.x, r.y) === 'ice' ? 'Hups!' : 'Auts!'); bump('bumps'); }
+  for (const b of SOLIDS) {
+    const hit = pushOut(r, clamp(r.x, b.x, b.x + b.w), clamp(r.y, b.y, b.y + b.h), R);
+    if (hit > 150) { damage(r, .08, surface(r.x, r.y) === 'ice' ? 'Hups!' : 'Auts!'); bump('bumps'); }
+  }
   for (const t of trees) if (pushOut(r, t.x, t.y, R + t.r) > 150) {
     damage(r, .08, 'Auts!');
     // ponytail: half the time the tree drops its snow on you; being buried plays exactly like a pothole
@@ -2426,14 +2191,14 @@ function updRobot(r, dt) {
   }
   const shop = nearShop(r);
   if (!r.cargo && dist(r, shop.door) < 45 && !presents.length && !eetu) {
-    // orders go to doors a few streets away, never across the whole city
-    const near = HOUSES.flatMap((h, i) => dist(h.door, shop.door) < 350 * PPM ? [i] : []);
+    // orders go to this block or the next one over, never across the whole map
+    const near = HOUSES.flatMap((h, i) => Math.abs(h.door.x - shop.door.x) < BW * 1.2 ? [i] : []);
     // ch 8: once only the sled is missing, S-1 gets it at the next shop it reaches (the HUD points to the nearest)
     const sled = chap()?.goal === 'sled' && r === robots[0] && delivered >= quota - 1 && !goalDone;
     const o = sled ? SLED : pickOrder(), O = ORDERS[o], dest = O.home ? KIDS_HOME : pick(near);
     // each order has a deadline: arrive in time for the speed tip
     r.cargo = { dest, o, cond: 1, t0: T, t: Math.round((8 + dist(shop.door, HOUSES[dest].door) / 60) * (O.time || 1) * (1 + .25 * up.box)) };
-    say(r, `${O.icon} → ${HOUSES[dest].addr}`); pop(r, O.name, '#fff'); sfx('pickup');
+    say(r, `${O.icon} → ${dest + 1}`); pop(r, O.name, '#fff'); sfx('pickup');
   } else if (r.cargo && dist(r, HOUSES[r.cargo.dest].door) < 45 && (!isDuo(r) || helper(r) || campaign && robots.length === 1)) {
     const c = r.cargo, O = ORDERS[c.o], late = c.t <= 0, tipX = O.tipX || 1;
     const pay = Math.round(((late ? 10 : 20) + (O.bonus || 0) + Math.round(15 * c.cond) + (late ? 0 : Math.min(20 * tipX, Math.round(c.t * tipX)))) * (1 + .25 * up.box));
@@ -2500,29 +2265,24 @@ function updCars(dt) {
   for (const c of cars) {
     if (c.fly > 0) { c.v = 0; continue; } // bowled over by Santa
     let target = c.base;
-    const ca = Math.cos(c.a), sa = Math.sin(c.a), ahead = (x, y) => [(x - c.x) * ca + (y - c.y) * sa, Math.abs((y - c.y) * ca - (x - c.x) * sa)];
     for (const cr of CROSS) {
-      if (Math.abs(cr.x - c.x) > 200 || Math.abs(cr.y - c.y) > 200) continue;
-      const [f, side] = ahead(cr.x, cr.y);
+      const ahead = (cr[0] + 20 - c.x) * c.dir;
       // Finnish drivers yield at the suojatie
-      if (f > 45 && f < 200 && side < 60 && robots.some(r => Math.hypot(r.x - cr.x, r.y - cr.y) < 70)) target = 0;
+      if (ahead > 45 && ahead < 200 && robots.some(r => inR(r.x, r.y, [cr[0] - 24, 590, 88, 140]))) target = 0;
     }
-    for (const o of cars) if (o !== c && Math.abs(o.x - c.x) < 130 && Math.abs(o.y - c.y) < 130) {
-      const [f, side] = ahead(o.x, o.y);
-      if (f > 0 && f < 130 && side < 26 && Math.cos(o.a - c.a) > .3) target = Math.min(target, f < 100 ? 0 : o.v);
+    for (const o of cars) if (o !== c && o.y === c.y) {
+      const dx = (o.x - c.x) * c.dir;
+      if (dx > 0 && dx < 130) target = Math.min(target, dx < 100 ? 0 : o.v);
     }
     c.v += (target - c.v) * Math.min(1, dt * 3);
-    c.t += c.v * dt;
-    while (c.t > c.len) { const t = c.t - c.len; if (!nextEdge(c)) { carStart(c); break; } c.t = t; }
-    carPlace(c);
+    c.x += c.v * c.dir * dt;
+    if (c.dir > 0 && c.x > W + 100) c.x = -100;
+    if (c.dir < 0 && c.x < -100) c.x = W + 100;
     for (const r of robots) {
       if (r.hole) continue;
-      const dx = r.x - c.x, dy = r.y - c.y, lx = clamp(dx * ca + dy * sa, -40, 40), ly = clamp(dy * ca - dx * sa, -18, 18);
-      pushOut(r, c.x + lx * ca - ly * sa, c.y + lx * sa + ly * ca, R);
-      const fx = (r.x - c.x) * ca + (r.y - c.y) * sa, fy = (r.y - c.y) * ca - (r.x - c.x) * sa;
-      if (c.v > 30 && r.hitCd <= 0 && Math.abs(fx) < 40 + R + 1 && Math.abs(fy) < 18 + R + 1) {
-        const side = Math.sign(fy || 1);
-        r.vx += ca * c.v * 1.2 - sa * side * 220; r.vy += sa * c.v * 1.2 + ca * side * 220; r.stun = .7;
+      pushOut(r, clamp(r.x, c.x - 40, c.x + 40), clamp(r.y, c.y - 18, c.y + 18), R);
+      if (c.v > 30 && r.hitCd <= 0 && Math.abs(r.x - c.x) < 40 + R + 1 && Math.abs(r.y - c.y) < 18 + R + 1) {
+        r.vx += c.dir * c.v * 1.2; r.vy += Math.sign(r.y - c.y || 1) * 220; r.stun = .7;
         damage(r, .25, 'Auts! 🚗'); bump('carHit');
       }
     }
@@ -2531,6 +2291,13 @@ function updCars(dt) {
 // ---------- angry pedestrians ----------
 const WOLT_SHOUTS = ['Tää on mun keikka!', 'Robotit vie meidän keikat!', 'Pois mun reitiltä!', 'Viis tähteä, kiitos!'];
 const PED_SHOUTS = ['Senkin romu!', 'Pois tieltä!', 'Robotit vie meidän työt!', 'Hitto sentään!', 'Mene pois!'];
+function pathPoint(side) { // a point on a sidewalk on this side of the road
+  for (;;) {
+    const q = pick(PATHS), x = q[0] + Math.random() * q[2], y = q[1] + Math.random() * q[3];
+    if ((y < 660) === (side === 0)) return { x, y };
+  }
+}
+const waypoint = side => { const q = pathPoint(side); return { tx: q.x, ty: q.y }; };
 function fall(p, msg) { p.mode = 'fall'; p.t = 2.5; p.moving = false; say(p, p.kind === 'dog' ? 'Vuh!' : msg, 1.2); sfx('kick'); fx({ k: 'burst', x: p.x, y: p.y, n: 10 }); }
 function kick(p, r) { // people kick, dogs jump on you
   const dog = p.kind === 'dog', a = Math.atan2(r.y - p.y, r.x - p.x), f = dog ? 220 : 340;
@@ -2538,7 +2305,7 @@ function kick(p, r) { // people kick, dogs jump on you
   damage(r, dog ? .08 : .15, pick(['Auts!', 'Apua!', 'Hei!'])); bump(dog ? 'bite' : 'kick');
   p.kickT = .35; say(p, dog ? pick(['Hau hau!', 'Murr!', 'Vuh vuh!']) : pick(p.kind === 'wolt' ? WOLT_SHOUTS : PED_SHOUTS), 1.8); sfx(dog ? 'bark' : 'kick');
   fx({ k: 'burst', x: r.x, y: r.y, n: 8 });
-  Object.assign(p, { mode: 'walk', cool: p.kind === 'wolt' ? 1.5 : dog ? 3 : 4, ni: -1 }); Object.assign(p, walkOn(p)); // satisfied, walks off (a courier just circles back)
+  Object.assign(p, { mode: 'walk', cool: p.kind === 'wolt' ? 1.5 : dog ? 3 : 4 }, waypoint(p.side)); // satisfied, walks off (a courier just circles back)
 }
 function updPeds(dt) {
   for (const p of peds) {
@@ -2557,19 +2324,20 @@ function updPeds(dt) {
     let gx = p.tx, gy = p.ty, sp = wolt ? 70 : dog ? 60 : 45;
     if (p.mode === 'chase') {
       const r = p.target;
-      if (!robots.includes(r) || r.hole || !wolt && dist(p, r) > 260 || state !== 'play') { p.mode = 'walk'; p.cool = 2; p.ni = -1; Object.assign(p, walkOn(p)); }
+      if (!robots.includes(r) || r.hole || !wolt && dist(p, r) > 260 || state !== 'play') { p.mode = 'walk'; p.cool = 2; }
       else {
         gx = r.x; gy = r.y; sp = wolt ? 160 : dog ? 150 : 100; // moped: outruns a robot in snow, loses it on a clear path
         if (dist(p, r) < R + (dog ? 10 : 16) && p.kickT < -.5) kick(p, r);
         if (surface(p.x, p.y) === 'ice' && Math.random() < dt * (dog ? 1.2 : .8)) { fall(p, 'Hups!'); continue; }
       }
-    } else if (Math.hypot(p.tx - p.x, p.ty - p.y) < 12) Object.assign(p, walkOn(p));
+    } else if (Math.hypot(p.tx - p.x, p.ty - p.y) < 12) Object.assign(p, waypoint(p.side));
     const d = Math.hypot(gx - p.x, gy - p.y);
     p.moving = d > 2 && p.kickT < 0;
     if (p.moving) { p.a = Math.atan2(gy - p.y, gx - p.x); const m = Math.min(d, sp * dt); p.x += Math.cos(p.a) * m; p.y += Math.sin(p.a) * m; }
-    collide(p, 8);
-    for (const t of trees) if (Math.abs(t.x - p.x) < 30 && Math.abs(t.y - p.y) < 30) pushOut(p, t.x, t.y, 8 + t.r);
-    p.x = clamp(p.x, 8, W - 8); p.y = clamp(p.y, 8, H - 8); p.vx = p.vy = 0;
+    if (!wolt) p.y = p.side === 0 ? Math.min(p.y, 594) : Math.max(p.y, 726); // never step into traffic (mopeds ride straight across)
+    for (const b of SOLIDS) pushOut(p, clamp(p.x, b.x, b.x + b.w), clamp(p.y, b.y, b.y + b.h), 8);
+    for (const t of trees) pushOut(p, t.x, t.y, 8 + t.r);
+    p.x = clamp(p.x, 8, W - 8); p.vx = p.vy = 0;
     // robots bump people; ramming at speed knocks them on their behind
     for (const r of robots) {
       if (r.hole || p.mode === 'fall') continue;
@@ -2582,10 +2350,11 @@ function updPeds(dt) {
   }
 }
 // ---------- snowplow, snowball kids ----------
-function updPlow(dt) { // clears the sidewalks, wandering the city's footways
+const PLOW_ROUTE = [[20, 580], ...BX.flatMap(bx => [[bx + 640, 580], [bx + 640, 238], [bx + 1320, 238], [bx + 1320, 580]]), [W - 20, 580]];
+function updPlow(dt) {
   if (!plow) return;
-  const tx = plow.tx, ty = plow.ty, d = Math.hypot(tx - plow.x, ty - plow.y);
-  if (d < 4) { Object.assign(plow, walkOn(plow)); return; }
+  const [tx, ty] = PLOW_ROUTE[plow.wi], d = Math.hypot(tx - plow.x, ty - plow.y);
+  if (d < 4) { if (plow.wi + plow.dir < 0 || plow.wi + plow.dir >= PLOW_ROUTE.length) plow.dir *= -1; plow.wi += plow.dir; return; }
   plow.a = Math.atan2(ty - plow.y, tx - plow.x);
   const m = Math.min(d, 70 * dt); plow.x += Math.cos(plow.a) * m; plow.y += Math.sin(plow.a) * m;
   for (const p of ice) if (!p.gone && Math.hypot(p.x - plow.x, p.y - plow.y) < Math.max(p.rx, p.ry) * .7 + 18) { p.gone = true; if (p.mesh) p.mesh.visible = false; }
@@ -2610,15 +2379,15 @@ function updThieves(dt) {
     const byDist = (a, b) => dist(t, a) - dist(t, b);
     const near = robots.filter(r => !r.hole).sort(byDist)[0], prey = !t.cargo && robots.filter(r => stealable(r) && dist(t, r) < 420).sort(byDist)[0];
     let gx = t.gx, gy = t.gy, sp = 60;
-    if (t.cargo && near && dist(t, near) < 320) { gx = 2 * t.x - near.x; gy = 2 * t.y - near.y; sp = 140; t.ni = -1; } // runs, but a robot on a clear sidewalk (190) catches it
-    else if (prey) { gx = prey.x; gy = prey.y; sp = 170; t.ni = -1; } // off its sidewalk: back to the nearest one when it calms down
-    else if (t.ni < 0 || Math.hypot(gx - t.x, gy - t.y) < 12) { const n = walkOn(t); Object.assign(t, { gx: n.tx, gy: n.ty, ni: n.ni, pi: n.pi }); gx = t.gx; gy = t.gy; }
+    if (t.cargo && near && dist(t, near) < 320) { gx = 2 * t.x - near.x; gy = 2 * t.y - near.y; sp = 140; } // runs, but a robot on a clear sidewalk (190) catches it
+    else if (prey) { gx = prey.x; gy = prey.y; sp = 170; }
+    else if (Math.hypot(gx - t.x, gy - t.y) < 12) { const s = spot(); t.gx = s.x; t.gy = s.y; }
     t.mode = prey ? 'chase' : 'walk';
     const d = Math.hypot(gx - t.x, gy - t.y);
     if (state === 'play' && t.cd <= 0 && d > 2) { t.a = Math.atan2(gy - t.y, gx - t.x); const m = Math.min(d, sp * dt); t.x += Math.cos(t.a) * m; t.y += Math.sin(t.a) * m; }
     // ponytail: no pathfinding, it steers straight and slides along walls; a cornered thief is the catchable kind
-    collide(t, R);
-    for (const tr of trees) if (Math.abs(tr.x - t.x) < 30 && Math.abs(tr.y - t.y) < 30) pushOut(t, tr.x, tr.y, R + tr.r);
+    for (const b of SOLIDS) pushOut(t, clamp(t.x, b.x, b.x + b.w), clamp(t.y, b.y, b.y + b.h), R);
+    for (const tr of trees) pushOut(t, tr.x, tr.y, R + tr.r);
     t.x = clamp(t.x, 10, W - 10); t.y = clamp(t.y, 10, H - 10); t.vx = t.vy = 0;
     if (state !== 'play') continue;
     for (const r of robots) {
@@ -2639,29 +2408,24 @@ function updThieves(dt) {
   }
 }
 // Santa sweeps a whole lane now and then: cars tumble like pins, robots get flung
-function updSanta(dt) { // he comes down a street a few blocks off, straight on at every junction, for ten seconds
+function updSanta(dt) {
   if (!santa) {
-    if (state !== 'play' || (santaIn -= dt) > 0 || !robots.length) return;
+    if (state !== 'play' || (santaIn -= dt) > 0) return;
     santaIn = rnd(35, 70);
-    const r = pick(robots), a = rnd(0, 7);
-    santa = carStart({ off: 0, life: 10 }, { x: r.x + Math.cos(a) * 160 * PPM, y: r.y + Math.sin(a) * 160 * PPM }, 60 * PPM);
-    if (santa) { fx({ k: 'wx', w: 'santa' }); sfx('jingle'); }
+    const dir = pick([1, -1]);
+    santa = { x: dir > 0 ? -250 : W + 250, y: pick([630, 690]), dir };
+    fx({ k: 'wx', w: 'santa' }); sfx('jingle');
     return;
   }
-  santa.t += SANTA_V * dt;
-  while (santa.t > santa.len) { const t = santa.t - santa.len; if (!nextEdge(santa, true)) { santa = null; return; } santa.t = t; }
-  carPlace(santa);
-  if ((santa.life -= dt) <= 0) { santa = null; return; }
-  const ca = Math.cos(santa.a), sa = Math.sin(santa.a), local = q => [(q.x - santa.x) * ca + (q.y - santa.y) * sa, (q.y - santa.y) * ca - (q.x - santa.x) * sa];
+  santa.x += santa.dir * SANTA_V * dt;
+  if (santa.x < -300 || santa.x > W + 300) { santa = null; return; }
   cars.forEach((c, i) => {
-    if (c.fly > 0 || dist(c, santa) > 100) return;
+    if (c.fly > 0 || c.y !== santa.y || Math.abs(c.x - santa.x) > 100) return;
     fx({ k: 'bowl', i }); fx({ k: 'burst', x: c.x, y: c.y, n: 24 }); sfx('crash');
   });
   for (const r of robots) {
-    const [f, side] = local(r);
-    if (r.hole || r.hitCd > 0 || Math.abs(f) > 70 + R || Math.abs(side) > 28 + R) continue;
-    const sg = Math.sign(side || 1);
-    r.vx = ca * 650 - sa * sg * 320; r.vy = sa * 650 + ca * sg * 320; r.stun = 1;
+    if (r.hole || r.hitCd > 0 || Math.abs(r.x - santa.x) > 70 + R || Math.abs(r.y - santa.y) > 28 + R) continue;
+    r.vx = santa.dir * 650; r.vy = Math.sign(r.y - santa.y || 1) * 320; r.stun = 1;
     damage(r, .2, 'Hohoho! 🎅'); fx({ k: 'burst', x: r.x, y: r.y, n: 20 }); bump('santaHit');
   }
 }
@@ -2743,7 +2507,7 @@ function update(dt) {
   if (state === 'play' && !roam) {
     if (!goalDone) time -= dt; // the battery waits while a story moment plays out
     if (!pvp && (chap()?.goal && chap().goal !== 'collect' ? goalDone && T - goalT > 3 : delivered >= quota)) {
-      bonus = Math.ceil(time / MAPX); money += bonus; score += bonus; state = 'shop'; stateT = 0;
+      bonus = Math.ceil(time); money += bonus; score += bonus; state = 'shop'; stateT = 0;
       sfx('clear');
       bump('shifts'); bump('earn', bonus);
       if (!since('dmg')) bump('perfShift');
@@ -2785,17 +2549,17 @@ function applyWeatherLook(dt) {
   }
 }
 const _v = new THREE.Vector3();
-const insideSolid = (x, y) => nearKind(x, y, 10, G_WALL) || SOLIDS.some(b => x > b.x - 10 && x < b.x + b.w + 10 && y > b.y - 10 && y < b.y + b.h + 10);
+const insideSolid = (x, y) => SOLIDS.some(b => x > b.x - 10 && x < b.x + b.w + 10 && y > b.y - 10 && y < b.y + b.h + 10);
 function updCameras(dt) {
-  // title screen: slow orbit over the streets by the station, where the robots start
-  const a = T * .08, c = SHOPS[0].door, cx = c.x * S - OX, cz = c.y * S - OZ;
-  camera.position.set(cx + Math.sin(a) * 75, 48, cz + Math.cos(a) * 75); camera.lookAt(cx, 4, cz);
-  // shadows, snowfall and lamp lights cover a couple of streets, so they follow the local players
-  const mine = robots.filter(r => r.owner === myOwner), title = state === 'title' || !mine.length;
-  const fx = title ? W / 2 : mine.reduce((t, r) => t + r.x, 0) / mine.length, fy = title ? H / 2 : mine.reduce((t, r) => t + r.y, 0) / mine.length;
-  const wx = fx * S - OX, wz = fy * S - OZ;
-  if (shadowNow) sun.position.set(wx - 60, 70, wz + 55), sun.target.position.set(wx, 0, wz); sun.target.updateMatrixWorld();
-  snow.position.set(wx, 0, wz); moveLamps(fx, fy);
+  // title screen: slow orbit over the village
+  const a = T * .08;
+  const tx = BW / 2 * S - OX; // title shot orbits the first block
+  camera.position.set(tx + Math.sin(a) * 110, 75, Math.cos(a) * 80); camera.lookAt(tx, 0, 0);
+  // shadows, snowfall and lamp lights cover one block's worth, so they follow the local players
+  const mine = robots.filter(r => r.owner === myOwner), fx = state === 'title' || !mine.length ? BW / 2 : mine.reduce((t, r) => t + r.x, 0) / mine.length;
+  const wx = fx * S - OX;
+  if (shadowNow) sun.position.set(wx - 60, 70, 55), sun.target.position.set(wx, 0, 0); sun.target.updateMatrixWorld();
+  snow.position.x = wx; moveLamps(fx);
   // third-person chase cam per robot; yaw lags behind so ice slides feel like slides
   for (const r of robots) {
     let d = r.a - r.camYaw; d = Math.atan2(Math.sin(d), Math.cos(d));
@@ -2915,15 +2679,15 @@ const inviteCode = new URLSearchParams(location.search).get('join');
 if (inviteCode) { history.replaceState(null, '', location.pathname); joinRoom(inviteCode); }
 function levelMsg() {
   return { type: 'lvl', n: level, cg: campaign, ch: chapter, pr: presents.map(({ x, y, gone }) => ({ x, y, gone })), et: eetu?.state, ice: ice.map(({ x, y, rx, ry, gone }) => ({ x, y, rx, ry, gone })), holes,
-           cars: cars.map(({ x, y, a, base, v, color }) => ({ x, y, a, base, v, color })),
-           peds: peds.map(({ x, y, kind, color, hat }) => ({ x, y, kind, color, hat })),
-           kids: kids.map(({ x, y, a, dx, dy, coat, hat, bum }) => ({ x, y, a, dx, dy, coat, hat, bum })), loot: loot.map(({ x, y, got, ham }) => ({ x, y, got, ham })), th: thieves.map(({ x, y }) => ({ x, y })), plow: plow && { x: plow.x, y: plow.y } };
+           cars: cars.map(({ x, y, dir, base, v, color }) => ({ x, y, dir, base, v, color })),
+           peds: peds.map(({ x, y, side, kind, color, hat }) => ({ x, y, side, kind, color, hat })),
+           kids: kids.map(({ x, y, a, dx, dy, coat, hat, bum }) => ({ x, y, a, dx, dy, coat, hat, bum })), loot: loot.map(({ x, y, got, ham }) => ({ x, y, got, ham })), th: thieves.map(({ x, y }) => ({ x, y })), plow: !!plow };
 }
 function applyLevelMsg(m) {
   level = m.n; campaign = !!m.cg; chapter = m.ch || 0; presents = m.pr || []; eetu = m.et ? { x: AVANTO.x, y: AVANTO.y, state: m.et, say: '', sayT: 0 } : null; ice = m.ice; holes = m.holes; cars = m.cars;
   peds = m.peds.map(p => ({ ...p, a: 0, mode: 'walk', kickT: 0, say: '', sayT: 0 }));
   kids = m.kids.map(k => ({ ...k, throwT: 0, say: '', sayT: 0 })); balls = []; loot = m.loot || [];
-  plow = m.plow ? { ...m.plow, a: 0 } : null;
+  plow = m.plow ? { x: 20, y: 580, a: 0 } : null;
   thieves = (m.th || []).map(t => ({ ...t, a: 0, say: '', sayT: 0 }));
   applyLevel(m.n);
 }
@@ -2933,11 +2697,11 @@ function broadcast(dt) {
   const m = { type: 's', st: state, pvp, roam, cg: campaign, ch: chapter, pz: paused, level, time, quota, delivered, score, bonus, money, up, banner, bannerT, best,
     r: robots.map(r => ({ id: r.id, i: r.i, n: nameOf(r), sk: skinOf(r), owner: r.owner, x: r.x, y: r.y, a: r.a, vx: r.vx, vy: r.vy, cargo: r.cargo,
                           hole: typeof r.hole === 'string' ? r.hole : !!r.hole, esc: r.esc, stun: r.stun, say: r.say, sayT: r.sayT, bo: r.boost, bl: r.boostLock, bz: r.boosting, dk: r.dTier, zp: r.zaps, hp: r.hp, e: r.earn, dr: r.drunk, lg: r.lag, kd: !!r.kid, th: r.throwT, tw: r.towT > 0 ? r.tow : -1 })),
-    c: cars.map(c => [Math.round(c.x), Math.round(c.y), Math.round(c.a * 100) / 100]), fx: outbox.splice(0),
+    c: cars.map(c => c.x), fx: outbox.splice(0),
     p: peds.map(p => ({ x: p.x, y: p.y, a: p.a, m: p.mode, k: p.kickT > 0, mv: p.moving, s: p.say, st: p.sayT })),
     tv: thieves.map(t => ({ x: t.x, y: t.y, a: t.a, c: t.cargo ? 1 : 0, z: t.cd > 0 ? 1 : 0, m: t.mode, s: t.say, st: t.sayT })),
     kd: kids.map(k => ({ a: k.a, th: k.throwT, s: k.say, st: k.sayT, z: k.zapT > 0 })), b: balls, wx: weather,
-    pl: plow && { x: plow.x, y: plow.y, a: plow.a }, sa: santa && { x: santa.x, y: santa.y, a: santa.a }, ig: ice.map(p => p.gone ? 1 : 0).join(''), pg: presents.map(p => p.gone ? 1 : 0).join(''), bxs: BOXES.map(b => b.t ? 1 : 0).join(''), et: eetu && { s: eetu.state, say: eetu.say, sayT: eetu.sayT } };
+    pl: plow && { x: plow.x, y: plow.y, a: plow.a }, sa: santa, ig: ice.map(p => p.gone ? 1 : 0).join(''), pg: presents.map(p => p.gone ? 1 : 0).join(''), bxs: BOXES.map(b => b.t ? 1 : 0).join(''), et: eetu && { s: eetu.state, say: eetu.say, sayT: eetu.sayT } };
   for (const c of conns) c.send(m);
 }
 function applySnap(m) {
@@ -2952,14 +2716,14 @@ function applySnap(m) {
     Object.assign(r, { owner: s.owner, n: s.n, skin: s.sk || '', tx: s.x, ty: s.y, ta: s.a, vx: s.vx, vy: s.vy, cargo: s.cargo, hole: s.hole || null,
                        esc: s.esc, stun: s.stun, say: s.say, sayT: s.sayT, boost: s.bo, boostLock: s.bl, boosting: s.bz, dTier: s.dk || 0, zaps: s.zp, hp: s.hp ?? 1, earn: s.e ?? 0, drunk: s.dr || 0, lag: s.lg || 0, kid: !!s.kd, throwT: s.th || 0, tow: s.tw, towT: s.tw >= 0 ? 1 : 0 });
   }
-  m.c.forEach(([x, y, a], i) => cars[i] && Object.assign(cars[i], { tx: x, ty: y, a }));
+  m.c.forEach((x, i) => cars[i] && (cars[i].tx = x));
   m.p?.forEach((q, i) => peds[i] && Object.assign(peds[i], { tx: q.x, ty: q.y, a: q.a, mode: q.m, kickT: q.k ? .3 : 0, moving: q.mv, say: q.s, sayT: q.st }));
   m.tv?.forEach((q, i) => thieves[i] && Object.assign(thieves[i], { tx: q.x, ty: q.y, a: q.a, cargo: q.c, cd: q.z, mode: q.m, say: q.s, sayT: q.st }));
   m.kd?.forEach((q, i) => kids[i] && Object.assign(kids[i], { a: q.a, throwT: q.th, say: q.s, sayT: q.st, zapT: q.z ? 1 : 0 }));
   balls = m.b || []; weather = m.wx || weather;
   BOXES.forEach((b, i) => b.t = +(m.bxs?.[i] === '1'));
   if (plow && m.pl) Object.assign(plow, { tx: m.pl.x, ty: m.pl.y, a: m.pl.a });
-  if (!m.sa) santa = null; else if (!santa || dist(santa, m.sa) > 150) santa = m.sa; else santa.a = m.sa.a; // guests run him ahead between snaps
+  if (!m.sa) santa = null; else if (!santa || Math.abs(santa.x - m.sa.x) > 150) santa = m.sa; // guests run him ahead between snaps
   if (eetu && m.et) { Object.assign(eetu, { state: m.et.s, say: m.et.say, sayT: m.et.sayT }); if (eetu.mesh) eetu.mesh.visible = eetu.state === 'ice'; }
   [...(m.pg || '')].forEach((g, i) => { const p = presents[i]; if (p && g === '1' && !p.gone) { p.gone = true; if (p.mesh) p.mesh.visible = false; } });
   [...(m.ig || '')].forEach((g, i) => { if (ice[i] && g === '1' && !ice[i].gone) { ice[i].gone = true; if (ice[i].mesh) ice[i].mesh.visible = false; } });
@@ -2979,30 +2743,13 @@ function guestTick(dt) {
     r.sayT -= dt;
   }
   for (const p of [...peds, ...thieves]) if (p.tx != null) { p.x += (p.tx - p.x) * k; p.y += (p.ty - p.y) * k; p.kickT -= dt; p.sayT -= dt; }
-  for (const c of cars) if (c.tx != null) {
-    if (Math.hypot(c.tx - c.x, c.ty - c.y) > 400) { c.x = c.tx; c.y = c.ty; } else { c.x += (c.tx - c.x) * k; c.y += (c.ty - c.y) * k; }
-  }
-  if (santa) { santa.x += Math.cos(santa.a) * SANTA_V * dt; santa.y += Math.sin(santa.a) * SANTA_V * dt; }
+  for (const c of cars) if (c.tx != null) c.x = Math.abs(c.tx - c.x) > 400 ? c.tx : c.x + (c.tx - c.x) * k;
+  if (santa) santa.x += santa.dir * SANTA_V * dt;
   if (plow?.tx != null) { plow.x += (plow.tx - plow.x) * k; plow.y += (plow.ty - plow.y) * k; }
   for (const b of balls) { b.age += dt; b.x += b.vx * dt; b.y += b.vy * dt; }
   for (const q of kids) { q.throwT -= dt; q.sayT -= dt; }
 }
 const SPARK = [0, '#3aa8ff', '#ff8a1f', '#c04bff'];
-// a street route to the robot's target, refreshed every second: the minimap draws it and the 3D arrow points along it
-function gps(r, tgt) {
-  if (!r.route || r.routeTo !== tgt || T > r.routeT) { r.route = findRoute(RG, r, tgt); r.routeTo = tgt; r.routeT = T + 1; }
-  const rt = r.route; // where the robot is on the route (closest segment), then 100 px further along it
-  let bd = Infinity, bi = 0, bp = rt[0];
-  for (let i = 0; i + 1 < rt.length; i++) { const [x, y] = segPoint(r.x, r.y, [rt[i].x, rt[i].y, rt[i + 1].x, rt[i + 1].y]), d = Math.hypot(x - r.x, y - r.y); if (d < bd) { bd = d; bi = i; bp = { x, y }; } }
-  r.routeI = bi + 1;
-  let left = 100, p = bp;
-  for (let i = bi + 1; i < rt.length; i++) {
-    const L = Math.hypot(rt[i].x - p.x, rt[i].y - p.y);
-    if (L >= left) { r.aim = { x: p.x + (rt[i].x - p.x) * left / L, y: p.y + (rt[i].y - p.y) * left / L }; return; }
-    left -= L; p = rt[i];
-  }
-  r.aim = tgt;
-}
 function sync(dt) {
   for (const r of robots) {
     place(r.mesh, r.x, r.y); r.mesh.rotation.y = -r.a;
@@ -3033,9 +2780,8 @@ function sync(dt) {
     if (!r.hole && (slip > 45 || r.boosting)) for (let k = 0; k < 2; k++)
       puff(r.x - Math.cos(r.a) * 6, r.y - Math.sin(r.a) * 6, .15, -Math.cos(r.a) * 2 + rnd(-1.5, 1.5), -Math.sin(r.a) * 2 + rnd(-1.5, 1.5), rnd(1, 3));
     r.flag.rotation.y = Math.PI + Math.sin(T * 8 + r.i) * .35 + clamp(Math.hypot(r.vx, r.vy) / 400, 0, .3);
-    const tgt = r.cargo ? HOUSES[r.cargo.dest].door : nearShop(r).door, mine = r.owner === myOwner;
-    if (mine && state === 'play') gps(r, tgt);
-    const aim = mine && r.aim || tgt, a = Math.atan2(aim.y - r.y, aim.x - r.x);
+    const tgt = r.cargo ? HOUSES[r.cargo.dest].door : nearShop(r).door, a = Math.atan2(tgt.y - r.y, tgt.x - r.x);
+    const mine = r.owner === myOwner;
     r.arrow.visible = mine && state === 'play' && dist(r, tgt) > 90;
     place(r.arrow, r.x + Math.cos(a) * 22, r.y + Math.sin(a) * 22, .3); r.arrow.rotation.y = -a;
     r.beam.visible = mine && state === 'play' && !!r.cargo;
@@ -3115,11 +2861,11 @@ function sync(dt) {
   applyWeatherLook(dt);
   for (const c of cars) {
     const f = c.fly > 0 ? (c.fly -= dt) : 0; // tumbling arc after Santa bowls it
-    place(c.mesh, c.x, c.y, f > 0 ? f * (1.4 - f) * 14 : 0); c.mesh.rotation.y = -c.a; c.mesh.rotation.x = f > 0 ? f * 9 : 0;
+    place(c.mesh, c.x, c.y, f > 0 ? f * (1.4 - f) * 14 : 0); c.mesh.rotation.y = c.dir > 0 ? 0 : Math.PI; c.mesh.rotation.x = f > 0 ? f * 9 : 0;
   }
   sleigh.visible = !!santa;
   if (santa) {
-    place(sleigh, santa.x, santa.y, .6 + Math.sin(T * 7) * .25); sleigh.rotation.y = -santa.a;
+    place(sleigh, santa.x, santa.y, .6 + Math.sin(T * 7) * .25); sleigh.rotation.y = santa.dir > 0 ? 0 : Math.PI;
     sleigh.deer.forEach((d, i) => d.legs.forEach((l, j) => l.rotation.z = Math.sin(T * 22 + i + j * 3) * .7));
   }
   if (flagMesh) flagMesh.rotation.y = Math.sin(T * 1.3) * .5;
@@ -3177,12 +2923,12 @@ function drawTag(v) { // the player's own order sign at the bottom of their view
   else if (r.hole) { title = r.hole === 'snow' ? 'Buried in snow' : r.hole === 'avanto' ? 'Fell through the ice' : 'Stuck in a pothole'; sub = pvp ? 'Wiggle out: nobody is coming to help' : 'Wiggle out, or wait for a friend to tow you'; }
   else if (r.cargo) {
     const O = ORDERS[r.cargo.o];
-    title = `${O.icon} ${O.name}`; num = HOUSES[r.cargo.dest].no;
-    sub = O.duo && !helper(r) ? (campaign && robots.length === 1 ? 'Heavy: slow going alone, but it gets there' : 'Too heavy alone: get a teammate right next to you') : `Deliver to ${HOUSES[r.cargo.dest].addr}${O.duo ? ' together' : ''}`;
+    title = `${O.icon} ${O.name}`; num = r.cargo.dest + 1;
+    sub = O.duo && !helper(r) ? (campaign && robots.length === 1 ? 'Heavy: slow going alone, but it gets there' : 'Too heavy alone: get a teammate right next to you') : `Deliver to house ${num}${O.duo ? ' together' : ''}`;
     late = r.cargo.t <= 0; right = late ? 'Late' : Math.ceil(r.cargo.t) + ' s';
   } else if (eetu?.state === 'ice') { title = '🪝 Eetu is in the ice hole'; sub = 'By the sauna. Aim at him and use your hook'; }
   else if (presents.length) { title = '🎁 Collect the presents'; sub = `${presents.filter(p => !p.gone).length} left on the road. Mind the cars`; }
-  else { const b = nearShop(r); title = `Pick up at ${b.name[0] + b.name.slice(1).toLowerCase()}, ${b.addr}`; sub = 'Follow the arrow to the green marker'; num = b.tag; numFill = b.color; }
+  else { const b = nearShop(r); title = `Pick up at ${b.name[0] + b.name.slice(1).toLowerCase()}`; sub = 'Follow the green marker'; num = b.tag; numFill = b.color; }
   ctx.font = F(800, 17); const tw = ctx.measureText(title).width;
   ctx.font = F(600, 13); const sw = ctx.measureText(sub).width;
   ctx.font = F(900, 24); const rw = right ? ctx.measureText(right).width + 34 : 0;
@@ -3272,42 +3018,36 @@ function drawLabels(v) {
   }
   if (v.r && state === 'play') { drawTag(v); drawMinimap(v); }
 }
-// minimap background: the surface raster itself, one pixel per metre, plus the railway
-const MINI = 1 / CELL, MWIN = 200 * PPM, miniBg = document.createElement('canvas'); miniBg.width = GW; miniBg.height = GH; // shows 200 m around the robot
+const MINI = .3, miniBg = document.createElement('canvas'); miniBg.width = W * MINI; miniBg.height = H * MINI;
 {
-  const g = miniBg.getContext('2d'), img = g.createImageData(GW, GH), d = img.data;
-  const COL = [[238, 243, 248], [179, 186, 196], [77, 82, 90], [185, 220, 240], [130, 138, 150]];
-  for (let i = 0; i < grid.length; i++) { const c = COL[grid[i]]; d[i * 4] = c[0]; d[i * 4 + 1] = c[1]; d[i * 4 + 2] = c[2]; d[i * 4 + 3] = 255; }
-  g.putImageData(img, 0, 0);
-  g.scale(MINI, MINI); g.strokeStyle = 'rgba(110,80,60,.6)'; g.lineWidth = 1.5 * PPM;
-  for (const r of MAP.rails) if (!r[0]) { g.beginPath(); for (let i = 1; i + 1 < r.length; i += 2) g.lineTo(r[i], r[i + 1]); g.stroke(); }
-  g.fillStyle = '#0f3a55'; g.beginPath(); g.arc(AVANTO.x, AVANTO.y, AVANTO.r * 2, 0, 7); g.fill();
+  const g = miniBg.getContext('2d'); g.scale(MINI, MINI);
+  g.fillStyle = '#eef3f8'; g.fillRect(0, 0, W, H);
+  g.fillStyle = '#b9dcf0'; g.beginPath(); g.ellipse(LAKE.x, LAKE.y, LAKE.rx, LAKE.ry, 0, 0, 7); g.fill();
+  g.fillStyle = '#0f3a55'; g.beginPath(); g.arc(AVANTO.x, AVANTO.y, AVANTO.r, 0, 7); g.fill();
+  g.fillStyle = '#4d525a'; g.fillRect(...ROAD);
+  g.fillStyle = '#b3bac4'; PATHS.forEach(p => g.fillRect(...p));
+  for (const b of SHOPS) { g.fillStyle = b.color; g.fillRect(b.x, b.y, b.w, b.h); }
   g.fillStyle = '#6b4226'; g.fillRect(SAUNA.x, SAUNA.y, SAUNA.w, SAUNA.h);
   g.fillStyle = '#8c6a3a'; g.fillRect(STATUE.x, STATUE.y, STATUE.w, STATUE.h);
+  g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = '900 72px Overpass, system-ui, sans-serif';
+  for (const h of HOUSES) { g.fillStyle = BLUE; g.fillRect(h.x, h.y, h.w, h.h); g.fillStyle = '#fff'; g.fillText(h.n, h.x + h.w / 2, h.y + h.h / 2 + 6); }
+  g.fillStyle = '#fff'; for (const b of SHOPS) g.fillText(b.tag, b.x + b.w / 2, b.y + b.h / 2 + 6);
 }
 function drawMinimap(v) {
   const mid = touchDev && v.w > v.h; // phone on its side: the buttons own the right edge, so the map sits top centre and smaller
-  const mw = Math.min(232, v.w * .3, mid ? v.h * .4 : 1e9), mh = mw * .75, x0 = mid ? v.x + (v.w - mw) / 2 : v.x + v.w - mw - 18 - (v.x + v.w > vw - 1 ? safe.r : 0), y0 = v.y + (v.y < 1 ? 60 + safe.t : 18), k = mw / MWIN;
-  const ox = clamp(v.r.x - MWIN / 2, 0, W - MWIN), oy = clamp(v.r.y - MWIN * .375, 0, H - MWIN * .75), x = x0 - ox * k, y = y0 - oy * k; // north up, the robot in the middle
-  plate(x0 - 7, y0 - 7, mw + 14, mh + 14, '#fff', INK);
+  const mw = Math.min(232, v.w * .3, mid ? v.h * .4 : 1e9), mh = mw * H / BW, x0 = mid ? v.x + (v.w - mw) / 2 : v.x + v.w - mw - 18 - (v.x + v.w > vw - 1 ? safe.r : 0), y = v.y + (v.y < 1 ? 60 + safe.t : 18), k = mw / BW;
+  const ox = clamp(v.r.x - BW / 2, 0, W - BW), x = x0 - ox * k; // shows one block's width around the robot
+  plate(x0 - 7, y - 7, mw + 14, mh + 14, '#fff', INK);
   ctx.save();
-  ctx.beginPath(); ctx.rect(x0, y0, mw, mh); ctx.clip();
-  ctx.drawImage(miniBg, ox * MINI, oy * MINI, MWIN * MINI, MWIN * .75 * MINI, x0, y0, mw, mh);
+  ctx.beginPath(); ctx.rect(x0, y, mw, mh); ctx.clip();
+  ctx.drawImage(miniBg, ox * MINI, 0, BW * MINI, H * MINI, x0, y, mw, mh);
   const dot = (px, py, rad, color) => { ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x + px * k, y + py * k, rad, 0, 7); ctx.fill(); };
   ctx.fillStyle = 'rgba(150,210,245,.95)';
   for (const p of ice) if (!p.gone) { ctx.beginPath(); ctx.ellipse(x + p.x * k, y + p.y * k, p.rx * k, p.ry * k, 0, 0, 7); ctx.fill(); }
   for (const h of holes) dot(h.x, h.y, 2.2, INK);
-  for (const c of cars) { ctx.save(); ctx.translate(x + c.x * k, y + c.y * k); ctx.rotate(c.a); ctx.fillStyle = '#26303b'; ctx.fillRect(-40 * k, -18 * k, 80 * k, 36 * k); ctx.restore(); }
-  if (v.r.route?.length > 1) { // the GPS route, from the robot to the door
-    ctx.strokeStyle = v.r.color; ctx.lineWidth = 3; ctx.lineJoin = ctx.lineCap = 'round'; ctx.globalAlpha = .75;
-    ctx.beginPath(); ctx.moveTo(x + v.r.x * k, y + v.r.y * k); for (const p of v.r.route.slice(v.r.routeI || 0)) ctx.lineTo(x + p.x * k, y + p.y * k); ctx.stroke(); ctx.globalAlpha = 1;
-  }
-  ctx.font = F(900, 10); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  for (const b of SHOPS) { dot(b.door.x, b.door.y, 7, b.color); ctx.fillStyle = '#fff'; ctx.fillText(b.tag, x + b.door.x * k, y + b.door.y * k + 1); }
-  for (const h of HOUSES) { ctx.fillStyle = BLUE; ctx.fillRect(x + h.door.x * k - 2.5, y + h.door.y * k - 2.5, 5, 5); }
-  const tgt = v.r.cargo ? HOUSES[v.r.cargo.dest].door : nearShop(v.r).door, e = 10 / k; // off-window targets pin to the edge
-  const tx = clamp(tgt.x, ox + e, ox + MWIN - e), ty = clamp(tgt.y, oy + e, oy + MWIN * .75 - e);
-  ctx.strokeStyle = v.r.color; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x + tx * k, y + ty * k, 7 + Math.sin(T * 6) * 2, 0, 7); ctx.stroke();
+  for (const c of cars) { ctx.fillStyle = '#26303b'; ctx.fillRect(x + (c.x - 40) * k, y + (c.y - 18) * k, 80 * k, 36 * k); }
+  const tgt = v.r.cargo ? HOUSES[v.r.cargo.dest].door : nearShop(v.r).door, tx = clamp(tgt.x, ox + 30, ox + BW - 30); // off-window targets pin to the edge
+  ctx.strokeStyle = v.r.color; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x + tx * k, y + tgt.y * k, 7 + Math.sin(T * 6) * 2, 0, 7); ctx.stroke();
   for (const p of peds) dot(p.x, p.y, 2.6, p.mode === 'chase' ? RED : p.kind === 'dog' ? '#8b5a2b' : p.kind === 'wolt' ? WOLT : '#6b7480');
   for (const q of kids) dot(q.x, q.y, 2.2, '#ff9d00');
   for (const t of thieves) dot(t.x, t.y, 3, t.cargo ? RED : '#0a8f3c');
@@ -3320,8 +3060,6 @@ function drawMinimap(v) {
     ctx.beginPath(); ctx.moveTo(sz, 0); ctx.lineTo(-sz * .7, -sz * .7); ctx.lineTo(-sz * .7, sz * .7); ctx.closePath(); ctx.fill(); if (r === v.r) ctx.stroke();
     ctx.restore();
   }
-  ctx.font = F(700, 9); ctx.textAlign = 'right'; ctx.textBaseline = 'alphabetic'; ctx.fillStyle = 'rgba(29,35,43,.7)';
-  ctx.fillText('© OpenStreetMap', x0 + mw - 3, y0 + mh - 3); // map data licence (ODbL) asks for this credit
   ctx.restore();
 }
 
@@ -3363,6 +3101,7 @@ function storyButton(fresh) {
 $('bStory').onclick = () => storyButton(false);
 $('bNewStory').onclick = () => storyButton(true);
 $('bMode').onclick = $('bMode2').onclick = () => { if (role !== 'guest') pvp = !pvp; };
+$('bMap').onclick = () => { location.href = 'helsinki.html'; }; // the real-city map is its own page, off the leaderboard
 $('bRoam').onclick = () => { if (state !== 'title' || role === 'guest') return; pvp = false; pressStart(); roam = true; };
 // skin cases: a reel of random skins slides under a marker and stops on the one already rolled
 const TILE = 104, WIN_AT = 40;
@@ -3418,7 +3157,7 @@ $('bOpen').onclick = openCase;
 $('skinGrid').onclick = e => { const b = e.target.closest('button.sk'); if (b && !b.disabled) equipSkin(b.dataset.k); };
 $('hornGrid').onclick = e => { const b = e.target.closest('button.sk'); if (b && !b.disabled) equipHorn(b.dataset.k); };
 const BOARD_WHERE = { local: 'best runs on this machine', loading: 'loading…', global: 'best runs anywhere', offline: 'offline — showing this machine' };
-const WX_TEXT = { santa: ['Hohoho! 🎅', 'Santa is bowling down the streets. Stay off them!'], blizzard: ['Blizzard', 'You can barely see the street'], freeze: ['Freezing rain', 'Every surface is ice for a while'] };
+const WX_TEXT = { santa: ['Hohoho! 🎅', 'Santa is bowling down the road. Stay off it!'], blizzard: ['Blizzard', 'You can barely see the street'], freeze: ['Freezing rain', 'Every surface is ice for a while'] };
 let lastBannerT = 0, lastWxT = 0, playersKey = null, shopKey = '', pipsKey = '', scoresKey = '';
 function restartAnim(el) { el.classList.remove('show'); void el.offsetWidth; el.classList.add('show'); }
 function updateDOM() {
@@ -3439,7 +3178,7 @@ function updateDOM() {
   // title
   $('title').hidden = state !== 'title';
   if (state === 'title') {
-    $('bStart').hidden = $('bRoam').hidden = role === 'guest';
+    $('bStart').hidden = $('bRoam').hidden = $('bMap').hidden = role === 'guest';
     const sv = storyLoad();
     $('bStory').hidden = role === 'guest'; $('bNewStory').hidden = role === 'guest' || !sv || !!urlChapter;
     setText('bStory', urlChapter ? `Story: chapter ${urlChapter}` : sv ? `Continue story: chapter ${sv.ch}` : 'Story');
@@ -3739,10 +3478,7 @@ function storyCheck() {
   console.assert(woltN(8) === 0 && woltN(9) === 1 && woltN(12) === 2, 'Woltti couriers start on shift 9');
   console.assert(CHAPTERS.length === 9, 'prologue + 8 chapters');
   console.assert(CHAPTERS.every(c => c.title && c.intro), 'every chapter has title + intro');
-  console.assert(HOUSES[KIDS_HOME] && inLake(AVANTO.x, AVANTO.y) && inLake(SAUNA.x + SAUNA.w / 2, SAUNA.y + SAUNA.h / 2), 'kids home, and the avanto and sauna out on the ice');
-  console.assert(SHOPS.length >= 5 && HOUSES.length >= 30 && SPAWNS.length === 8, 'Helsinki map: shops, doors and spawn spots');
-  console.assert(DOORS.every(d => cellAt(d.x, d.y) !== G_WALL), 'every door is outside its building');
-  console.assert(findRoute(RG, SHOPS[0].door, HOUSES[0].door).length > 2, 'GPS finds a street route');
+  console.assert(HOUSES[KIDS_HOME] && HOUSES[KIDS_HOME].door.x < BW, 'kids home is in block 0');
   console.assert(CHAPTERS.slice(1).every(c => c.darkness != null && c.quota > 0 && c.time > 0), 'every chapter sets darkness, quota, time');
   console.assert(CHAPTERS.every(c => !c.orders || c.orders.length === ORDERS.length), 'order weights match ORDERS');
   console.assert(CHAPTERS.slice(1).every(c => c.darkness >= 0 && c.darkness <= .8), 'darkness in range');
