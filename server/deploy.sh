@@ -8,7 +8,7 @@ WWW=/var/www/ruokarobo          # Caddy serves this on ruokarobo.com (and robo.h
 APP=/opt/ruokarobo-board        # the leaderboard service
 PEER=/opt/ruokarobo-peer        # PeerJS signaling; `npm i peer@1.0.2` lives in node_modules there
 
-scp -q index.html "$HOST:$WWW/index.html"
+scp -q index.html helsinki.js "$HOST:$WWW/"
 scp -q server/board.js "$HOST:$APP/board.js"
 scp -q server/peer.js "$HOST:$PEER/peer.js"
 scp -q server/ruokarobo-board.service server/ruokarobo-peer.service "$HOST:/etc/systemd/system/"
