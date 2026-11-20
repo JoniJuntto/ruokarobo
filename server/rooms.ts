@@ -14,7 +14,7 @@ import { maps } from '../src/sim/map/index';
 import { isFx } from '../src/sim/state';
 import type { FxEvent, Input, SimEvent, UpKey, Upgrades } from '../src/sim/types';
 import { SNAP_HZ, encodeLevel, encodeSnap, type RoomServerMsg } from '../src/shared/protocol';
-import { RUN_MAX, addRow, clean, int, name, plausible } from './board';
+import { RUN_MAX, addRow, addTime, clean, int, name, plausible } from './board';
 
 // ---------- limits ----------
 export const MSG_MAX = 2048;   // bytes of one message; Bun closes a socket that sends more (code 1009)
@@ -86,7 +86,7 @@ function tickRoom(room: Room, now: number) {
     for (const e of room.game.drain()) {
       if (isFx(e)) { if (room.fx.length < FX_MAX) room.fx.push(e); }
       else if (e.k === 'level') level = true;
-      else if (e.k !== 'stat') { ev.push(e); if (e.k === 'run') room.runAt = Date.now(); else if (e.k === 'over') record(room); }
+      else if (e.k !== 'stat') { ev.push(e); if (e.k === 'run') room.runAt = Date.now(); else if (e.k === 'over') record(room); else if (e.k === 'split') recordTime(room, e.c, e.t); }
     }
   };
   collect(); // what act, story and buy messages did since the last tick
@@ -115,6 +115,12 @@ function record(room: Room) {
   // players come and go mid-run, so the sanity check allows what the biggest team this run saw could have earned
   if (plausible({ ...row, robots: int(g.stats.players, row.robots, MAX_PLAYERS) }, row.at - t0)) addRow(row);
   else console.error(`room ${room.code}: implausible run not recorded`, row);
+}
+// A speedrun time (src/sim/splits.ts), on its board under the leader's name like the run's row. The server timed it itself
+function recordTime(room: Room, cat: string, ms: number) {
+  if (room.map !== 'village') return; // as the leaderboard: the worldwide boards are the village's
+  const g = room.game.state, lead = g.robots.find(r => r.owner === room.leader) ?? g.robots[0];
+  addTime(cat, { name: name(lead?.n), ms: int(ms, 0, RUN_MAX), robots: int(g.robots.length, 1, MAX_PLAYERS), at: Date.now() });
 }
 
 // ---------- sockets ----------

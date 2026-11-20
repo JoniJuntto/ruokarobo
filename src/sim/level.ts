@@ -68,6 +68,7 @@ export function startLevel(g: GameState, n: number) {
   const wx = chap(g)?.weather;
   if (wx) { g.weather = { k: wx, t: 1e9 }; fx(g, { k: 'wx', w: wx }); sfx(g, 'alarm'); } // ch 7: blizzard all chapter
   g.santa = null; g.santaIn = g.campaign ? Infinity : rnd(20, 45); // no sleigh knocking cars over on the night of the crash
+  g.shiftT0 = g.runT;
   g.mark = { ...g.stats }; // "clear a shift without X" is measured against this snapshot
   most(g, 'players', g.robots.length);
   g.state = 'play'; g.stateT = 0; fx(g, { k: 'start' });
@@ -81,6 +82,7 @@ export function newRun(g: GameState) {
   if (g.robots.length < 2) g.pvp = false;
   g.score = 0; g.money = 0; g.up = freshUp();
   for (const k in g.stats) delete g.stats[k];
+  g.runT = 0; g.splits = {};
   bump(g, 'runs'); fx(g, { k: 'run' });
   startLevel(g, 1);
 }
@@ -88,6 +90,7 @@ export function newRun(g: GameState) {
 export function startStory(g: GameState, ch: number, save?: { money?: number; up?: Partial<Upgrades> } | null) {
   g.campaign = true; g.pvp = false; g.roam = false; g.score = 0; g.money = save?.money || 0; g.up = { ...freshUp(), ...save?.up };
   for (const k in g.stats) delete g.stats[k];
+  g.runT = 0; g.splits = {}; g.fullStory = ch <= 1 && !save; fx(g, { k: 'run' });
   g.chapter = ch; g.state = 'story'; g.stateT = 0;
 }
 // a chapter starts from its card; a retry restarts it with the money and upgrades it began with

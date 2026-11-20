@@ -16,7 +16,7 @@ export function createState(map: GameMap): GameState {
     presents: [], eetu: null, ice: [], holes: [], cars: [], peds: [], kids: [], balls: [], loot: [], thieves: [], plow: null, santa: null,
     boxes: map.BOXES.map(b => ({ ...b, t: 0 })),
     weather: { k: null, t: 0 },
-    stats: {}, mark: {},
+    stats: {}, mark: {}, runT: 0, shiftT0: 0, splits: {}, fullStory: false,
     santaIn: Infinity, weatherIn: Infinity, handT: {}, nextId: 0, inputs: {}, events: [],
   };
 }
@@ -29,7 +29,7 @@ export function tickClock(g: GameState, dt: number) {
 
 export const fx = (g: GameState, e: GameEvent) => { g.events.push(e); };
 export const sfx = (g: GameState, n: SfxName) => fx(g, { k: 'sfx', n });
-export const isFx = (e: GameEvent): e is FxEvent => !['level', 'start', 'stat', 'ach', 'run', 'clear', 'over', 'storySave', 'storyEnd'].includes(e.k);
+export const isFx = (e: GameEvent): e is FxEvent => !['level', 'start', 'stat', 'ach', 'run', 'split', 'clear', 'over', 'storySave', 'storyEnd'].includes(e.k);
 export function say(r: { say: string; sayT: number }, text: string, t = 1.6) { r.say = text; r.sayT = t; }
 export function pop(g: GameState, r: Pt, text: string, color: string) { fx(g, { k: 'pop', x: r.x, y: r.y, text, color }); }
 

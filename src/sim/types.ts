@@ -93,7 +93,8 @@ export type SimEvent =
   | { k: 'start' }                           // a shift began: every robot is back on its spawn
   | { k: 'stat'; s: string; n: number; max?: true } // counter s went up by n (max: is now at least n), for lifetime totals
   | { k: 'ach'; a: string }                  // unlock achievement a outright
-  | { k: 'run' }                             // a new endless run began
+  | { k: 'run' }                             // a new endless run, or a story, began
+  | { k: 'split'; c: string; t: number }     // speedrun category c (sim/splits.ts) was reached t ms of play into the run
   | { k: 'clear' }                           // shift cleared, the workshop (or the next story card) is up
   | { k: 'over' }                            // battery dead
   | { k: 'storySave'; ch: number }           // the story reached chapter ch with the money and upgrades now in state
@@ -119,6 +120,9 @@ export interface GameState {
   loot: Loot[]; thieves: Thief[]; plow: Plow | null; santa: Santa | null; boxes: ItemBox[];
   weather: Weather;
   stats: Stats; // this run's counters, cleared by a new run
+  // speedruns (sim/splits.ts): seconds of play this run, what runT was when this shift began, the categories already
+  // reached and when, and whether this story began at the prologue with nothing saved
+  runT: number; shiftT0: number; splits: Stats; fullStory: boolean;
   mark: Stats;  // counter snapshot taken at the start of the shift, for "clear a shift without X"
   // simulation bookkeeping; a mirror leaves these alone
   santaIn: number; weatherIn: number; handT: Record<string, number>; nextId: number;

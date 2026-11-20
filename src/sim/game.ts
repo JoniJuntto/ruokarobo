@@ -7,6 +7,7 @@ import type { GameMap } from './map/types';
 import { updCars, updEetu, updKids, updPeds, updPlow, updSanta, updThieves, updWeather } from './npc';
 import { powerUp, robotPairs, updRobot } from './robot';
 import { EETU } from './data';
+import { split, tickSplits } from './splits';
 import { bump, chap, createState, fx, most, say, sfx, since, tickClock } from './state';
 import type { GameEvent, GameState, Input, Robot, UpKey, Upgrades } from './types';
 
@@ -74,6 +75,7 @@ export function step(g: GameState, dt: number) {
   }
   updWeather(g, dt);
   updEetu(g, dt);
+  tickSplits(g, dt);
   if (g.state === 'play' && !g.roam) {
     if (!g.goalDone) g.time -= dt; // the battery waits while a story moment plays out
     const goal = chap(g)?.goal;
@@ -88,6 +90,7 @@ export function step(g: GameState, dt: number) {
       if (g.robots.every(r => (r.hp ?? 1) >= 1)) bump(g, 'fullHpShift');
       if (g.money < 10) bump(g, 'poorShop');
       fx(g, { k: 'clear' });
+      if (g.campaign) { split(g, 'ch' + g.chapter, g.runT - g.shiftT0); if (g.chapter === 8 && g.fullStory) split(g, 'story', g.runT); }
       if (g.campaign) { fx(g, { k: 'storySave', ch: g.chapter + 1 }); if (g.chapter === 8) { g.chapter = 9; g.state = 'story'; } } // after the last chapter: the ending card, no workshop
     } else if (g.time <= 0) {
       g.time = 0; g.state = 'over'; g.stateT = 0;

@@ -12,6 +12,7 @@ import { achTick, achToast, bump, countStat, unlock } from './achievements';
 import { pollPads, urlChapter } from './actions';
 import { SFX, hasHornSound, musicTick, playHorn } from './audio';
 import { boardTick, onlineRun, recordRun, startRun } from './board';
+import { gotSplit } from './times';
 import { $ } from './dom';
 import { holeMesh } from './entities';
 import { MOBILE, camera, fog, renderer, scene, vh } from './gfx';
@@ -51,6 +52,7 @@ function handle(e: GameEvent) {
     case 'stat': countStat(e.s, e.n, e.max); break;
     case 'ach': unlock(e.a); break;
     case 'run': if (net.role === 'guest') onlineRun(null); else startRun(); break; // an online run is the server's to put on the board
+    case 'split': gotSplit(e.c, e.t); break;
     case 'clear': saveTot(); break;
     case 'over':
       if (G.campaign) {} // story runs stay off the best run and the leaderboard

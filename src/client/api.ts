@@ -5,4 +5,5 @@
 // ponytail: `vite preview` serves the production build, so it talks to production too.
 const DEV = import.meta.env.DEV, HOST = 'api.ruokarobo.com';
 export const SCORES_URL = DEV ? '/api/scores' : `https://${HOST}/api/scores`;
+export const TIMES_URL = DEV ? '/api/times' : `https://${HOST}/api/times`;
 export const WS_URL = DEV ? `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws` : `wss://${HOST}/ws`;

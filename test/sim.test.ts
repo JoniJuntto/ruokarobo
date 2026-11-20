@@ -55,6 +55,28 @@ test('the battery runs out and a paused game stands still', () => {
   expect(kinds.has('over')).toBe(true);
 });
 
+test('speedrun splits: each category once a run, on a clock that only runs while driving', () => {
+  const game = createGame(village), g = game.state;
+  const splits = () => game.drain().flatMap(e => e.k === 'split' ? [e] : []);
+  game.addRobot(); game.pressStart();
+  for (let i = 0; i < 120; i++) game.step(DT);
+  g.stats.del = 5; g.score = 500; // as if five orders had just paid 500 €
+  game.step(DT); game.step(DT);
+  const got = splits();
+  expect(got.map(e => e.c).filter(c => c !== 'pick').sort()).toEqual(['del1', 'del5', 'eur500']);
+  for (const e of got) if (e.c !== 'pick') { expect(e.t).toBeGreaterThan(2000); expect(e.t).toBeLessThan(2100); }
+  g.state = 'shop'; const T = g.runT; game.step(DT); expect(g.runT).toBe(T); // the workshop is off the clock
+  game.quit(); g.pvp = true; g.state = 'title'; game.pressStart(); g.pvp = true; g.stats.del = 9; game.step(DT);
+  expect(splits()).toEqual([]); // pvp has no speedruns
+  // the story: every chapter is a category, and the whole of it only when it began at the prologue
+  g.pvp = false; game.quit(); game.startStory(0); expect(g.fullStory).toBe(true);
+  game.startStory(8, { money: 0 }); expect(g.fullStory).toBe(false);
+  g.stateT = 1; game.pressStart(); expect(g.state as string).toBe('play');
+  for (let i = 0; i < 60; i++) game.step(DT);
+  game.drain(); g.goalDone = true; g.goalT = g.T - 4; game.step(DT);
+  expect(splits().map(e => e.c)).toEqual(['ch8']);
+});
+
 // ---------- every map in the registry ----------
 for (const map of Object.values(maps)) {
   // What a room does, without the socket: a game on one side, a blank state on the other, and between them only

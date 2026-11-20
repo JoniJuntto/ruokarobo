@@ -9,7 +9,7 @@ import type { RoomClientMsg, RoomServerMsg, SnapMsg } from '../src/shared/protoc
 const dir = mkdtempSync(join(tmpdir(), 'ruokarobo-test-'));
 process.env.STATE_DIRECTORY = dir; process.env.PORT = '0'; // before the server modules load: they read both at import
 const { server } = await import('../server/index');
-const { plausible, name, int } = await import('../server/board');
+const { plausible, name, int, addTime, plausibleTime } = await import('../server/board');
 const { rooms } = await import('../server/rooms');
 const http = `http://127.0.0.1:${server.port}/api/scores`, wsUrl = `ws://127.0.0.1:${server.port}/ws`;
 afterAll(() => { server.stop(true); rmSync(dir, { recursive: true, force: true }); });
@@ -69,9 +69,31 @@ test('the leaderboard over HTTP: tokens, cooldown, junk', async () => {
   expect(start.status).toBe(201);
   const { run } = await start.json() as { run: string };
   expect((await fetch(http + '?start', { method: 'POST' })).status).toBe(429); // one run per address per 5 s
+  // speedrun times ride on the same token, one per category, before the score spends it
+  const time = (o: object) => fetch(http.replace('scores', 'times'), { method: 'POST', body: JSON.stringify(o) });
+  expect((await time({ cat: 'pick', ms: 1000, robots: 1 })).status).toBe(403);            // no run token
+  expect((await time({ run, name: 'Aino', cat: 'pick', ms: 1000, robots: 1 })).status).toBe(201);
+  expect((await time({ run, name: 'Aino', cat: 'pick', ms: 1000, robots: 1 })).status).toBe(403); // each category once per run
+  expect((await time({ run, name: 'Aino', cat: 'del1', ms: 4000, robots: 1 })).status).toBe(422); // 4 s of play in a run a moment old
+  expect((await time({ run, name: 'Aino', cat: 'nope', ms: 4000, robots: 1 })).status).toBe(422);
   expect((await post(JSON.stringify({ run, name: 'Aino', score: 100, shift: 1, robots: 1 }))).status).toBe(422); // a second after it began
   expect((await post(JSON.stringify({ run, name: 'Aino', score: 0, shift: 1, robots: 1 }))).status).toBe(403);   // each token works once
   expect(await (await fetch(http)).json()).toEqual([]);
+});
+
+test('speedrun boards: a floor per category, one row per name, fastest first', async () => {
+  expect(plausibleTime('del1', 3000, 1, 60000)).toBe(false);  // no order is delivered in under 4 s
+  expect(plausibleTime('del1', 5000, 1, 60000)).toBe(true);
+  expect(plausibleTime('del1', 50000, 1, 10000)).toBe(false); // more play than the run has lasted
+  expect(plausibleTime('shift1', 11000, 1, 60000)).toBe(false); expect(plausibleTime('shift1', 13000, 1, 60000)).toBe(true);
+  const at = Date.now();
+  addTime('del1', { name: 'A', ms: 9000, robots: 1, at }); addTime('del1', { name: 'B', ms: 7000, robots: 2, at });
+  addTime('del1', { name: 'A', ms: 8000, robots: 1, at }); addTime('del1', { name: 'A', ms: 9500, robots: 1, at });
+  addTime('nope', { name: 'A', ms: 1, robots: 1, at });
+  const got = await (await fetch(http.replace('scores', 'times'))).json() as Record<string, { name: string; ms: number }[]>;
+  expect(Object.keys(got).sort()).toEqual(['del1', 'pick']);
+  expect(got.del1.map(r => [r.name, r.ms])).toEqual([['B', 7000], ['A', 8000]]);
+  expect(got.pick.map(r => [r.name, r.ms])).toEqual([['Aino', 1000]]);
 });
 
 test('two browsers in a room: host, join, drive, leader rules, hostile input, leader leaves, run recorded', async () => {

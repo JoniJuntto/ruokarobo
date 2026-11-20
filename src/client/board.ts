@@ -14,7 +14,7 @@ import { store } from './store';
 import { G } from './world';
 
 const BOARD = { url: page.worldwide ? SCORES_URL : '' };
-const boardOn = () => !!BOARD.url;
+export const boardOn = () => !!BOARD.url;
 export interface Row { s: number; lv: number; p: number; n: string; d?: number }
 let localBoard: Row[] = [];
 try { localBoard = JSON.parse(localStorage.getItem(page.board) || '[]'); } catch (e) {}
@@ -37,6 +37,7 @@ async function loadBoard() {
   rankRow();
 }
 let runTok: Promise<string | null> | null = null; // promise of this run's token
+export const runToken = () => runTok; // this run's token, for its speedrun times too (times.ts)
 // a new run: ask the server for its token, and forget where the last one ranked
 export const startRun = () => { lastRank = 0; runTok = boardOn() ? fetch(BOARD.url + '?start', { method: 'POST' }).then(r => r.json()).then(o => o.run).catch(() => null) : null; };
 async function postScore(row: Row) {
