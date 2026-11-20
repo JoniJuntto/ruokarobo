@@ -1,0 +1,17 @@
+{
+  // The seam, checked mechanically: the simulation and the wire protocol must compile with no DOM types
+  // and no ambient browser or Bun globals, so they run unchanged in a browser and on the server.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022"],
+    "types": [],
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true
+  },
+  "include": ["src/sim", "src/shared"]
+}

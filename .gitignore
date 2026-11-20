@@ -1,3 +1,7 @@
 .claude/
 .DS_Store
 brag-output/
+node_modules
+dist
+server/build
+.dev-state

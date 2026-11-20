@@ -1,9 +1,14 @@
 [Unit]
-Description=Ruokarobo leaderboard
+Description=Ruokarobo server: leaderboard and online rooms
 After=network.target
 
 [Service]
-ExecStart=/usr/bin/node /opt/ruokarobo-board/board.js
+# One bundled file (bun run build:server), so the box needs the bun binary and nothing else.
+# The unit keeps its old name so StateDirectory, and with it scores.json, stays where it is.
+ExecStart=/usr/local/bin/bun /opt/ruokarobo-board/server.js
+Environment=PORT=47500
+# nowhere to cache transpiled code, and no need: it is one file
+Environment=BUN_RUNTIME_TRANSPILER_CACHE_PATH=0
 Restart=always
 RestartSec=2
 # DynamicUser gives the service its own throwaway account and StateDirectory is the only
@@ -17,6 +22,9 @@ ProtectHome=yes
 ProtectKernelTunables=yes
 ProtectControlGroups=yes
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+# The box is shared with other sites: the game simulations may fill one core and no more.
+CPUQuota=100%
+MemoryMax=512M
 
 [Install]
 WantedBy=multi-user.target

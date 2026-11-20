@@ -1,0 +1,23 @@
+{
+  "name": "ruokarobo",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.sim.json && tsc -p tsconfig.node.json",
+    "test": "bun test test/",
+    "server": "STATE_DIRECTORY=${STATE_DIRECTORY:-.dev-state} bun --watch server/index.ts",
+    "build:server": "bun build server/index.ts --target=bun --outfile server/build/server.js"
+  },
+  "dependencies": {
+    "three": "0.160.0"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.5",
+    "@types/three": "0.160.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8"
+  }
+}
