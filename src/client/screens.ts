@@ -66,7 +66,7 @@ export function updateDOM() {
       : 'PvP: 2nd player, press a key');
   }
   const ranked = G.robots.filter(r => !r.kid).sort((a, b) => b.earn - a.earn);
-  if (G.state !== 'title') closeCases();
+  if (G.state !== 'title') { closeCases(); document.querySelector<HTMLElement>(':popover-open')?.hidePopover(); }
   // title
   $('title').hidden = G.state !== 'title';
   if (G.state === 'title') {
@@ -81,7 +81,7 @@ export function updateDOM() {
       $('players').innerHTML = G.robots.length
         ? G.robots.map(r => `<span class="chip"><i style="background:${r.color}"></i>${r.kid ? '🧒 ' : ''}${esc(nameOf(r))}</span>`).join('')
           + (G.pvp ? '<br>PvP: press your snowball key to play as a snowball kid. No score, just mayhem.' : '')
-        : (touchDev ? 'Tap Start shift to play.' : 'Drive with any row of the table. Each row is one player.');
+        : (touchDev ? 'Tap Start shift to play.' : 'Press Start shift, then drive with WASD or the arrow keys.');
     }
     setText('bestLine', store.best ? `Best run ${store.best} €` : '');
     if (achKey !== achDone.size) { // unlocked first, so the newest sit at the top

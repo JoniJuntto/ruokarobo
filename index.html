@@ -53,42 +53,60 @@
     <h1>Ruokarobo</h1>
     <p>Deliver groceries from the corner shops to every door on the street, through ice, potholes and very grumpy neighbours.</p>
   </div>
-  <div class="plate white" id="keys">
-    <table>
-      <tr><th>Who</th><th>Drive</th><th>Boost</th><th>Brake / drift</th><th>Zap</th><th>Hook</th><th>Snowball (PvP)</th><th>Horn</th></tr>
-      <tr><td>Player 1</td><td><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></td><td><kbd>Shift</kbd></td><td><kbd>Space</kbd></td><td><kbd>E</kbd></td><td><kbd>Q</kbd></td><td><kbd>Z</kbd></td><td><kbd>X</kbd></td></tr>
-      <tr><td>Player 2</td><td><kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd></td><td><kbd>R-Shift</kbd></td><td><kbd>.</kbd></td><td><kbd>,</kbd></td><td><kbd>/</kbd></td><td><kbd>R-Alt</kbd></td><td><kbd>R-Ctrl</kbd></td></tr>
-      <tr><td>Player 3</td><td><kbd>I</kbd><kbd>J</kbd><kbd>K</kbd><kbd>L</kbd></td><td><kbd>U</kbd></td><td><kbd>O</kbd></td><td><kbd>P</kbd></td><td><kbd>N</kbd></td><td><kbd>Ö</kbd></td><td><kbd>Å</kbd></td></tr>
-      <tr><td>Player 4</td><td><kbd>T</kbd><kbd>F</kbd><kbd>G</kbd><kbd>H</kbd></td><td><kbd>R</kbd></td><td><kbd>Y</kbd></td><td><kbd>V</kbd></td><td><kbd>B</kbd></td><td><kbd>C</kbd></td><td><kbd>6</kbd></td></tr>
-      <tr><td>Gamepad</td><td>Stick</td><td><kbd>A</kbd></td><td><kbd>B</kbd></td><td><kbd>X</kbd></td><td><kbd>Y</kbd></td><td><kbd>LB</kbd></td><td><kbd>L3</kbd></td></tr>
-    </table>
-  </div>
-  <div class="plate white" id="touchNote" hidden>Once the shift starts, steer with the stick on the left. Boost, brake, zap, hook, horn and (in PvP) snowball are on the right. Hold brake while steering at speed to drift; let go for a mini-turbo.</div>
-  <details class="plate white fold" id="achBox">
-    <summary>Achievements<span id="achCount"></span></summary>
-    <div class="achGrid" id="achGrid"></div>
-  </details>
-  <details class="plate white fold" id="boardBox">
-    <summary>Leaderboard<span id="boardWhere"></span></summary>
-    <ol id="boardList"></ol>
-    <p id="boardEmpty">No runs yet. Finish a shift and the board fills up.</p>
-  </details>
   <div id="players" class="note"></div>
   <div class="actions" id="menu">
-    <input id="pname" placeholder="Name" maxlength="12" autocomplete="off" aria-label="Name for the leaderboard">
     <button class="go" id="bStart">Start shift</button>
-    <button class="ghost" id="bRoam">Free roam</button>
-    <button class="ghost" id="bMap">🏙 Helsinki map</button>
-    <button class="ghost mode" id="bMode" hidden>Mode: Co-op</button>
-    <button class="go" id="bStory">Story</button>
+    <button class="ghost" id="bStory">Story</button>
     <button class="ghost" id="bNewStory" hidden>New story</button>
+    <button class="ghost" id="bRoam">Free roam</button>
+    <button class="ghost" popovertarget="mMulti">👥 Multiplayer</button>
     <button class="ghost" id="bCases">🎁 Skins &amp; horns</button>
-    <button class="ghost" id="bHost">Host online game</button>
-    <button class="ghost" id="bInvite" hidden>Copy invite link</button>
-    <span id="joinBox"><input id="code" placeholder="Code" maxlength="5" autocomplete="off" aria-label="Room code"><button class="ghost" id="bJoin">Join</button></span>
+    <button class="ghost" popovertarget="mKeys">🎮 Controls</button>
+    <button class="ghost" popovertarget="mRecords">🏆 Records<span id="achCount"></span></button>
+    <button class="ghost" id="bMap">🏙 Helsinki map</button>
+    <input id="pname" placeholder="Your name" maxlength="12" autocomplete="off" aria-label="Your name, for the leaderboard and online games">
   </div>
   <p id="status" class="note"></p>
   <div class="foot note"><span id="bestLine"></span><span><kbd>M</kbd> music on or off</span><span><kbd>Esc</kbd> pause and settings</span></div>
+
+  <!-- submenus: native popovers, so Esc and a click outside close them -->
+  <div class="plate white sub" id="mMulti" popover>
+    <h2>Multiplayer</h2>
+    <h3>Same screen</h3>
+    <p>Up to four players share this screen. Each player presses a drive key from Controls, or a gamepad button, to get a robot.</p>
+    <div class="actions"><button class="ghost mode" id="bMode" hidden>Mode: Co-op</button></div>
+    <h3>Online</h3>
+    <div class="actions">
+      <button class="ghost" id="bHost" popovertarget="mMulti" popovertargetaction="hide">Host online game</button>
+      <button class="ghost" id="bInvite" hidden>Copy invite link</button>
+      <span id="joinBox"><input id="code" placeholder="Code" maxlength="5" autocomplete="off" aria-label="Room code"><button class="ghost" id="bJoin" popovertarget="mMulti" popovertargetaction="hide">Join</button></span>
+    </div>
+    <button class="ghost x" popovertarget="mMulti" popovertargetaction="hide">Close</button>
+  </div>
+  <div class="plate white sub" id="mKeys" popover>
+    <h2>Controls</h2>
+    <div id="keys">
+      <table>
+        <tr><th>Who</th><th>Drive</th><th>Boost</th><th>Brake / drift</th><th>Zap</th><th>Hook</th><th>Snowball (PvP)</th><th>Horn</th></tr>
+        <tr><td>Player 1</td><td><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></td><td><kbd>Shift</kbd></td><td><kbd>Space</kbd></td><td><kbd>E</kbd></td><td><kbd>Q</kbd></td><td><kbd>Z</kbd></td><td><kbd>X</kbd></td></tr>
+        <tr><td>Player 2</td><td><kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd></td><td><kbd>R-Shift</kbd></td><td><kbd>.</kbd></td><td><kbd>,</kbd></td><td><kbd>/</kbd></td><td><kbd>R-Alt</kbd></td><td><kbd>R-Ctrl</kbd></td></tr>
+        <tr><td>Player 3</td><td><kbd>I</kbd><kbd>J</kbd><kbd>K</kbd><kbd>L</kbd></td><td><kbd>U</kbd></td><td><kbd>O</kbd></td><td><kbd>P</kbd></td><td><kbd>N</kbd></td><td><kbd>Ö</kbd></td><td><kbd>Å</kbd></td></tr>
+        <tr><td>Player 4</td><td><kbd>T</kbd><kbd>F</kbd><kbd>G</kbd><kbd>H</kbd></td><td><kbd>R</kbd></td><td><kbd>Y</kbd></td><td><kbd>V</kbd></td><td><kbd>B</kbd></td><td><kbd>C</kbd></td><td><kbd>6</kbd></td></tr>
+        <tr><td>Gamepad</td><td>Stick</td><td><kbd>A</kbd></td><td><kbd>B</kbd></td><td><kbd>X</kbd></td><td><kbd>Y</kbd></td><td><kbd>LB</kbd></td><td><kbd>L3</kbd></td></tr>
+      </table>
+    </div>
+    <p id="touchNote" hidden>Once the shift starts, steer with the stick on the left. Boost, brake, zap, hook, horn and (in PvP) snowball are on the right. Hold brake while steering at speed to drift; let go for a mini-turbo.</p>
+    <button class="ghost x" popovertarget="mKeys" popovertargetaction="hide">Close</button>
+  </div>
+  <div class="plate white sub" id="mRecords" popover>
+    <h2>Records</h2>
+    <h3>Leaderboard<span id="boardWhere"></span></h3>
+    <ol id="boardList"></ol>
+    <p id="boardEmpty">No runs yet. Finish a shift and the board fills up.</p>
+    <h3>Achievements</h3>
+    <div class="achGrid" id="achGrid"></div>
+    <button class="ghost x" popovertarget="mRecords" popovertargetaction="hide">Close</button>
+  </div>
 </div>
 
 <div id="shop" hidden>

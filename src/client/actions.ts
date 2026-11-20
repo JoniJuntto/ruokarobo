@@ -52,8 +52,10 @@ const codeIn = $<HTMLInputElement>('code');
 addEventListener('keydown', e => {
   const target = e.target as HTMLElement;
   if (!$('cases').hidden) { if (e.code === 'Escape') closeCases(); return; } // skins screen eats keys, so Enter can't start a shift under it
+  const sub = document.querySelector<HTMLElement>(':popover-open'); // a title submenu: Esc closes it by itself, Enter is for its buttons
+  if (sub && e.code === 'Escape') return;
   if (e.code === 'Escape' && !e.repeat) { if (target.tagName === 'INPUT') target.blur(); return setMenu(!ui.menuOpen); }
-  if (target.tagName === 'INPUT' || target.tagName === 'SELECT') { if (e.code === 'Enter' && target === codeIn) joinRoom(codeIn.value); return; }
+  if (target.tagName === 'INPUT' || target.tagName === 'SELECT') { if (e.code === 'Enter' && target === codeIn) { joinRoom(codeIn.value); sub?.hidePopover(); } return; }
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
   keys.add(e.code);
   if (e.repeat || ui.menuOpen) return;
@@ -61,7 +63,7 @@ addEventListener('keydown', e => {
   if (i >= 0) wantJoin({ kb: i });
   const bi = KB.findIndex(k => k.b === e.code);
   if (bi >= 0) confirmJoin({ kb: bi });
-  if (e.code === 'Enter') pressStart(); // Space is a handbrake
+  if (e.code === 'Enter' && !sub) pressStart(); // Space is a handbrake
   const u = SHOP.find(u => u.key === (e.key === '=' ? '+' : e.key)); // '=' is '+' without shift on US keyboards
   if (u) buy(u.k);
   if (e.code === 'KeyM') toggleMusic();

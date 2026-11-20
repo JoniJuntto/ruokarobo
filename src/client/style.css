@@ -72,19 +72,18 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--yellow);outline
 @keyframes shake{25%{transform:translateX(calc(-50% - 7px))}75%{transform:translateX(calc(-50% + 7px))}}
 
 /* title */
-#title{position:fixed;left:max(20px,5vw);top:50%;transform:translateY(-50%);width:min(580px,calc(100vw - 40px));
+#title{position:fixed;left:max(20px,5vw);top:50%;transform:translateY(-50%);width:min(440px,calc(100vw - 40px));
        display:flex;flex-direction:column;gap:12px;max-height:calc(100dvh - 32px);overflow:auto;padding:4px 4px 8px;box-sizing:border-box}
 #title > *{flex-shrink:0} /* short windows scroll the column instead of squashing the keys table */
 #title .hero{padding:22px 28px 20px}
 #title .hero svg{width:92px;height:62px;display:block;margin-bottom:8px}
 #title h1{margin:0;font-size:clamp(48px,9vw,80px);font-weight:900;line-height:.88;letter-spacing:-.015em}
 #title .hero p{margin:12px 0 0;font-size:18px;font-weight:600;line-height:1.35;max-width:38ch}
-#keys{padding:12px 14px 10px;font-size:14px;overflow-x:auto}
+#keys{font-size:14px;overflow-x:auto}
 #keys table{border-collapse:collapse;width:100%}
 #keys th{font-weight:600;text-align:left;padding:2px 6px;color:#5a6470;font-size:13px}
 #keys td{padding:3px 6px;white-space:nowrap;font-weight:600}
 kbd{font:800 12px var(--font);border:1.5px solid var(--ink);border-bottom-width:3px;border-radius:4px;padding:2px 5px 0;margin-right:2px;display:inline-block;min-width:9px;text-align:center;background:#fff;color:var(--ink)}
-#touchNote{padding:12px 16px 9px;font-weight:600}
 .note{background:rgba(29,35,43,.78);color:#fff;font-weight:600;border-radius:6px;padding:7px 11px 5px;width:fit-content;max-width:100%;box-sizing:border-box}
 #players{display:flex;gap:6px;flex-wrap:wrap;align-items:center;min-height:32px}
 #players:has(.chip){background:none;padding:0}
@@ -95,6 +94,20 @@ kbd{font:800 12px var(--font);border:1.5px solid var(--ink);border-bottom-width:
 #joinBox{display:inline-flex;gap:6px}
 #code{width:5.4em;font:900 18px var(--font);text-transform:uppercase;text-align:center;letter-spacing:.12em;border:0;border-radius:8px;
       padding:12px 8px 9px;box-shadow:inset 0 0 0 2px var(--ink),0 4px 0 rgba(0,0,0,.25)}
+/* title menu: one big Start, the rest in two columns; everything else lives in a submenu */
+#menu{display:grid;grid-template-columns:1fr 1fr}
+#bStart{grid-column:1/-1}
+#menu .ghost{text-align:left}
+#achCount{float:right;font-size:13px;color:#5a6470;font-variant-numeric:tabular-nums}
+.sub{border:0;padding:22px 24px 20px;width:min(600px,calc(100vw - 32px));max-height:calc(100dvh - 32px);box-sizing:border-box;overflow:auto}
+.sub::backdrop{background:rgba(13,27,42,.55)}
+.sub h2{margin:0 0 4px;font-size:34px;font-weight:900;line-height:1}
+.sub h3{margin:16px 0 8px;font-size:15px;font-weight:800;color:#5a6470;display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+.sub h3 span{font-size:13px;font-weight:700}
+.sub p{margin:8px 0;font-weight:600;line-height:1.4}
+.sub .ghost,.sub #code{box-shadow:inset 0 0 0 2px var(--ink),0 4px 0 rgba(0,0,0,.25)}
+.sub .ghost:disabled{color:#5a6470;cursor:default}
+.sub .x{display:block;margin:18px 0 0 auto}
 #status{margin:0}
 #status:empty{display:none}
 .foot{font-size:14px;display:flex;gap:18px;flex-wrap:wrap;align-items:center}
@@ -165,13 +178,6 @@ kbd{font:800 12px var(--font);border:1.5px solid var(--ink);border-bottom-width:
 #over .stats span{font-size:13px;font-weight:600;color:#5a6470}
 
 /* achievements */
-.fold{padding:9px 14px 8px}
-.fold summary{display:flex;justify-content:space-between;align-items:baseline;gap:12px;cursor:pointer;font-size:15px;font-weight:800;list-style:none;padding:2px 0}
-.fold summary::-webkit-details-marker{display:none}
-.fold summary::before{content:'▸';font-size:12px;margin-right:7px;color:#5a6470}
-.fold[open] summary::before{content:'▾'}
-.fold summary span{margin-left:auto;font-weight:700;color:#5a6470;font-size:13px;font-variant-numeric:tabular-nums}
-.fold > :not(summary){margin-top:9px}
 .achGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(152px,1fr));gap:5px;max-height:196px;overflow:auto}
 .achIt{display:flex;align-items:center;gap:7px;padding:5px 8px 3px;border-radius:5px;background:#eef2f7;font-weight:700;font-size:12.5px;opacity:.45;filter:grayscale(1)}
 .achIt.on{opacity:1;filter:none;background:var(--yellow)}
@@ -184,7 +190,7 @@ kbd{font:800 12px var(--font);border:1.5px solid var(--ink);border-bottom-width:
 #boardList .mt{font-size:11px;font-weight:600;color:#5a6470}
 #boardList li.you .rk,#boardList li.you .mt{color:#6b5500}
 #boardEmpty{font-size:13px;font-weight:600;color:#5a6470}
-#pname{width:7em;font:800 15px var(--font);border:0;border-radius:8px;padding:12px 10px 9px;box-shadow:inset 0 0 0 2px var(--ink),0 4px 0 rgba(0,0,0,.25)}
+#pname{min-width:0;font:800 15px var(--font);border:0;border-radius:8px;padding:12px 10px 9px;box-shadow:inset 0 0 0 2px var(--ink),0 4px 0 rgba(0,0,0,.25)}
 #overRank{margin:-8px 0 16px;font-size:17px;font-weight:800}
 #overRank:empty{display:none}
 #achs{position:fixed;left:14px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:8px;align-items:flex-start;pointer-events:none;z-index:5}
@@ -219,7 +225,7 @@ kbd{font:800 12px var(--font);border:1.5px solid var(--ink);border-bottom-width:
 #joinAsk{bottom:calc(24px + var(--sb))}
 #achs{left:calc(14px + var(--sl))}
 #touch{inset:var(--st) var(--sr) var(--sb) var(--sl)}
-#title{left:calc(max(20px,5vw) + var(--sl));width:min(580px,calc(100vw - 40px - var(--sl) - var(--sr)));max-height:calc(100dvh - 32px - var(--st) - var(--sb))}
+#title{left:calc(max(20px,5vw) + var(--sl));width:min(440px,calc(100vw - 40px - var(--sl) - var(--sr)));max-height:calc(100dvh - 32px - var(--st) - var(--sb))}
 #pause,#shop,#cases{padding:calc(20px + var(--st)) calc(20px + var(--sr)) calc(20px + var(--sb)) calc(20px + var(--sl))}
 
 @media (max-width:640px){#sign h2{font-size:34px}#shop h2{font-size:32px}#hud .plate{font-size:18px;padding:8px 11px 5px}#hud{max-width:calc(100vw - 160px - var(--sl) - var(--sr))}} /* a column down the left: the minimap has the right */
