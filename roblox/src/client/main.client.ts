@@ -274,12 +274,20 @@ RunService.RenderStepped.Connect((frameDt) => {
 	const fwd = new Vector3(math.cos(car.a), 0, math.sin(car.a)), pos = new Vector3(car.x * PX, 0, car.y * PX);
 	let rc = facing(car.x, car.y, fwd.X, fwd.Z);
 	if (stunned) rc = rc.mul(CFrame.Angles(0, math.sin(T * 40) * 0.15, 0)); // knocked about: shaking
+	if (car.turbo) rc = rc.mul(CFrame.Angles(math.random() * 0.03 - 0.015, 0, math.random() * 0.03 - 0.015)); // rocket rattle
 	bot.model.PivotTo(rc);
 	for (const s of bot.sparks) {
 		s.Color = TIER[car.dTier];
 		s.Transparency = car.dTier > 0 ? 0.2 : 1;
 	}
-	bot.flame.Transparency = car.turbo ? 0.3 : 1;
+	for (const f of bot.flames) {
+		const s = 0.7 + math.random() * 0.6; // flicker: stretch from the nozzle back
+		f.mesh.Scale = new Vector3(s, 1, 1);
+		f.mesh.Offset = new Vector3(f.half * (1 - s), 0, 0);
+		f.part.Transparency = car.turbo ? f.tr : 1;
+	}
+	for (const e of bot.fx) e.Enabled = car.turbo;
+	camera.FieldOfView += ((car.turbo ? 82 : 70) - camera.FieldOfView) * (1 - math.exp(-5 * dt)); // speed kick
 	const goal = CFrame.lookAt(pos.sub(fwd.mul(16)).add(new Vector3(0, 8, 0)), pos.add(new Vector3(0, 2, 0)));
 	let cf = camReady ? camera.CFrame.Lerp(goal, 1 - math.exp(-6 * dt)) : goal; // first frame: straight there, no glide from the origin
 	camReady = true;

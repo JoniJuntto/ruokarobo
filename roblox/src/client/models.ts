@@ -84,10 +84,46 @@ export function robot(color: string, shell = "#f2f2ee") {
 	}
 	K.cyl(0.03, 3.9, -1.45, 3.95, 0.85, "#3a3f45", M.Metal); // flag pole
 	K.box(1.3, 0.5, 0.04, -2.1, 5.5, 0.85, "#ff7b00", M.Neon); // pennant
-	const flame = K.blob(1.6, 0.7, 0.7, -2.6, 1.2, 0, "#7ef9ff", M.Neon);
+	// turbo: a rocket strapped to the lid, nose forward, fins in the player's colour
+	const RY = 2.6, RZ = -0.25, RED = "#e8402c", k = 0.4 * STUDS;
+	K.cyl(0.45, 2.4, -1, RY, RZ, RED, M.SmoothPlastic, "x");
+	K.blob(1.1, 0.9, 0.9, 0.2, RY, RZ, WHITE); // nose
+	K.cyl(0.46, 0.22, -0.35, RY, RZ, WHITE, M.SmoothPlastic, "x"); // band
+	for (const x of [-1.7, -0.75]) {
+		K.cyl(0.47, 0.14, x, RY, RZ, "#2a2f36", M.SmoothPlastic, "x"); // strap
+		K.box(0.14, 0.4, 0.6, x, 2.3, RZ, "#2a2f36");
+	}
+	K.box(0.6, 0.55, 0.05, -1.95, RY + 0.72, RZ, color); // fins
+	for (const s of [-1, 1]) K.box(0.6, 0.05, 0.55, -1.95, RY, RZ + s * 0.72, color);
+	const nozzle = K.cyl(0.32, 0.35, -2.35, RY, RZ, "#3a3f45", M.Metal, "x");
+	// flame: white core inside yellow inside orange, each starting at the nozzle. main flickers their length
+	const flames = ([[0.9, 0.3, "#ffffff", 0], [1.6, 0.5, "#ffd23a", 0.1], [2.6, 0.78, "#ff6a00", 0.35]] as const).map(([len, d, c, tr]) => {
+		const part = K.blob(len, d, d, -2.53 - len / 2, RY, RZ, c, M.Neon);
+		return { part, mesh: part.FindFirstChildOfClass("SpecialMesh")!, half: (len * k) / 2, tr };
+	});
+	const emit = (props: Partial<WritableInstanceProperties<ParticleEmitter>>) => {
+		const e = new Instance("ParticleEmitter");
+		e.EmissionDirection = Enum.NormalId.Left; // the robot's back
+		e.Enabled = false;
+		for (const [key, v] of pairs(props)) (e as unknown as Record<string, unknown>)[key] = v;
+		e.Parent = nozzle;
+		return e;
+	};
+	const ns = (a: number, b: number) => new NumberSequence(a, b);
+	const fx: (ParticleEmitter | PointLight)[] = [
+		emit({ Rate: 90, Lifetime: new NumberRange(0.25, 0.5), Speed: new NumberRange(10, 16), SpreadAngle: new Vector2(12, 12), Size: ns(0.7, 0), LightEmission: 1, Color: new ColorSequence(Color3.fromHex("#ffe066"), Color3.fromHex("#ff3d00")) }),
+		emit({ Rate: 30, Lifetime: new NumberRange(0.8, 1.3), Speed: new NumberRange(4, 7), SpreadAngle: new Vector2(20, 20), Size: ns(0.6, 2.4), Transparency: ns(0.4, 1), Color: new ColorSequence(Color3.fromHex("#c9ccd1")), RotSpeed: new NumberRange(-90, 90) }),
+	];
+	const light = new Instance("PointLight");
+	light.Color = Color3.fromHex("#ff8a2a");
+	light.Range = 14;
+	light.Brightness = 3;
+	light.Enabled = false;
+	light.Parent = nozzle;
+	fx.push(light);
 	const sparks = [-1.5, 1.5].map((z) => K.ball(0.32, -1.6, 0.35, z, "#3aa8ff", M.Neon));
-	for (const p of [flame, ...sparks]) { p.Transparency = 1; p.CastShadow = false; }
-	return { model: m, flame, sparks };
+	for (const p of [...flames.map((f) => f.part), ...sparks]) { p.Transparency = 1; p.CastShadow = false; }
+	return { model: m, flames, fx, sparks };
 }
 
 // ---- windowAt(): framed window with crossbars and a sill, facing +Z*s. Some are lit from inside ----
