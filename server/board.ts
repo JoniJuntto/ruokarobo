@@ -10,7 +10,9 @@ import { SPLIT } from '../src/sim/splits';
 const DIR = process.env.STATE_DIRECTORY || '/var/lib/ruokarobo-board';
 const FILE = DIR + '/scores.json', TIMES = DIR + '/times.json';
 const KEEP = 50;        // rows kept on the board
-const COOLDOWN = 5000;  // ms between runs started from one address
+// runs started from one address: one a second on average, a burst of 5 at once, so a speedrunner can Retry the
+// moment a try goes wrong. Refused, the run has no token and none of its times count
+const COOLDOWN = 1000, BURST = 5, RUNS_MAX = 50000; // 50000 > a day of one address's runs at full rate: nobody's live token gets pushed out
 const BODY_MAX = 2048;  // bytes of a posted score
 
 export interface Row { name: string; score: number; shift: number; robots: number; at: number }
@@ -59,10 +61,9 @@ export function plausible(o: { score: number; shift: number; robots: number }, m
   return o.score <= max && ms >= min * 1000 && ms <= RUN_MAX;
 }
 
-const seen = new Map<string, number>(); // address -> last run started
+const seen = new Map<string, number>(); // address -> when its burst is full again
 setInterval(() => { // keep the maps from growing forever
-  const cut = Date.now() - COOLDOWN * 10;
-  for (const [k, t] of seen) if (t < cut) seen.delete(k);
+  for (const [k, t] of seen) if (t < Date.now()) seen.delete(k);
   for (const [k, r] of runs) if (r.t0 < Date.now() - RUN_MAX) runs.delete(k);
 }, 60000).unref();
 
@@ -102,9 +103,10 @@ export async function boardHttp(req: Request, who: string): Promise<Response> {
 
   const now = Date.now();
   if (req.url.includes('?start')) { // a run begins: hand out its token
-    if (now - (seen.get(who) || 0) < COOLDOWN) return reply(429);
-    seen.set(who, now);
-    if (runs.size >= 5000) runs.delete(runs.keys().next().value!); // full: the oldest run gives way
+    const full = Math.max(now, seen.get(who) || 0) + COOLDOWN;
+    if (full - now > COOLDOWN * BURST) return reply(429);
+    seen.set(who, full);
+    if (runs.size >= RUNS_MAX) runs.delete(runs.keys().next().value!); // full: the oldest run gives way
     const run = crypto.randomUUID();
     runs.set(run, { t0: now, cats: new Set() });
     return reply(201, JSON.stringify({ run }), JSON_TYPE);

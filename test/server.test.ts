@@ -68,7 +68,8 @@ test('the leaderboard over HTTP: tokens, cooldown, junk', async () => {
   const start = await fetch(http + '?start', { method: 'POST' });
   expect(start.status).toBe(201);
   const { run } = await start.json() as { run: string };
-  expect((await fetch(http + '?start', { method: 'POST' })).status).toBe(429); // one run per address per 5 s
+  for (let i = 0; i < 4; i++) expect((await fetch(http + '?start', { method: 'POST' })).status).toBe(201); // Retry, Retry...
+  expect((await fetch(http + '?start', { method: 'POST' })).status).toBe(429); // a burst of 5, then one a second
   // speedrun times ride on the same token, one per category, before the score spends it
   const time = (o: object) => fetch(http.replace('scores', 'times'), { method: 'POST', body: JSON.stringify(o) });
   expect((await time({ cat: 'pick', ms: 1000, robots: 1 })).status).toBe(403);            // no run token
