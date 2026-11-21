@@ -88,7 +88,7 @@ export function sync(dt: number, shadowNow: boolean) {
     const v = rv(r);
     place(v.mesh, r.x, r.y); v.mesh.rotation.y = -r.a;
     v.body.visible = !r.kid;
-    if (r.kid && !v.person) v.person = buildPerson(v.mesh, r.color, '#fff', 1.55); // 1.55 × the robot's .4 = the street kids' .62
+    if (r.kid && !v.person) v.person = buildPerson(v.mesh, r.color, '#fff', 1.55, { kid: true }); // 1.55 × the robot's .4 = the street kids' .62
     if (v.person) {
       v.person.g.visible = !!r.kid;
       const sw = Math.hypot(r.vx, r.vy) > 10 && r.stun <= 0 ? Math.sin(G.T * 14) * .6 : 0;
@@ -131,10 +131,11 @@ export function sync(dt: number, shadowNow: boolean) {
     if (!pv) continue;
     place(pv.g, p.x, p.y); pv.g.rotation.y = -p.a;
     const dog = p.kind === 'dog', down = p.mode === 'fall';
-    pv.body.rotation.z = down && !dog ? Math.PI / 2 : 0; pv.body.rotation.x = down && dog ? Math.PI / 2 : 0;
-    const sw = p.moving && p.kind !== 'wolt' ? Math.sin(G.T * (p.mode === 'chase' ? 16 : 9)) * .5 : 0;
+    const f = p.mode === 'chase' ? 16 : 9, sw = p.moving && p.kind !== 'wolt' ? Math.sin(G.T * f) * .5 : 0;
+    pv.body.rotation.z = down && !dog ? Math.PI / 2 : sw && !dog && p.mode === 'chase' ? -.12 : 0; pv.body.rotation.x = down && dog ? Math.PI / 2 : 0; // lean into a chase
     pv.legs[0].rotation.z = sw; pv.legs[1].rotation.z = p.kickT > 0 && !dog ? 1.4 : -sw;
-    pv.body.position.y = dog && p.kickT > 0 ? .6 : 0; // dogs jump at you
+    if (pv.arms) { pv.arms[0].rotation.z = -sw * .7; pv.arms[1].rotation.z = sw * .7; } // arms counter-swing
+    pv.body.position.y = dog && p.kickT > 0 ? .6 : sw && !dog ? Math.abs(Math.cos(G.T * f)) * .05 : 0; // dogs jump at you; people bob as they walk
     if (pv.head) pv.head.material.color.copy(p.mode === 'chase' ? ANGRY : p.mode === 'zapped' ? ZAPPED : SKIN); // ready-made colours: no '#hex' to parse per face per frame
     pv.g.rotation.x = p.mode === 'zapped' ? Math.sin(G.T * 45) * .08 : 0; // twitching
     if (p.mode === 'zapped' && Math.random() < .3) puff(p.x, p.y, rnd(1, 2.5), rnd(-1, 1), rnd(-1, 1), rnd(0, 2));
@@ -143,7 +144,8 @@ export function sync(dt: number, shadowNow: boolean) {
     const kv = hv.kids.get(k);
     if (!kv) continue;
     place(kv.g, k.x, k.y); kv.g.rotation.y = -k.a;
-    kv.arms[1].rotation.z = k.throwT > 0 ? -2.4 + (.3 - k.throwT) * 8 : 0;
+    const sg = (G.T + k.x) % 5; // the spurgu takes a swig every five seconds
+    kv.arms[1].rotation.z = k.throwT > 0 ? -2.4 + (.3 - k.throwT) * 8 : k.bum && sg < 1.2 ? -1.9 * Math.sin(sg / 1.2 * Math.PI) : 0;
     kv.g.rotation.x = k.zapT > 0 ? Math.sin(G.T * 45) * .1 : 0;
   }
   let nb = 0; // jagged lightning bolts for stun-gun shots

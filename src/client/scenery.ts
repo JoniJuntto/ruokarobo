@@ -9,7 +9,7 @@ import type { Pt, Robot } from '../sim/types';
 import { type StdMat } from './gfx';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { pick, rnd } from '../sim/util';
-import { _vc, blotches, box, capGeo, coneGeo, cylGeo, flat, fuse, group, mat, mesh, MOBILE, paint, place, plainCopy, prism, rbox, scene, seqIndex, speckle, sphGeo, Std, sun, tex } from './gfx';
+import { _g, _vc, blotches, box, boxGeo, capGeo, coneGeo, cylGeo, flat, fuse, group, mat, mesh, MOBILE, paint, place, plainCopy, prism, rbox, scene, seg, seqIndex, speckle, sphGeo, Std, sun, tex } from './gfx';
 import { AVANTO, HOUSES, KIDS_HOME, OX, OZ, S, SAUNA } from './world';
 export const snowTex = tex(512, 512, (c, w, h) => {
   c.fillStyle = '#eef3f8'; c.fillRect(0, 0, w, h);
@@ -162,31 +162,113 @@ export function buildTree(t: Tree) {
 // people face +X. Legs/arms are pivot groups so they can walk, kick, wave and throw
 export interface Person { g: THREE.Group; body: THREE.Group; legs: THREE.Group[]; arms: THREE.Group[]; head: THREE.Mesh<THREE.BufferGeometry, StdMat> }
 export interface Dog { g: THREE.Group; body: THREE.Group; legs: THREE.Group[]; arms: null; head: null }
-export function buildPerson(parent: THREE.Object3D, coat: string, hat: string, scale = 1): Person {
+type Headwear = 'beanie' | 'ushanka' | 'hood' | 'santa' | 'spurgu';
+// all optional: hat style, hair, scarf and build otherwise come from a hash of (coat, hat), so a person always looks the same
+export interface Look { kid?: boolean; style?: Headwear; hair?: string; scarf?: string; wide?: number; beard?: boolean; spurgu?: boolean }
+const HAIR = ['#3a2a1f', '#6b4a2b', '#c9a36b', '#1d1d1d', '#8f8f8f', '#a8552e'];
+const SCARF = ['#d33', '#f5c400', '#2e8b57', '#2d9cff', '#f4f1ea', '#7b4bbf', '#ff7b00'];
+const STYLES: Headwear[] = ['beanie', 'beanie', 'ushanka', 'hood'];
+const torGeo = (r: number, t: number) => _g[`t${r},${t}`] ??= new THREE.TorusGeometry(r, t, seg(8, 5), seg(18, 8));
+const domeGeo = (r: number, p0: number, pl: number, tl: number) => _g[`d${r},${p0},${pl},${tl}`] ??= new THREE.SphereGeometry(r, seg(18, 8), seg(10, 5), p0, pl, 0, tl);
+const shade = (c: string, k: number) => '#' + new THREE.Color(c).multiplyScalar(k).getHexString();
+function hash(s: string) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+export function buildPerson(parent: THREE.Object3D, coat: string, hat: string, scale = 1, o: Look = {}): Person {
+  const PI = Math.PI, sp = !!o.spurgu; // the drunk on his cardboard: long worn coat, no fur, red nose, bottle in hand
+  const h = hash(coat + hat), pick = <T>(a: T[], n: number) => a[(h >>> n) % a.length];
+  const kid = o.kid ?? scale < .8, hs = kid ? 1.18 : 1; // kids: bigger head
+  const style = o.style ?? (sp ? 'spurgu' : kid ? 'beanie' : pick(STYLES, 3));
+  const hairC = o.hair ?? (sp ? '#9a948a' : pick(HAIR, 7));
+  let scarfC = o.scarf ?? (sp ? '#6f6455' : pick(SCARF, 11));
+  if (scarfC === hat) scarfC = pick(SCARF, 13);
+  const wide = o.wide ?? (sp ? 1.05 : kid ? 1 : [.92, 1, 1, 1.1][(h >>> 17) % 4]);
   const g = new THREE.Group(); parent.add(g); g.scale.setScalar(scale);
   const body = new THREE.Group(); g.add(body); // tips over when they slip
-  const coatM = mat(coat, null, .85), hatM = mat(hat, null, .95);
-  const legs = [-.17, .17].map(z => {
+  const coatM = mat(coat, null, .85), trim = mat(shade(coat, .6), null, .85), hatM = mat(hat, null, .95), scarfM = mat(scarfC, null, .95);
+  const fur = mat('#ece3d2', null, 1), hair = mat(hairC, null, .9), glass = mat('#3d5a2e', null, .25);
+
+  // legs: slim trousers, chunky felt-lined winter boots
+  const legs = [-.16, .16].map(z => {
     const leg = new THREE.Group(); leg.position.set(0, .95, z); body.add(leg);
-    mesh(capGeo(.13, .55), mat('#2b2f3a', null, .9), leg, 0, -.42, 0);
-    rbox(leg, .4, .2, .26, .07, rubber, .07, -.88, 0);
+    mesh(capGeo(.115, .42), mat(sp ? '#3a3630' : '#2b2f3a', null, .9), leg, 0, -.36, 0);
+    const b = mesh(capGeo(.14, .2), mat(sp ? '#4a3a2c' : '#24272d', null, .7), leg, .06, -.8, 0); b.rotation.z = PI / 2; b.scale.set(1, .95, 1.05);
+    box(leg, .46, .06, .27, mat(sp ? '#2e2620' : '#5b6068', null, .8), .06, -.95, 0);
+    if (!sp) mesh(torGeo(.125, .045), fur, leg, 0, -.66, 0).rotation.x = PI / 2;
     return leg;
   });
-  const torso = mesh(capGeo(.33, .5), coatM, body, 0, 1.47, 0); torso.scale.set(.82, 1, 1.12);
-  box(body, .04, .8, .06, mat('#2b2f3a', null, .5), .27, 1.45, 0); // zipper
-  const sc = mesh(new THREE.TorusGeometry(.22, .09, 8, 16), hatM, body, 0, 2.02, 0); sc.rotation.x = Math.PI / 2;
+
+  const sh = mesh(sphGeo(.33), coatM, body, 0, 1.86, 0); sh.scale.set(.86 * wide, .5, 1.14 * wide); // round shoulders
+  if (sp) { // knee-length overcoat hanging open over a maroon jumper, a patch, a bottle in the side pocket
+    mesh(cylGeo(.3, .44, 1.3, 20), coatM, body, 0, 1.23, 0).scale.set(.88 * wide, 1, 1.12 * wide);
+    const lh = mesh(torGeo(.44, .045), trim, body, 0, .59, 0); lh.rotation.x = PI / 2; lh.scale.set(.88 * wide, 1.12 * wide, 1);
+    box(body, .04, 1, .16, mat('#6b2f2a', null, .95), .3 * wide, 1.38, 0).rotation.z = .1;
+    for (const z of [-.11, .11]) { const lp = box(body, .04, .9, .06, trim, .31 * wide, 1.4, z); lp.rotation.z = .1; lp.rotation.x = z > 0 ? -.12 : .12; }
+    const pt = box(body, .03, .15, .15, mat('#8a7a55', null, .95), .28 * wide, 1, -.24 * wide); pt.rotation.y = .6; pt.rotation.z = .1;
+    mesh(cylGeo(.035, .05, .28, 8), glass, body, .06, 1.08, .43 * wide);
+  } else { // parka: flared, darker hem, zip and pocket flaps
+    mesh(cylGeo(.3, .38, .92, 20), coatM, body, 0, 1.42, 0).scale.set(.88 * wide, 1, 1.12 * wide);
+    const hem = mesh(torGeo(.38, .05), trim, body, 0, .97, 0); hem.rotation.x = PI / 2; hem.scale.set(.88 * wide, 1.12 * wide, 1);
+    box(body, .03, .84, .05, trim, .3 * wide, 1.42, 0).rotation.z = .076;
+    for (const z of [-.17, .17]) box(body, .05, .06, .17, trim, .29 * wide, 1.22, z * wide);
+    if (style !== 'hood') mesh(sphGeo(.24), coatM, body, -.2, 2, 0).scale.set(.55, .5, 1.05); // hood down, bunched at the neck
+  }
+  mesh(torGeo(.19, .085), scarfM, body, 0, 2.03, 0).rotation.x = PI / 2;
+  if (!sp) { // scarf end (the spurgu's is tucked in)
+    box(body, .05, .42, .13, scarfM, .3, 1.83, .1).rotation.z = .08;
+    box(body, .055, .05, .135, mat(shade(scarfC, .7), null, .95), .31, 1.6, .1);
+  }
+
+  // arms hang slightly out from the body; cuffed sleeve, mitten with a thumb
   const arms = [-.44, .44].map(z => {
-    const a = new THREE.Group(); a.position.set(0, 1.92, z); body.add(a);
-    mesh(capGeo(.1, .55), coatM, a, 0, -.38, 0); mesh(sphGeo(.12), hatM, a, 0, -.76, 0);
+    const a = new THREE.Group(); a.position.set(0, 1.86, z * wide); body.add(a);
+    const th = z < 0 ? .12 : -.12, dy = -Math.cos(th), dz = -Math.sin(th);
+    mesh(capGeo(.115, .5), coatM, a, 0, .34 * dy, .34 * dz).rotation.x = th;
+    mesh(torGeo(.1, .04), trim, a, 0, .68 * dy, .68 * dz).rotation.x = th + PI / 2;
+    const mt = mesh(sphGeo(.12), hatM, a, 0, .8 * dy, .8 * dz); mt.scale.set(1.05, 1.1, .8); mt.rotation.x = th;
+    mesh(sphGeo(.05), hatM, a, .08, .75 * dy, .75 * dz);
+    if (sp && z > 0) { // held by the neck: a swig is one arm rotation
+      mesh(cylGeo(.03, .04, .16, 8), glass, a, .02, .9 * dy, .9 * dz);
+      mesh(cylGeo(.075, .075, .3, 10), glass, a, .02, 1.12 * dy, 1.12 * dz).rotation.x = th;
+    }
     return a;
   });
-  const head = mesh(sphGeo(.27), new Std({ color: '#f1c7a5', roughness: .7 }), body, 0, 2.33, 0) as Person['head'];
-  mesh(sphGeo(.06), mat('#e8a98a', null, .7), body, .27, 2.3, 0);
-  for (const z of [-.09, .09]) mesh(sphGeo(.035), '#1d1d1d', body, .24, 2.4, z);
-  for (const z of [-.1, .1]) { const br = box(body, .04, .04, .14, '#3a2a1f', .25, 2.47, z); br.rotation.x = z > 0 ? .5 : -.5; }
-  const pipo = mesh(new THREE.SphereGeometry(.29, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2), hatM, body, 0, 2.4, 0); pipo.scale.y = 1.15;
-  mesh(cylGeo(.3, .3, .12, 18), white, body, 0, 2.42, 0);
-  mesh(sphGeo(.11), white, body, 0, 2.74, 0);
+
+  // head: big enough to read from the chase cam, which sits at head height ~7 units back
+  const r = .3 * hs, hy = 2.36 + (hs - 1) * .3;
+  const head = mesh(sphGeo(r), new Std({ color: '#f1c7a5', roughness: .7 }), body, 0, hy, 0) as Person['head'];
+  const onFace = (geo: THREE.BufferGeometry, m: string | StdMat, el: number, az: number, out = 1) =>
+    mesh(geo, m, body, r * out * Math.cos(el) * Math.cos(az), hy + r * out * Math.sin(el), r * out * Math.cos(el) * Math.sin(az));
+  for (const az of [-.33, .33]) {
+    onFace(sphGeo(.045 * hs), '#1d1d1d', -.02, az, .97).scale.set(.6, sp ? .5 : 1.25, 1); // spurgu: heavy-lidded
+    if (!sp) onFace(sphGeo(.015 * hs), white, .04, az + (az < 0 ? .06 : -.06), 1.01); // catchlight
+    const br = onFace(boxGeo(.03, .03, .12 * hs), hair, .17, az); br.rotation.x = (az > 0 ? .3 : -.3) * (sp ? -.6 : 1); br.rotation.y = -az;
+    const ch = onFace(sphGeo(.065 * hs), mat(sp ? '#d9705f' : '#f0a08c', null, .8), -.2, az * 1.65, .93); ch.scale.set(.5, .75, 1); ch.rotation.y = -az * 1.65;
+  }
+  onFace(sphGeo((sp ? .088 : .07) * hs), mat(sp ? '#d65f50' : '#e8a98a', null, .6), -.12, 0, .97).scale.set(1, .9, 1);
+  if (sp) mesh(sphGeo(.27), mat('#8f8a80', null, 1), body, .08, hy - .2, 0).scale.set(.95, .6, 1.08); // grey stubble beard
+  else onFace(boxGeo(.02, .025, .09 * hs), '#7a3b30', -.38, 0, .97);
+  if (style !== 'hood') mesh(domeGeo(.315 * hs, -PI * .6, PI * 1.2, PI * .62), hair, body, 0, hy, 0); // back of the head and over the ears
+  if (o.beard) { mesh(sphGeo(.25), white, body, .2, hy - .22, 0).scale.set(.8, 1.2, 1.3); mesh(sphGeo(.1), white, body, .28, hy - .08, 0).scale.set(.7, .6, 2.2); }
+
+  if (style === 'beanie') {
+    mesh(domeGeo(.325 * hs, 0, PI * 2, PI / 2), hatM, body, 0, hy + .14 * hs, 0).scale.y = 1.1;
+    mesh(cylGeo(.33 * hs, .33 * hs, .13 * hs, 18), mat(shade(hat, .75), null, .95), body, 0, hy + .135 * hs, 0);
+    mesh(sphGeo(.12 * hs), white, body, 0, hy + .5 * hs, 0);
+  } else if (style === 'ushanka') {
+    mesh(domeGeo(.32, 0, PI * 2, PI / 2), hatM, body, 0, hy + .15, 0).scale.y = 1.05;
+    mesh(cylGeo(.345, .345, .15, 18), fur, body, 0, hy + .14, 0);
+    for (const z of [-.3, .3]) mesh(sphGeo(.13), fur, body, -.03, hy - .05, z).scale.set(.9, 1.45, .45); // ear flaps
+  } else if (style === 'hood') { // hood up: the face shows through a fur ring
+    mesh(sphGeo(.37 * hs), coatM, body, -.1 * hs, hy + .02, 0);
+    mesh(torGeo(.23 * hs, .06), fur, body, .19 * hs, hy + .01, 0).rotation.y = PI / 2;
+  } else if (style === 'santa') {
+    mesh(cylGeo(.33, .33, .14, 18), white, body, 0, hy + .14, 0);
+    mesh(coneGeo(.31, .62, 18), hatM, body, -.05, hy + .48, 0).rotation.z = .35;
+    mesh(sphGeo(.1), white, body, -.17, hy + .77, 0);
+  } else { // spurgu: stretched knit hat slumping off the back of his head
+    const sd = mesh(domeGeo(.325, 0, PI * 2, PI / 2), hatM, body, -.04, hy + .13, 0); sd.scale.y = 1.25; sd.rotation.z = .3;
+    mesh(cylGeo(.33, .33, .12, 18), mat(shade(hat, .75), null, .95), body, -.01, hy + .12, 0).rotation.z = .3;
+    mesh(sphGeo(.14), hatM, body, -.3, hy + .4, 0).scale.set(1.2, .7, 1);
+  }
   fuse(body, [head], .85); legs.forEach(l => fuse(l, [], .88)); arms.forEach(a => fuse(a, [], .85));
   return { g, body, legs, arms, head };
 }
@@ -219,7 +301,7 @@ export function buildStatue(b: Box) { // Olli Lindholm in bronze
   });
   const plaque = new THREE.Mesh(new THREE.PlaneGeometry(2.8, 1.05), new Std({ map: t, roughness: .35, metalness: .7 }));
   plaque.position.set(0, 1.6, 1.82); g.add(plaque);
-  const p = buildPerson(g, '#000', '#000', 1.7); p.g.position.y = 2.7; p.g.rotation.y = -Math.PI / 2; // faces the road
+  const p = buildPerson(g, '#000', '#000', 1.7, { style: 'beanie', hair: '#000' }); p.g.position.y = 2.7; p.g.rotation.y = -Math.PI / 2; // faces the road
   // singing: hand held at the chin, mic tilted up to the mouth (not a raised arm)
   p.arms[1].quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), new THREE.Vector3(.42, .2, -.44).normalize());
   const mic = mesh(cylGeo(.05, .08, .3, 8), '#000', p.body, .46, 2.2, -.04); mic.rotation.z = .5;

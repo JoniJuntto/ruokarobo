@@ -81,7 +81,7 @@ export function buildHazards() {
     fuse(g); movers.push({ o: g, r: 8 });
   }
   for (const p of G.peds) { // grumpy locals and their dogs
-    const m = p.kind === 'dog' ? buildDog(hazardGroup) : buildPerson(hazardGroup, p.color!, p.hat!);
+    const m = p.kind === 'dog' ? buildDog(hazardGroup) : buildPerson(hazardGroup, p.color!, p.hat!, 1, p.kind === 'wolt' ? { style: 'beanie', scarf: '#1d232b' } : {});
     if (p.kind === 'wolt') { // e-moped under the rider, delivery box on the back; all in body so it tips over with them
       for (const x of [-.75, .75]) mesh(cylGeo(.28, .28, .14, 14), rubber, m.body, x, .28, 0).rotation.x = Math.PI / 2;
       box(m.body, 1.5, .1, .42, rubber, 0, .3, 0); box(m.body, .07, 1.4, .07, metalGray, .72, 1, 0); box(m.body, .07, .07, .8, rubber, .72, 1.7, 0);
@@ -113,7 +113,7 @@ export function buildHazards() {
     box(lm, 1.54, .22, 1.14, '#1d232b', 0, 0, 0); box(lm, .24, 1.04, 1.14, '#1d232b', 0, 0, 0);
   }
   for (const k of G.kids) { // kid behind a snowdrift, or a bum lounging on cardboard with his bottles
-    const m = buildPerson(hazardGroup, k.coat, k.hat, k.bum ? 1 : .62);
+    const m = buildPerson(hazardGroup, k.coat, k.hat, k.bum ? 1 : .62, { spurgu: k.bum });
     hv.kids.set(k, m); movers.push({ o: m.g, r: 5 });
     if (k.bum) {
       m.body.rotation.z = 1.15; m.body.position.set(.9, .35, 0); // reclined, feet towards the path
@@ -139,8 +139,7 @@ export const sleigh = new THREE.Group(); scene.add(sleigh); sleigh.visible = fal
   const red = mat('#c0262d', null, .35, .2), gold = mat('#f5c400', null, .3, .7);
   rbox(sleigh, 4.4, 1.4, 3, .4, red, -3.2, 1.3, 0); rbox(sleigh, 1.3, 2.2, 3, .4, red, -5, 1.9, 0);
   for (const z of [-1.35, 1.35]) { box(sleigh, 6, .18, .2, gold, -3.3, .3, z); const c = box(sleigh, 1, .18, .2, gold, .1, .6, z); c.rotation.z = .8; }
-  const s = buildPerson(sleigh, '#c0262d', '#c0262d', 1.25); s.g.position.set(-3.6, .6, 0);
-  const beard = mesh(sphGeo(.24), white, s.body, .2, 2.12, 0); beard.scale.set(.8, 1.2, 1.3);
+  buildPerson(sleigh, '#c0262d', '#c0262d', 1.25, { style: 'santa', beard: true, scarf: '#f4f1ea' }).g.position.set(-3.6, .6, 0);
   mesh(sphGeo(1), '#6b4a2b', sleigh, -5.3, 3.3, 0).scale.set(.8, .9, .9); // sack of presents
 }
 export const deer: Dog[] = [];
