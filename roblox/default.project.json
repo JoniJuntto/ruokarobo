@@ -1,0 +1,17 @@
+{
+  "name": "Ruokarobo",
+  "globIgnorePaths": ["**/package.json", "**/tsconfig.json"],
+  "tree": {
+    "$className": "DataModel",
+    "Players": { "$className": "Players", "$properties": { "CharacterAutoLoads": false } },
+    "ReplicatedStorage": {
+      "$className": "ReplicatedStorage",
+      "rbxts_include": { "$path": "include", "node_modules": { "$className": "Folder", "@rbxts": { "$path": "node_modules/@rbxts" } } },
+      "TS": { "$path": "out/shared" }
+    },
+    "StarterPlayer": {
+      "$className": "StarterPlayer",
+      "StarterPlayerScripts": { "$className": "StarterPlayerScripts", "TS": { "$path": "out/client" } }
+    }
+  }
+}

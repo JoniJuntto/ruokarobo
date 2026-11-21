@@ -1,0 +1,14 @@
+{
+  "name": "ruokarobo-roblox",
+  "private": true,
+  "scripts": {
+    "build": "rbxtsc && rojo build -o Ruokarobo.rbxlx",
+    "watch": "rbxtsc -w",
+    "serve": "rojo serve"
+  },
+  "devDependencies": {
+    "@rbxts/compiler-types": "3.0.0-types.0",
+    "@rbxts/types": "1.0.963",
+    "roblox-ts": "3.0.0"
+  }
+}
