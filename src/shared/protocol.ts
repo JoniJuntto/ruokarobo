@@ -78,7 +78,7 @@ export function encodeSnap(g: GameState, fx: FxEvent[]): SnapMsg {
 // act and story messages count. Anyone may buy, as guests always could.
 export interface HostMsg { type: 'host'; map: string }   // a key of maps in sim/map/index.ts
 export interface JoinMsg { type: 'join'; code: string }
-export interface ActMsg { type: 'act'; a: 'start' | 'roam' | 'pvp' | 'pause' | 'resume' | 'quit' } // start = Game.pressStart
+export interface ActMsg { type: 'act'; a: 'start' | 'roam' | 'pvp' | 'pause' | 'resume' | 'retry' | 'quit' } // start = Game.pressStart
 export interface StoryMsg { type: 'story'; ch: number; save?: { money?: number; up?: Partial<Upgrades> } | null }
 export type RoomClientMsg = ClientMsg | HostMsg | JoinMsg | ActMsg | StoryMsg;
 

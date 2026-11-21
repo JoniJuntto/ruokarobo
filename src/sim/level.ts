@@ -99,6 +99,12 @@ function playChapter(g: GameState) {
   startLevel(g, g.chapter);
 }
 function retryChapter(g: GameState) { g.money = g.storyStart!.money; g.up = { ...g.storyStart!.up }; playChapter(g); }
+// the pause menu's Retry: a story chapter restarts with the money and upgrades it began with, anything else
+// (endless, pvp, roaming) starts its run over from shift 1. Nothing to retry on the title or a story card
+export function retry(g: GameState) {
+  if (g.state === 'title' || g.state === 'story') return;
+  if (g.campaign) { if (g.storyStart) retryChapter(g); } else newRun(g); // newRun leaves g.roam alone, so a roam stays a roam
+}
 // the one "go on" button: Start shift, Try again, Start next shift, Continue. Whoever calls this on the title
 // screen makes sure a robot exists first
 export function pressStart(g: GameState) {

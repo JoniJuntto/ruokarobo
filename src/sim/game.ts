@@ -2,7 +2,7 @@
 // then drain() what happened. It runs the same in a browser (solo and split-screen) and on a server (online):
 // nothing under src/sim touches the DOM, three.js or the network.
 import { COLORS } from './data';
-import { buy, pressStart, setupLevel, startStory } from './level';
+import { buy, pressStart, retry, setupLevel, startStory } from './level';
 import type { GameMap } from './map/types';
 import { updCars, updEetu, updKids, updPeds, updPlow, updSanta, updThieves, updWeather } from './npc';
 import { powerUp, robotPairs, updRobot } from './robot';
@@ -29,6 +29,7 @@ export interface Game {
   buy(k: UpKey): void;
   setSkin(owner: string, skin: string): void;   // every robot of this owner wears it
   setPaused(paused: boolean): void;
+  retry(): void;                                // pause menu: replay the chapter, or the run from shift 1
   quit(): void;                                 // back to the title, fresh level 1 hazards; robots stay
 }
 
@@ -118,6 +119,7 @@ export function createGame(map: GameMap, opts: GameOpts = {}): Game {
     buy: k => buy(g, k),
     setSkin: (owner, skin) => { for (const r of g.robots) if (r.owner === owner) r.skin = skin; },
     setPaused: paused => { g.paused = paused; },
+    retry: () => retry(g),
     quit: () => { g.state = 'title'; setupLevel(g, 1); },
   };
 }

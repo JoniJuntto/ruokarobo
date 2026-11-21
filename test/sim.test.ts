@@ -272,3 +272,17 @@ test('nothing under src/sim or src/shared imports anything but itself', async ()
   }
   expect(files).toBeGreaterThan(8);
 });
+
+test('Retry replays a chapter with its starting money, or an endless run from shift 1', () => {
+  const game = createGame(village), g = game.state;
+  game.addRobot();
+  game.retry(); expect(g.state).toBe('title'); // nothing to retry on the title
+  game.startStory(3, { money: 120 }); g.stateT = 1; game.pressStart(); expect(g.state).toBe('play');
+  g.money = 5; g.up.battery = 2; g.time = 1;
+  game.retry();
+  expect([g.state, g.chapter, g.money, g.up.battery]).toEqual(['play', 3, 120, 0]);
+  game.quit(); game.pressStart(); g.state = 'shop'; g.stateT = 2; game.pressStart();
+  expect(g.level).toBe(2);
+  g.money = 99; game.retry();
+  expect([g.state, g.level, g.money, g.campaign]).toEqual(['play', 1, 0, false]);
+});

@@ -43,11 +43,17 @@ export function setMenu(open: boolean) {
   $('pauseNote').hidden = !waiting() || G.state === 'title';
   // online the leader's Quit takes the whole room back to its title screen; on that screen, and for everyone else, it leaves the room
   $('bQuit').hidden = G.state === 'title' && !online;
+  $('bRestart').hidden = waiting() || G.state === 'title' || G.state === 'story'; // only whoever steers the game
+  setText('bRestart', G.campaign ? 'Retry chapter' : 'Retry from shift 1');
   setText('bQuit', online && (waiting() || G.state === 'title') ? 'Leave online game' : 'Quit to title');
   if (open) { updateMenu(); $('bResume').focus(); }
 }
 $('bPause').onclick = () => setMenu(true);
 $('bResume').onclick = () => setMenu(false);
+$('bRestart').onclick = () => {
+  setMenu(false);
+  if (net.role === 'guest') send({ type: 'act', a: 'retry' }); else game.retry();
+};
 $('bQuit').onclick = () => {
   const room = net.role === 'guest' && !waiting() && G.state !== 'title';
   setMenu(false);

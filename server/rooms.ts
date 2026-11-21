@@ -230,6 +230,7 @@ function handle(ws: WS, m: Rec) {
       else if (m.a === 'pvp') { if (g.robots.length >= 2 && (g.state === 'title' || g.state === 'over' && !g.campaign)) game.togglePvp(); }
       else if (m.a === 'pause') { if (g.state !== 'title') game.setPaused(true); }
       else if (m.a === 'resume') game.setPaused(false);
+      else if (m.a === 'retry') { game.setPaused(false); game.retry(); }
       else if (m.a === 'quit') { if (g.state !== 'title') { game.setPaused(false); game.quit(); } }
       break;
     case 'story': {
