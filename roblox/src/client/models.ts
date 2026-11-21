@@ -67,9 +67,9 @@ function model(name: string, parent?: Instance) {
 }
 
 // ---- robot: buildRobot() at the web's .4 scale. Faces +X like the web model; main turns it to face its heading ----
-export function robot(color: string) {
+export function robot(color: string, shell = "#f2f2ee") {
 	const m = model("Robot"), K = kit(m, 0.4 * STUDS);
-	K.box(3.6, 1.45, 2.6, 0, 1.25, 0, "#f2f2ee"); // shell
+	K.box(3.6, 1.45, 2.6, 0, 1.25, 0, shell);
 	K.box(3.66, 0.42, 2.66, 0, 0.62, 0, "#2a2f36"); // dark skirt
 	K.box(3, 0.22, 2.25, -0.08, 2.02, 0, "#e3e6ea"); // lid
 	K.box(3.02, 0.24, 0.46, -0.08, 2.04, 0, color); // stripe in the player's colour
@@ -218,4 +218,121 @@ export function drift(x: number, y: number, sx: number, sy: number, sz: number, 
 	const m = model("Snowbank", parent);
 	kit(m, STUDS).blob(sx, sy, sz, 0, 0, 0, SNOW, M.Snow);
 	m.PivotTo(new CFrame(x * px, 0, y * px).mul(CFrame.Angles(0, yaw, 0)));
+}
+
+// ---- Farmari, the boxy winter estate from buildHazards(); faces +X ----
+export function farmari(color: string, parent: Instance) {
+	const m = model("Farmari", parent), K = kit(m, STUDS), TRIM = "#2b2f36", GLASS = "#1b2631";
+	K.box(8.1, 0.36, 3.66, 0, 0.72, 0, TRIM); // sill
+	K.box(8, 0.9, 3.6, 0, 1.3, 0, color);
+	K.box(5.25, 1.4, 3.3, -1.1, 2.45, 0, color); // cabin
+	K.box(4.75, 0.78, 3.34, -1.05, 2.5, 0, GLASS, M.Glass); // side windows
+	for (const x of [-0.33, -2.47]) K.box(0.26, 0.8, 3.38, x, 2.5, 0, color); // B and C pillars
+	K.box(0.06, 0.8, 2.9, 1.555, 2.5, 0, GLASS, M.Glass); // windscreen
+	K.box(0.06, 0.78, 2.9, -3.755, 2.5, 0, GLASS, M.Glass);
+	K.box(0.05, 0.36, 1.5, 4.025, 1.38, 0, TRIM); // grille
+	K.box(4.75, 0.3, 2.6, -1.1, 3.3, 0, SNOW, M.Snow); // snow on the roof and bonnet
+	K.box(2, 0.12, 2.9, 2.7, 1.81, -0.1, SNOW, M.Snow);
+	for (const s of [-1, 1]) {
+		K.box(0.3, 0.46, 3.7, s * 4.12, 0.95, 0, TRIM); // bumpers
+		K.box(0.04, 0.28, 1, s * 4.29, 0.95, 0, WHITE); // number plates
+		K.box(4.4, 0.12, 0.14, -1.15, 3.21, s * 1.45, TRIM); // roof rails
+		K.box(0.25, 0.26, 0.36, 1.3, 2.15, s * 1.85, color); // mirrors
+		K.box(0.06, 0.34, 0.7, 4.02, 1.4, s * 1.2, "#fff6b0", M.Neon); // headlights
+		K.box(0.06, 0.7, 0.36, -4.02, 1.45, s * 1.5, "#d1322b", M.Neon); // tall tail lights
+	}
+	for (const sx of [-2.55, 2.55]) for (const sz of [-1.62, 1.62]) {
+		K.cyl(0.64, 0.5, sx, 0.64, sz, "#1d1d1d", M.SmoothPlastic, "z");
+		K.cyl(0.32, 0.54, sx, 0.64, sz, METAL, M.Metal, "z");
+	}
+	return m;
+}
+
+// ---- people and dogs: limbs swing about a hip or shoulder, so each frame poses them from a root CFrame ----
+interface Limb { pivot: CFrame; parts: { p: BasePart; rel: CFrame }[] }
+export interface Walker { model: Model; still: { p: BasePart; rel: CFrame }[]; legs: Limb[]; arms: Limb[]; head: BasePart }
+// a kit whose parts are recorded with their place in the model, so pose() can move them all from one CFrame
+function rig(parent: Instance, k: number) {
+	const m = model("Walker", parent), K = kit(m, k);
+	const rec = (into: { p: BasePart; rel: CFrame }[], p: BasePart, pivot = I) => { into.push({ p, rel: pivot.Inverse().mul(p.CFrame) }); return p; };
+	return { m, K, rec };
+}
+export function pose(w: Walker, root: CFrame, swing: number, armSwing: number, arm1?: number) {
+	for (const s of w.still) s.p.CFrame = root.mul(s.rel);
+	w.legs.forEach((l, i) => { const a = root.mul(l.pivot).mul(CFrame.Angles(0, 0, i === 0 ? swing : -swing)); for (const s of l.parts) s.p.CFrame = a.mul(s.rel); });
+	w.arms.forEach((l, i) => { const a = root.mul(l.pivot).mul(CFrame.Angles(0, 0, i === 0 ? -armSwing : arm1 ?? armSwing)); for (const s of l.parts) s.p.CFrame = a.mul(s.rel); });
+}
+
+const SKIN = "#f1c7a5", SCARVES = ["#dd3333", "#f5c400", "#2e8b57", "#2d9cff", "#f4f1ea", "#7b4bbf"];
+// buildPerson(), simplified: winter boots, a puffy coat, scarf, mittens, a bobble hat. Faces +X
+export function person(coat: string, hat: string, parent: Instance, courier = false, scale = 1): Walker {
+	const k = STUDS * scale, { m, K, rec } = rig(parent, k), still: { p: BasePart; rel: CFrame }[] = [];
+	const legs = [-0.16, 0.16].map((z): Limb => {
+		const pivot = new CFrame(0, 0.95 * k, z * k), parts: Limb["parts"] = [];
+		rec(parts, K.cyl(0.12, 0.75, 0, 0.6, z, "#2b2f36", M.Fabric), pivot);
+		rec(parts, K.box(0.46, 0.22, 0.27, 0.06, 0.11, z, "#24272d", M.Leather), pivot); // boot
+		return { pivot, parts };
+	});
+	rec(still, K.blob(0.62, 1.25, 0.8, 0, 1.5, 0, coat, M.Fabric)); // coat
+	rec(still, K.cyl(0.25, 0.16, 0, 2.02, 0, SCARVES[math.floor(math.random() * SCARVES.size())], M.Fabric));
+	const arms = [-0.38, 0.38].map((z): Limb => {
+		const pivot = new CFrame(0, 1.9 * k, z * k), parts: Limb["parts"] = [];
+		rec(parts, K.cyl(0.11, 0.6, 0, 1.58, z, coat, M.Fabric), pivot);
+		rec(parts, K.ball(0.12, 0, 1.22, z, hat, M.Fabric), pivot); // mitten
+		return { pivot, parts };
+	});
+	const head = rec(still, K.ball(0.3, 0, 2.36, 0, SKIN));
+	for (const z of [-0.1, 0.1]) rec(still, K.ball(0.045, 0.28, 2.4, z, "#1d1d1d")); // eyes
+	rec(still, K.ball(0.07, 0.3, 2.3, 0, "#e8a98a")); // nose
+	rec(still, K.blob(0.64, 0.44, 0.64, 0, 2.56, 0, courier ? "#00a3d9" : hat, M.Fabric)); // bobble hat
+	rec(still, K.cyl(0.31, 0.1, 0, 2.5, 0, WHITE, M.Fabric));
+	rec(still, K.ball(0.11, 0, 2.8, 0, WHITE, M.Fabric));
+	if (courier) { // e-moped under the rider, delivery box on the back
+		for (const x of [-0.75, 0.75]) rec(still, K.cyl(0.28, 0.14, x, 0.28, 0, "#1d1d1d", M.SmoothPlastic, "z"));
+		rec(still, K.box(1.5, 0.1, 0.42, 0, 0.3, 0, "#1d1d1d"));
+		rec(still, K.box(0.07, 1.4, 0.07, 0.72, 1, 0, METAL, M.Metal));
+		rec(still, K.box(0.07, 0.07, 0.8, 0.72, 1.7, 0, "#1d1d1d"));
+		rec(still, K.box(0.75, 0.75, 0.75, -0.55, 1.9, 0, "#00a3d9")); // the insulated box
+	}
+	return { model: m, still, legs, arms, head };
+}
+
+// buildDog(): brown with dark ears and snout. Faces +X
+export function dog(parent: Instance): Walker {
+	const { m, K, rec } = rig(parent, STUDS), still: { p: BasePart; rel: CFrame }[] = [], FUR = "#8b5a2b", DARK = "#3a2412";
+	rec(still, K.blob(1.2, 0.5, 0.5, 0, 0.62, 0, FUR, M.Fabric)); // body
+	const head = rec(still, K.ball(0.24, 0.65, 0.88, 0, FUR, M.Fabric));
+	rec(still, K.box(0.26, 0.18, 0.22, 0.9, 0.82, 0, DARK));
+	rec(still, K.ball(0.05, 1.03, 0.86, 0, "#111111"));
+	for (const z of [-0.13, 0.13]) rec(still, K.box(0.1, 0.2, 0.1, 0.6, 1.12, z, DARK));
+	rec(still, K.box(0.1, 0.42, 0.1, -0.66, 0.86, 0, FUR, M.Fabric, CFrame.Angles(0, 0, -0.9))); // tail
+	const legs = [0.32, -0.32].map((x): Limb => {
+		const pivot = new CFrame(x * STUDS, 0.45 * STUDS, 0), parts: Limb["parts"] = [];
+		for (const z of [-0.13, 0.13]) rec(parts, K.cyl(0.06, 0.42, x, 0.23, z, FUR, M.Fabric), pivot);
+		return { pivot, parts };
+	});
+	return { model: m, still, legs, arms: [], head };
+}
+
+// sidewalk snowplow tractor from buildHazards(), with its orange beacon. Faces +X
+export function plow(parent: Instance) {
+	const m = model("Plow", parent), K = kit(m, STUDS);
+	K.box(3.6, 1.6, 2.4, -0.3, 1.3, 0, "#f5a200");
+	K.box(1.8, 1.6, 2.1, -0.8, 2.9, 0, "#2b3440", M.Glass); // cab
+	K.box(0.3, 1.1, 3.6, 2.0, 0.7, 0, "#9aa3ad", M.Metal); // blade
+	K.box(0.8, 0.5, 3.4, 2.4, 0.3, 0, SNOW, M.Snow); // snow piling up in front of it
+	for (const sx of [-1.3, 1]) for (const sz of [-1.2, 1.2]) K.cyl(0.6, 0.4, sx, 0.6, sz, "#151515", M.SmoothPlastic, "z");
+	const beacon = K.ball(0.25, -0.8, 3.9, 0, "#ff9d00", M.Neon);
+	const light = new Instance("PointLight");
+	light.Color = Color3.fromHex("#ff7b00");
+	light.Range = 14;
+	light.Parent = beacon;
+	return { model: m, light };
+}
+
+// the spurgu's cardboard, a flattened box under where he reclines
+export function cardboard(x: number, y: number, parent: Instance, px: number) {
+	const m = model("Cardboard", parent);
+	kit(m, STUDS).box(2.4, 0.06, 1.4, 0, 0.03, 0, "#b08a5a", M.Cardboard);
+	m.PivotTo(new CFrame(x * px, 0, y * px).mul(CFrame.Angles(0, math.random() * 6, 0)));
 }

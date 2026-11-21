@@ -3,3 +3,4 @@ out
 include
 *.rbxlx
 *.rbxl
+*.lock
