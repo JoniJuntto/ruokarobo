@@ -56,18 +56,28 @@ export function buildHazards() {
   }
   for (const c of G.cars) {
     const g = new THREE.Group(); hv.cars.set(c, g); hazardGroup.add(g);
-    const paint = mat(c.color, null, .3, .3);
-    rbox(g, 8, 1.15, 3.6, .45, paint, 0, 1.2, 0);
-    rbox(g, 4.6, 1.35, 3.3, .5, paint, -.6, 2.25, 0);
-    rbox(g, 4.72, .72, 3.38, .3, darkGlass, -.6, 2.3, 0); // window band
-    rbox(g, 3.9, .28, 2.9, .14, snowMat, -.6, 2.98, 0); // snow on the roof
-    for (const sx of [-1, 1]) rbox(g, .3, .45, 3.5, .12, mat('#2b2f36', null, .6), sx * 3.98, .85, 0); // bumpers
-    for (const sx of [-2.55, 2.55]) for (const sz of [-1.72, 1.72]) {
-      mesh(cylGeo(.62, .62, .45, 20), rubber, g, sx, .65, sz).rotation.x = Math.PI / 2;
-      mesh(cylGeo(.32, .32, .48, 14), metalGray, g, sx, .65, sz).rotation.x = Math.PI / 2;
+    // Farmari: a boxy estate, the cabin running to the tail. Same footprint and wheel spots as the old saloon
+    const paint = mat(c.color, null, .3, .3), trim = mat('#2b2f36', null, .6);
+    rbox(g, 8.1, .36, 3.66, .1, trim, 0, .72, 0); // sill
+    rbox(g, 8, .9, 3.6, .2, paint, 0, 1.3, 0);
+    rbox(g, 5.25, 1.4, 3.3, .2, paint, -1.1, 2.45, 0); // cabin
+    box(g, 4.75, .78, 3.34, darkGlass, -1.05, 2.5, 0); // side windows
+    for (const x of [-.33, -2.47]) box(g, .26, .8, 3.38, paint, x, 2.5, 0); // B and C pillars
+    box(g, .06, .8, 2.9, darkGlass, 1.555, 2.5, 0); box(g, .06, .78, 2.9, darkGlass, -3.755, 2.5, 0); // windscreen, rear window
+    box(g, .05, .36, 1.5, trim, 4.025, 1.38, 0); // grille
+    rbox(g, 4.75, .3, 2.6, .12, snowMat, -1.1, 3.3, 0); rbox(g, 2, .12, 2.9, .05, snowMat, 2.7, 1.81, -.1); // snow on the roof and bonnet
+    for (const s of [-1, 1]) {
+      rbox(g, .3, .46, 3.7, .1, trim, s * 4.12, .95, 0); // bumpers
+      box(g, .04, .28, 1, white, s * 4.29, .95, 0); box(g, .02, .28, .14, mat('#1f4bb8'), s * 4.305, .95, s * .42); // plates, EU strip on the left
+      box(g, 4.4, .12, .14, trim, -1.15, 3.21, s * 1.45); // roof rails
+      box(g, .25, .26, .36, paint, 1.3, 2.15, s * 1.85); // mirrors
+      box(g, .05, .5, .5, trim, -3.35, .55, s * 1.65); // mud flaps
+      box(g, .06, .34, .7, mat('#fff6b0', '#fff6b0'), 4.02, 1.4, s * 1.2); box(g, .06, .7, .36, mat('#d1322b', '#ff2222'), -4.02, 1.45, s * 1.5); // head and tall tail lights
     }
-    for (const sz of [-1.2, 1.2]) { rbox(g, .14, .32, .8, .06, mat('#fff6b0', '#fff6b0'), 4.02, 1.38, sz); rbox(g, .14, .3, .7, .06, mat('#c0392b', '#ff2222'), -4.02, 1.38, sz); }
-    for (const sx of [-1, 1]) box(g, .05, .3, 1, white, sx * 4.15, .85, 0); // number plates
+    for (const sx of [-2.55, 2.55]) for (const sz of [-1.62, 1.62]) {
+      mesh(cylGeo(.64, .64, .5, 20), rubber, g, sx, .64, sz).rotation.x = Math.PI / 2;
+      mesh(cylGeo(.32, .32, .54, 14), metalGray, g, sx, .64, sz).rotation.x = Math.PI / 2;
+    }
     fuse(g); movers.push({ o: g, r: 8 });
   }
   for (const p of G.peds) { // grumpy locals and their dogs
