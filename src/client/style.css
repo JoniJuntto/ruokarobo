@@ -231,6 +231,17 @@ kbd{font:800 12px var(--font);border:1.5px solid var(--ink);border-bottom-width:
 
 @media (max-width:640px){#sign h2{font-size:34px}#shop h2{font-size:32px}#hud .plate{font-size:18px;padding:8px 11px 5px}#hud{max-width:calc(100vw - 160px - var(--sl) - var(--sr))}} /* a column down the left: the minimap has the right */
 @media (pointer:coarse){.foot span:has(kbd){display:none}} /* no M or Esc key on a phone */
-@media (pointer:coarse) and (orientation:portrait){#touch{bottom:calc(100px + var(--sb))}} /* clear of the order sign and meters along the bottom */
+/* phone, either way up: the robot sits mid-screen, so the controls are smaller and hug the two edges */
+@media (pointer:coarse) and (orientation:portrait),(pointer:coarse) and (max-height:480px){
+  #stick{left:12px;bottom:0;width:128px;height:128px}
+  .tbtn{width:66px;height:66px;font-size:13px}
+  #tBrake{right:10px;bottom:0}#tBoost{right:10px;bottom:74px}#tBall{right:10px;bottom:148px}
+  #tZap{right:84px;bottom:37px}#tHook{right:84px;bottom:111px}
+  #tHorn{right:91px;bottom:185px;width:52px;height:52px}
+  .tbtn{opacity:.8}#hud #hShiftPlate,#hPips,#bMusic span{display:none} /* less on screen: the shift number was on the sign, the count says what the pips do, the speaker needs no caption */
+}
+@media (pointer:coarse) and (orientation:portrait){#touch{bottom:calc(112px + var(--sb))}} /* right on top of the order sign and meter strip (~105px) */
+/* on its side there is no height to stack anything: controls on the floor, horn beside them, HUD in one row; overlay.ts moves the map and meters to match */
+@media (pointer:coarse) and (max-height:480px){#touch{bottom:calc(10px + var(--sb))}#tHorn{right:158px;bottom:0}#hud{max-width:calc(100vw - 230px - var(--sl) - var(--sr));flex-wrap:nowrap}#hud .plate{font-size:18px;padding:8px 11px 5px}}
 @media (max-height:480px){#title .hero{padding:12px 18px 8px}#title .hero svg,#title .hero p{display:none}#title h1{font-size:40px}} /* phone on its side: Start without scrolling */
 @media (prefers-reduced-motion:reduce){#sign.show,#alert.show,.ach{animation:none}}

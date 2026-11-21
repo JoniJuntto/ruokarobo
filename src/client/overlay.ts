@@ -82,20 +82,23 @@ function drawTag(v: PlayerView) { // the player's own order sign at the bottom o
   }
   if (r.kid) return; // no battery, boost or zap to show
   // boost meter and stun-gun charges on a small supplementary panel above
-  const pw = 230, px = cx - pw / 2, py = y - 30;
-  const hp = r.hp ?? 1, hy = py - 28; // robo health
+  // phones get one slim plate: health, boost and zaps side by side, colour-matched to the buttons instead of labelled
+  const slim = touchDev && (v.h > v.w || v.h < 480), squat = slim && v.w > v.h;
+  const pw = 230, px = cx - pw / 2, py = squat ? v.y + 18 + (v.y < 1 ? 42 + safe.t : 0) : y - 30; // phone on its side: up under the HUD, off the robot
+  const hp = r.hp ?? 1, hy = slim ? py : py - 28; // robo health
   const low = hp < .3 && (performance.now() / 300 | 0) % 2 === 0; // blink when nearly broken
+  const hx = px + (slim ? 26 : 50), hw = slim ? 58 : 168, bx = px + (slim ? 96 : 50), bw = slim ? 64 : 84;
   plate(px, hy, pw, 24, low ? RED : '#fff', low ? '#fff' : INK);
+  if (!slim) plate(px, py, pw, 24, '#fff', INK);
   ctx.fillStyle = low ? '#fff' : INK;
   ctx.font = F(700, 11); ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-  ctx.fillText('Robo', px + 11, hy + 13);
-  ctx.fillStyle = '#d8e0e8'; rr(px + 50, hy + 7, 168, 10, 2); ctx.fill();
-  ctx.fillStyle = `hsl(${hp * 120},75%,45%)`; rr(px + 50, hy + 7, 168 * hp, 10, 2); ctx.fill();
-  plate(px, py, pw, 24, '#fff', INK);
-  ctx.fillStyle = INK; ctx.font = F(700, 11); ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-  ctx.fillText('Boost', px + 11, py + 13); ctx.fillText('Zap', px + 146, py + 13);
-  ctx.fillStyle = '#d8e0e8'; rr(px + 50, py + 8, 84, 8, 2); ctx.fill();
-  ctx.fillStyle = r.boost > .02 && !r.boostLock ? BLUE : '#9aa5b1'; rr(px + 50, py + 8, 84 * r.boost, 8, 2); ctx.fill();
+  ctx.fillText(slim ? '♥' : 'Robo', px + 11, hy + 13);
+  ctx.fillStyle = '#d8e0e8'; rr(hx, hy + 7, hw, 10, 2); ctx.fill();
+  ctx.fillStyle = `hsl(${hp * 120},75%,45%)`; rr(hx, hy + 7, hw * hp, 10, 2); ctx.fill();
+  ctx.fillStyle = INK;
+  if (!slim) { ctx.fillText('Boost', px + 11, py + 13); ctx.fillText('Zap', px + 146, py + 13); }
+  ctx.fillStyle = '#d8e0e8'; rr(bx, py + 8, bw, 8, 2); ctx.fill();
+  ctx.fillStyle = r.boost > .02 && !r.boostLock ? BLUE : '#9aa5b1'; rr(bx, py + 8, bw * r.boost, 8, 2); ctx.fill();
   const nz = 3 + 2 * G.up.tesla, zs = 51 / nz, zw = zs - (nz > 3 ? 2 : 5); // tesla coil adds pips, squeeze them in
   for (let k = 0; k < nz; k++) {
     const f = clamp((r.zaps ?? 3) - k, 0, 1), zx = px + 172 + k * zs;
@@ -151,8 +154,8 @@ function drawLabels(v: View) {
 }
 // the map's own picture (its view's mini.bg) with everything that moves drawn on top
 function drawMinimap(v: PlayerView) {
-  const M = view.mini, mid = touchDev && v.w > v.h; // phone on its side: the buttons own the right edge, so the map sits top centre and smaller
-  const mw = Math.min(232, v.w * .3, mid ? v.h * .4 : 1e9), mh = mw * M.h / M.w, x0 = mid ? v.x + (v.w - mw) / 2 : v.x + v.w - mw - 18 - (v.x + v.w > vw - 1 ? safe.r : 0), y0 = v.y + (v.y < 1 ? 60 + safe.t : 18), k = mw / M.w;
+  const M = view.mini, mid = touchDev && v.w > v.h, squat = mid && v.h < 480; // on its side the buttons own the right edge, so the map sits top centre and smaller; on a phone the meters are there, so top left
+  const mw = Math.min(232, v.w * .3, mid ? v.h * .4 : 1e9), mh = mw * M.h / M.w, x0 = squat ? v.x + 14 + (v.x < 1 ? safe.l : 0) : mid ? v.x + (v.w - mw) / 2 : v.x + v.w - mw - 18 - (v.x + v.w > vw - 1 ? safe.r : 0), y0 = v.y + (v.y < 1 ? 60 + safe.t : 18), k = mw / M.w;
   const o = M.at(v.r), x = x0 - o.x * k, y = y0 - o.y * k; // the window's corner on the map; north up
   plate(x0 - 7, y0 - 7, mw + 14, mh + 14, '#fff', INK);
   ctx.save();
