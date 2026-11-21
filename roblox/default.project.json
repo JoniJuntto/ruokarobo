@@ -10,19 +10,21 @@
         "Technology": { "Enum": 4 },
         "ClockTime": 15.3,
         "GeographicLatitude": 60,
-        "Brightness": 2.4,
+        "Brightness": 1.8,
+        "ExposureCompensation": -0.25,
         "GlobalShadows": true,
+        "ShadowSoftness": 0.5,
         "EnvironmentDiffuseScale": 1,
-        "EnvironmentSpecularScale": 1,
-        "Ambient": { "Color3": [0.35, 0.38, 0.45] },
-        "OutdoorAmbient": { "Color3": [0.62, 0.68, 0.78] }
+        "EnvironmentSpecularScale": 0.35,
+        "Ambient": { "Color3": [0.45, 0.48, 0.55] },
+        "OutdoorAmbient": { "Color3": [0.68, 0.73, 0.82] }
       },
       "Atmosphere": {
         "$className": "Atmosphere",
-        "$properties": { "Density": 0.32, "Offset": 0.2, "Color": { "Color3": [0.8, 0.86, 0.92] }, "Decay": { "Color3": [0.55, 0.62, 0.74] }, "Glare": 0.4, "Haze": 1.4 }
+        "$properties": { "Density": 0.5, "Offset": 0.1, "Color": { "Color3": [0.81, 0.86, 0.91] }, "Decay": { "Color3": [0.72, 0.78, 0.85] }, "Glare": 0.15, "Haze": 2.5 }
       },
       "Bloom": { "$className": "BloomEffect", "$properties": { "Intensity": 0.5, "Size": 24, "Threshold": 1.4 } },
-      "ColorCorrection": { "$className": "ColorCorrectionEffect", "$properties": { "Contrast": 0.06, "Saturation": 0.08, "TintColor": { "Color3": [1, 0.97, 0.94] } } },
+      "ColorCorrection": { "$className": "ColorCorrectionEffect", "$properties": { "Brightness": 0.02, "Contrast": -0.04, "Saturation": -0.12, "TintColor": { "Color3": [1, 0.97, 0.94] } } },
       "SunRays": { "$className": "SunRaysEffect", "$properties": { "Intensity": 0.06, "Spread": 0.6 } }
     },
     "ReplicatedStorage": {

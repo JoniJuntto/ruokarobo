@@ -54,11 +54,11 @@ ZONES.forEach((z, i) => { // a hair apart: no flicker where they overlap
 	const p = flat(world, z.x, z.y, z.w, z.h, 0.02 * (i + 1), COLOR[z.k], MATERIAL[z.k]);
 	if (z.k === "ice") p.Reflectance = 0.15;
 });
-const DASH = Color3.fromHex("#e9c84a");
-for (let t = 10; t < W; t += 60) {
+const DASH = Color3.fromHex("#d8bf62"); // worn paint, matte: the web's dashes are thin and dull
+for (let t = 14; t < W; t += 60) {
 	if (t > 900 && t < 1100) continue; // not across the crossing
-	flat(world, t, 998, 32, 4, 0.08, DASH, Enum.Material.SmoothPlastic);
-	flat(world, 998, t, 4, 32, 0.08, DASH, Enum.Material.SmoothPlastic);
+	flat(world, t, 999, 24, 2, 0.08, DASH, Enum.Material.Concrete);
+	flat(world, 999, t, 2, 24, 0.08, DASH, Enum.Material.Concrete);
 }
 
 function bubble(part: BasePart, offset: number, size = new UDim2(0, 160, 0, 36)) {
