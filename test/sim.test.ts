@@ -284,5 +284,5 @@ test('Retry replays a chapter with its starting money, or an endless run from sh
   game.quit(); game.pressStart(); g.state = 'shop'; g.stateT = 2; game.pressStart();
   expect(g.level).toBe(2);
   g.money = 99; game.retry();
-  expect([g.state, g.level, g.money, g.campaign]).toEqual(['play', 1, 0, false]);
+  expect([g.state as string, g.level, g.money, g.campaign]).toEqual(['play', 1, 0, false]);
 });
