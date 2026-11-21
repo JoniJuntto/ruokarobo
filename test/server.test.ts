@@ -82,6 +82,7 @@ test('the leaderboard over HTTP: tokens, cooldown, junk', async () => {
 });
 
 test('speedrun boards: a floor per category, one row per name, fastest first', async () => {
+  expect(plausibleTime('pick', 300, 1, 60000)).toBe(true);    // robots start beside a shop: a real run posted 0.3 s and got a 422
   expect(plausibleTime('del1', 3000, 1, 60000)).toBe(false);  // no order is delivered in under 4 s
   expect(plausibleTime('del1', 5000, 1, 60000)).toBe(true);
   expect(plausibleTime('del1', 50000, 1, 10000)).toBe(false); // more play than the run has lasted

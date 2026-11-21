@@ -14,7 +14,7 @@ const ORDER_S = 4; // no order is delivered in under 4 s (server/board.ts counts
 const quota = (k: number, p: number) => 2 + k + (p - 1) * 2; // startLevel()
 const shifts = (n: number, p: number) => { let s = 0; for (let k = 1; k <= n; k++) s += ORDER_S * quota(k, p) / p; return s; };
 export const SPLITS: SplitDef[] = [
-  { k: 'pick', n: 'First pickup', hit: g => g.robots.some(r => r.cargo), min: () => 1 },
+  { k: 'pick', n: 'First pickup', hit: g => g.robots.some(r => r.cargo), min: () => 0 }, // robots start beside a shop door: an honest first pickup takes a fraction of a second
   ...[1, 5, 10, 25, 50, 100].map((n): SplitDef => ({ k: 'del' + n, n: n === 1 ? 'First delivery' : `${n} deliveries`, hit: g => g.stats.del >= n, min: p => ORDER_S * n / p })),
   ...[1, 3, 5, 10, 15].map((n): SplitDef => ({ k: 'shift' + n, n: n === 1 ? 'First shift done' : `${n} shifts done`, hit: g => g.stats.shifts >= n, min: p => shifts(n, p) })),
   // ponytail: 250 € is more than any one order pays with its share of the battery bonus, so this floor is loose
