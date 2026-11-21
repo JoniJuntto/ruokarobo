@@ -4,6 +4,27 @@
   "tree": {
     "$className": "DataModel",
     "Players": { "$className": "Players", "$properties": { "CharacterAutoLoads": false } },
+    "Lighting": {
+      "$className": "Lighting",
+      "$properties": {
+        "Technology": { "Enum": 4 },
+        "ClockTime": 15.3,
+        "GeographicLatitude": 60,
+        "Brightness": 2.4,
+        "GlobalShadows": true,
+        "EnvironmentDiffuseScale": 1,
+        "EnvironmentSpecularScale": 1,
+        "Ambient": { "Color3": [0.35, 0.38, 0.45] },
+        "OutdoorAmbient": { "Color3": [0.62, 0.68, 0.78] }
+      },
+      "Atmosphere": {
+        "$className": "Atmosphere",
+        "$properties": { "Density": 0.32, "Offset": 0.2, "Color": { "Color3": [0.8, 0.86, 0.92] }, "Decay": { "Color3": [0.55, 0.62, 0.74] }, "Glare": 0.4, "Haze": 1.4 }
+      },
+      "Bloom": { "$className": "BloomEffect", "$properties": { "Intensity": 0.5, "Size": 24, "Threshold": 1.4 } },
+      "ColorCorrection": { "$className": "ColorCorrectionEffect", "$properties": { "Contrast": 0.06, "Saturation": 0.08, "TintColor": { "Color3": [1, 0.97, 0.94] } } },
+      "SunRays": { "$className": "SunRaysEffect", "$properties": { "Intensity": 0.06, "Spread": 0.6 } }
+    },
     "ReplicatedStorage": {
       "$className": "ReplicatedStorage",
       "rbxts_include": { "$path": "include", "node_modules": { "$className": "Folder", "@rbxts": { "$path": "node_modules/@rbxts" } } },

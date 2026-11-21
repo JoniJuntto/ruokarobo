@@ -21,6 +21,7 @@ export interface Car {
 	dDir: number; // drift direction: -1, 0, 1
 	dCh: number; // drift charge
 	dTier: number; // 0 none, 1 blue, 2 orange, 3 purple
+	turbo: boolean; // boosting or on a mini-turbo this step
 }
 
 export interface Keys {
@@ -31,7 +32,7 @@ export interface Keys {
 }
 
 export const newCar = (x: number, y: number): Car => ({
-	x, y, a: 0, vx: 0, vy: 0, boost: 1, boostLock: false, mt: 0, dDir: 0, dCh: 0, dTier: 0,
+	x, y, a: 0, vx: 0, vy: 0, boost: 1, boostLock: false, mt: 0, dDir: 0, dCh: 0, dTier: 0, turbo: false,
 });
 
 const MT = [0, 0.6, 1.1, 1.7];
@@ -59,7 +60,7 @@ export function drive(r: Car, inp: Keys, surface: Surface, dt: number, heavy = f
 		r.dTier = (r.dCh >= 1 ? 1 : 0) + (r.dCh >= 2 ? 1 : 0) + (r.dCh >= 3.2 ? 1 : 0);
 	}
 	r.mt = math.max(0, r.mt - dt);
-	const turbo = boosting || r.mt > 0, drifting = r.dDir !== 0;
+	const turbo = (r.turbo = boosting || r.mt > 0), drifting = r.dDir !== 0;
 	r.a += (drifting ? r.dDir * (0.75 + 0.45 * inp.s * r.dDir) : inp.s * (inp.h ? 1.7 : 1)) * 3.4 * dt;
 	const cx = math.cos(r.a), sy = math.sin(r.a);
 	const acc = S.acc * inp.t * (inp.t < 0 ? 0.6 : 1) * (turbo ? 1.9 : 1) * (drifting ? 0.9 : inp.h ? 0.2 : 1);

@@ -32,6 +32,22 @@ for (const y of [200, 450, 1300, 1550]) {
 	HOUSES.push(building(`Talo ${HOUSES.size() + 1}`, 1100, y, 120, 150, 1075, y + 75)); // east
 }
 export const SOLIDS = [SHOP, ...HOUSES];
+export const inLake = (x: number, y: number) => x > 1220 && x < 1780 && y > 1220 && y < 1680;
+
+// spruces in the yards, from a seeded LCG (like the web's seeded()): a server and its clients plant the same forest
+export interface Tree { x: number; y: number; r: number }
+export const TREES: Tree[] = [];
+{
+	let s = 7;
+	const rnd = () => (s = (s * 1664525 + 1013904223) % 4294967296) / 4294967296; // exact in doubles: no bit ops needed
+	for (let i = 0; i < 500 && TREES.size() < 60; i++) {
+		const x = 40 + rnd() * 1920, y = 40 + rnd() * 1920;
+		if (x > 880 && x < 1120 || y > 880 && y < 1120 || inLake(x, y)) continue; // off the roads and the lake
+		if (SOLIDS.some((b) => x > b.x - 40 && x < b.x + b.w + 40 && y > b.y - 40 && y < b.y + b.h + 40)) continue;
+		if (TREES.some((t) => (t.x - x) ** 2 + (t.y - y) ** 2 < 70 * 70)) continue;
+		TREES.push({ x, y, r: 6 }); // the trunk: the robot fits under the branches
+	}
+}
 
 export interface Cargo { o: number; dest: number; cond: number; t: number; t0: number }
 export interface Run { T: number; money: number; delivered: number; cargo?: Cargo; hitCd: number }
@@ -64,13 +80,27 @@ export function pushBox(r: Car, b: Building): number {
 	return -vn;
 }
 
-// one step after driving: walls, the order clock, pickups and deliveries. Returns a message to flash, if any.
+// pushOut() from src/sim/util.ts: push the robot out of a round obstacle; returns how fast it was going into it
+export function pushOut(r: Car, cx: number, cy: number, minD: number): number {
+	let dx = r.x - cx, dy = r.y - cy, d = math.sqrt(dx * dx + dy * dy);
+	if (d >= minD) return 0;
+	if (d < 0.001) { dx = 0; dy = 1; d = 1; }
+	const nx = dx / d, ny = dy / d;
+	r.x = cx + nx * minD;
+	r.y = cy + ny * minD;
+	const vn = r.vx * nx + r.vy * ny;
+	if (vn < 0) { r.vx -= 1.4 * vn * nx; r.vy -= 1.4 * vn * ny; }
+	return -vn;
+}
+
+// one step after driving: walls, trees, the order clock, pickups and deliveries. Returns a message to flash, if any.
 export function tick(run: Run, r: Car, dt: number): string | undefined {
 	run.T += dt;
 	run.hitCd -= dt;
 	let msg: string | undefined;
 	let hit = 0;
 	for (const b of SOLIDS) hit = math.max(hit, pushBox(r, b));
+	for (const t of TREES) hit = math.max(hit, pushOut(r, t.x, t.y, R + t.r));
 	if (hit > 150 && run.hitCd <= 0) { // a real crash, not a scrape
 		run.hitCd = 0.7;
 		msg = "Auts!";
