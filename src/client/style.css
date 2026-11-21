@@ -75,9 +75,9 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--yellow);outline
 #title{position:fixed;left:max(20px,5vw);top:50%;transform:translateY(-50%);width:min(440px,calc(100vw - 40px));
        display:flex;flex-direction:column;gap:12px;max-height:calc(100dvh - 32px);overflow:auto;padding:4px 4px 8px;box-sizing:border-box}
 #title > *{flex-shrink:0} /* short windows scroll the column instead of squashing the keys table */
-#title .hero{padding:22px 28px 20px}
+#title .hero{padding:22px 28px 20px;container-type:inline-size}
 #title .hero svg{width:92px;height:62px;display:block;margin-bottom:8px}
-#title h1{margin:0;font-size:clamp(48px,9vw,80px);font-weight:900;line-height:.88;letter-spacing:-.015em}
+#title h1{margin:0;font-size:min(80px,19cqi);font-weight:900;line-height:.88;letter-spacing:-.015em}
 #title .hero p{margin:12px 0 0;font-size:18px;font-weight:600;line-height:1.35;max-width:38ch}
 #keys{font-size:14px;overflow-x:auto}
 #keys table{border-collapse:collapse;width:100%}
